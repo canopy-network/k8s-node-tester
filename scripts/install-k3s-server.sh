@@ -27,6 +27,10 @@ chmod 600 $HOME/.kube/config
 echo "Local kubectl config created"
 
 echo "K3S setup completed"
+TOKEN=$(cat /var/lib/rancher/k3s/server/node-token)
 echo "-------------------------------------------------------------------------------------------------------------------------"
-echo "Server Token: $(cat /var/lib/rancher/k3s/server/node-token)"
+echo "Server Token: $TOKEN"
 echo "-------------------------------------------------------------------------------------------------------------------------"
+
+echo "To quickly add new nodes, run the following command on the new node:"
+echo "curl -sfL https://get.k3s.io | K3S_URL=https://{SERVER_IP}:6443 K3S_TOKEN=$TOKEN sh -"
