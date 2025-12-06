@@ -18,3 +18,9 @@ hetzner-tls:
 	$(call check_vars, DOMAIN HETZNER_API_TOKEN EMAIL)
 	DOMAIN=$(DOMAIN) HETZNER_DNS_API_TOKEN=$(HETZNER_API_TOKEN) \
 	EMAIL=$(EMAIL) ./cluster/tls/setup.sh
+
+.PHONY: setup-monitoring
+setup-monitoring:
+	$(call check_vars, DOMAIN)
+	./cluster/monitoring/prometheus/setup.sh
+	@sed -e "s;{{DOMAIN}};$${DOMAIN};g" ./cluster/monitoring/prometheus/ingress-routes.yml | kubectl apply -f -

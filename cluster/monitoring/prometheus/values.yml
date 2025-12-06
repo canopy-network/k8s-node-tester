@@ -1,0 +1,39 @@
+prometheus:
+  prometheusSpec:
+    # enable local-path persistence for prometheus
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+grafana:
+  enabled: true
+  namespaceOverride: ""
+  # enable local-path persistence for grafana
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    accessModes:
+      - ReadWriteOnce
+    size: 2Gi
+  sidecar:
+    datasources:
+      enabled: true
+    dashboards:
+      enabled: true
+  datasources:
+    # load the default prometheus datasource
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          uid: prometheus
+          type: prometheus
+          access: proxy
+          url: http://prometheus-operated.monitoring.svc:9090
+          isDefault: true
+          version: 1
+          jsonData: {}
