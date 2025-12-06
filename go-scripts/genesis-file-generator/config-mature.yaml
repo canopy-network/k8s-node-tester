@@ -1,0 +1,15 @@
+# Mature configuration - medium scale testing
+# 1M accounts, 10K validators, 10K delegators
+
+accounts: 1000000
+validators: 10000
+delegators: 10000
+password: "mysecurepass"
+multi_node: false
+concurrency: 100
+buffer: 1000
+
+# Optional: custom URLs (only used when multi_node is false)
+# root_chain_url: "http://custom-node:50002"
+# external_address: "custom-node"
+

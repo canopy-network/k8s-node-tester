@@ -1,0 +1,15 @@
+# Max configuration - maximum scale testing
+# 100M accounts, 1M validators, 1M delegators
+
+accounts: 100000000
+validators: 1000000
+delegators: 1000000
+password: "mysecurepass"
+multi_node: false
+concurrency: 100
+buffer: 1000
+
+# Optional: custom URLs (only used when multi_node is false)
+# root_chain_url: "http://custom-node:50002"
+# external_address: "custom-node"
+

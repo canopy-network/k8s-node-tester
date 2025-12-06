@@ -1,0 +1,11 @@
+# Minimal configuration - small scale multi-node testing
+# 10 accounts, 5 validators, 10 delegators
+
+accounts: 10
+validators: 5
+delegators: 10
+password: "pablito"
+multi_node: true
+concurrency: 10
+buffer: 100
+

@@ -5,6 +5,7 @@ go 1.25.3
 require (
 	github.com/canopy-network/canopy v0.1.14-snapshot
 	github.com/launchdarkly/go-jsonstream/v3 v3.1.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

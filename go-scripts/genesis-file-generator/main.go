@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/hex"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"math"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/launchdarkly/go-jsonstream/v3/jwriter"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -85,6 +85,43 @@ const (
 	delegatorNick = "delegator"
 	accountNick   = "account"
 )
+
+// AppConfig represents the YAML configuration structure
+type AppConfig struct {
+	Delegators            int    `yaml:"delegators"`
+	Validators            int    `yaml:"validators"`
+	Accounts              int    `yaml:"accounts"`
+	Password              string `yaml:"password"`
+	MultiNode             bool   `yaml:"multi_node"`
+	Concurrency           int64  `yaml:"concurrency"`
+	Buffer                int64  `yaml:"buffer"`
+	CustomRootChainURL    string `yaml:"root_chain_url"`
+	CustomExternalAddress string `yaml:"external_address"`
+}
+
+func loadConfig(path string) (*AppConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	config := &AppConfig{
+		// Set defaults
+		Delegators:  10,
+		Validators:  5,
+		Accounts:    100,
+		Password:    "pablito",
+		MultiNode:   false,
+		Concurrency: 100,
+		Buffer:      1000,
+	}
+
+	if err := yaml.Unmarshal(data, config); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	return config, nil
+}
 
 func logData() {
 	var accounts, validators, delegators int32
@@ -423,6 +460,20 @@ func genesisWriter(multiNode bool, validatorLen int, wg, accountsWG *sync.WaitGr
 }
 
 func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: go run main.go <config-file.yaml>")
+		fmt.Println("Example: go run main.go config-mature.yaml")
+		os.Exit(1)
+	}
+
+	configPath := os.Args[1]
+	cfg, err := loadConfig(configPath)
+	if err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Loaded config from: %s\n", configPath)
 	fmt.Println("Deleting old files!")
 
 	mustSetDirectory(".config")
@@ -430,44 +481,31 @@ func main() {
 
 	fmt.Println("Creating new files!")
 
-	var (
-		delegators            = flag.Int("delegators", 10, "Number of delegators")
-		validators            = flag.Int("validators", 5, "Number of validators")
-		accounts              = flag.Int("accounts", 100, "Number of accounts")
-		password              = flag.String("password", "pablito", "Password for keystore")
-		multiNode             = flag.Bool("multiNode", false, "Flag to create config for multiples nodes or not")
-		concurrency           = flag.Int64("concurrency", 100, "Concurrency of the processes")
-		buffer                = flag.Int64("buffer", 1000, "Buffer of validators and accounts to be saved while waiting processing")
-		customRootChainURL    = flag.String("root_chain_url", "", "Custom name for root chain url")
-		customExternalAddress = flag.String("external_address", "", "Custom name for external address")
-	)
-	flag.Parse()
-
-	if *multiNode && (*customRootChainURL != "" || *customExternalAddress != "") {
+	if cfg.MultiNode && (cfg.CustomRootChainURL != "" || cfg.CustomExternalAddress != "") {
 		panic("Custom root chain url and/or external address can just be used on not multi node")
 	}
 
-	acountsLen := *delegators + *validators + *accounts
-	validatorsLen := *delegators + *validators
+	acountsLen := cfg.Delegators + cfg.Validators + cfg.Accounts
+	validatorsLen := cfg.Delegators + cfg.Validators
 
-	accountChan := make(chan *fsm.Account, *buffer)
-	validatorChan := make(chan *fsm.Validator, *buffer)
+	accountChan := make(chan *fsm.Account, cfg.Buffer)
+	validatorChan := make(chan *fsm.Validator, cfg.Buffer)
 
 	logData()
 
 	var genesisWG, accountsWG sync.WaitGroup
 	genesisWG.Add(1)
 	accountsWG.Add(1)
-	go genesisWriter(*multiNode, validatorsLen, &genesisWG, &accountsWG, validatorChan)
+	go genesisWriter(cfg.MultiNode, validatorsLen, &genesisWG, &accountsWG, validatorChan)
 	go accountsWriter(acountsLen, &accountsWG, accountChan)
 
 	files := &IndividualFiles{}
-	semaphoreChan := make(chan struct{}, *concurrency)
+	semaphoreChan := make(chan struct{}, cfg.Concurrency)
 	var gsync sync.Mutex
 	var wg sync.WaitGroup
-	addValidators(*validators, false, *multiNode, "validator", *password, *customRootChainURL, *customExternalAddress, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
-	addValidators(*delegators, true, *multiNode, "delegator", *password, *customRootChainURL, *customExternalAddress, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
-	addAccounts(*accounts, &wg, semaphoreChan, accountChan)
+	addValidators(cfg.Validators, false, cfg.MultiNode, "validator", cfg.Password, cfg.CustomRootChainURL, cfg.CustomExternalAddress, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
+	addValidators(cfg.Delegators, true, cfg.MultiNode, "delegator", cfg.Password, cfg.CustomRootChainURL, cfg.CustomExternalAddress, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
+	addAccounts(cfg.Accounts, &wg, semaphoreChan, accountChan)
 
 	wg.Wait()
 	genesisWG.Wait()
