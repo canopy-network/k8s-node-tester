@@ -27,7 +27,7 @@ grafana:
       defaultFolderName: null
       provider:
         foldersFromFilesStructure: true
-  # follows the issue below in order to import the node exporter full dashboard at installation
+  # follows the issue below in order to import the additional dashboards at installation
   # https://github.com/prometheus-community/helm-charts/issues/2477#issuecomment-1276224026
   dashboardProviders:
     dashboardproviders.yaml:
