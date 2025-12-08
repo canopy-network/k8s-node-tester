@@ -1,0 +1,41 @@
+deploymentMode: "SingleBinary<->SimpleScalable"
+loki:
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: "filesystem"
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        index:
+          prefix: loki_index_
+          period: 24h
+        object_store: filesystem
+        schema: v13
+  auth_enabled: false
+  tableManager:
+    retention_deletes_enabled: true
+    retention_period: 72h
+singleBinary:
+  replicas: 1
+  # TODO: Need to fully measure required resources
+  # resources:
+  #   requests:
+  #     cpu: 100m
+  #     memory: 256Mi
+  #   limits:
+  #     cpu: 1
+  #     memory: 512Mi
+# disable caches in SingleBinary mode - the single process already caches in memory
+# and using filesystem storage is fast enough for short-term deployments
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+persistence:
+  enabled: true
+  storageClassName: "local-path"
+  accessModes:
+    - ReadWriteOnce
+  size: 15Gi
