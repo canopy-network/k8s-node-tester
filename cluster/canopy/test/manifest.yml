@@ -47,6 +47,9 @@ spec:
             - name: config
               mountPath: /root/.canopy/validator_key.json
               subPath: validator_key.json
+            - name: config
+              mountPath: /root/.canopy/keystore.json
+              subPath: keystore.json
       volumes:
         - name: config
           configMap:
@@ -107,6 +110,9 @@ spec:
             - name: config
               mountPath: /root/.canopy/validator_key.json
               subPath: validator_key.json
+            - name: config
+              mountPath: /root/.canopy/keystore.json
+              subPath: keystore.json
       volumes:
         - name: config
           configMap:
