@@ -156,7 +156,7 @@ metadata:
   namespace: canopy
   name: node-1
   labels:
-    app: canopy-node
+    app: canopy
 spec:
   ports:
     - port: 50000
@@ -186,7 +186,7 @@ metadata:
   namespace: canopy
   name: node-2
   labels:
-    app: canopy-node
+    app: canopy
 spec:
   ports:
     - port: 40000
