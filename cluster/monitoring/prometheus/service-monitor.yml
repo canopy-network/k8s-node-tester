@@ -1,0 +1,25 @@
+# create namespace in case it doesn't already exists
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: canopy
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: canopy-nodes
+  namespace: canopy
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: canopy-node
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+      # drop the volatile labels from the scraped metrics (so pod/instance won't split series)
+      metricRelabelings:
+        - action: labeldrop
+          regex: "pod|instance"
