@@ -58,7 +58,7 @@ spec:
                 path: genesis.json
               - key: keystore
                 path: keystore.json
-              - key: validator-key
+              - key: validator-key-node-1
                 path: validator_key.json
         - name: data
           persistentVolumeClaim:
@@ -118,7 +118,7 @@ spec:
                 path: genesis.json
               - key: keystore
                 path: keystore.json
-              - key: validator-key
+              - key: validator-key-node-2
                 path: validator_key.json
         - name: data
           persistentVolumeClaim:
@@ -155,6 +155,8 @@ kind: Service
 metadata:
   namespace: canopy
   name: node-1
+  labels:
+    app: canopy-node
 spec:
   ports:
     - port: 50000
@@ -183,6 +185,8 @@ kind: Service
 metadata:
   namespace: canopy
   name: node-2
+  labels:
+    app: canopy-node
 spec:
   ports:
     - port: 40000
