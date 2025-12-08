@@ -24,3 +24,7 @@ monitoring/prometheus:
 .PHONY: monitoring/loki
 monitoring/loki:
 	./cluster/monitoring/loki/setup.sh
+
+.PHONY: monitoring/promtail
+monitoring/promtail:
+	./cluster/monitoring/promtail/setup.sh
