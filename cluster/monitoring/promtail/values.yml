@@ -11,8 +11,9 @@ config:
       - job_name: canopy_only
         kubernetes_sd_configs:
           - role: pod
+            # limit scraping to specific namespaces
             namespaces:
-        #      names: ["canopy"] # limit scraping to specific namespaces
+                names: ["canopy"]
         relabel_configs:
           # set the log path (required for k3s)
           - action: replace

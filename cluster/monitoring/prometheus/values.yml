@@ -48,7 +48,7 @@ grafana:
         revision: 42
         datasource: Prometheus
   datasources:
-    # load the default prometheus datasource
+    # load the default prometheus and loki datasources
     datasources.yaml:
       apiVersion: 1
       datasources:
