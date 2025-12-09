@@ -1,7 +1,6 @@
 max:
   password: "pablito"
   concurrency: 200
-  buffer: 2000
   chains:
     chain_1:
       id: 1
@@ -25,7 +24,6 @@ max:
 medium:
   password: "pablito"
   concurrency: 100
-  buffer: 1000
   chains:
     chain_1:
       id: 1
@@ -49,7 +47,6 @@ medium:
 default:
   password: "pablito"
   concurrency: 100
-  buffer: 1000
   chains:
     chain_1:
       id: 1
@@ -73,7 +70,6 @@ default:
 min:
   password: "pablito"
   concurrency: 10
-  buffer: 100
   chains:
     chain_1:
       id: 1
@@ -88,7 +84,6 @@ min:
 mature:
   password: "pablito"
   concurrency: 150
-  buffer: 1500
   chains:
     chain_1:
       id: 1

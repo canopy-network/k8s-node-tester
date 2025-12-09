@@ -44,7 +44,6 @@ type ChainConfig struct {
 type AppConfig struct {
 	Password    string                  `yaml:"password"`
 	Concurrency int64                   `yaml:"concurrency"`
-	Buffer      int64                   `yaml:"buffer"`
 	Chains      map[string]*ChainConfig `yaml:"chains"`
 }
 
