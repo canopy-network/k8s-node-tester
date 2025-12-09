@@ -84,12 +84,14 @@ const (
 	validatorNick = "validator"
 	delegatorNick = "delegator"
 	accountNick   = "account"
+	fullNodeNick  = "fullnode"
 )
 
 // AppConfig represents the configuration structure
 type AppConfig struct {
 	Delegators  int    `yaml:"delegators"`
 	Validators  int    `yaml:"validators"`
+	FullNodes   int    `yaml:"full_nodes"`
 	Accounts    int    `yaml:"accounts"`
 	Password    string `yaml:"password"`
 	Concurrency int64  `yaml:"concurrency"`
@@ -142,7 +144,7 @@ func listAvailableConfigs() []string {
 }
 
 func logData() {
-	var accounts, validators, delegators int32
+	var accounts, validators, delegators, fullNodes int32
 
 	go func() {
 		for nickname := range nickNames {
@@ -153,6 +155,8 @@ func logData() {
 				atomic.AddInt32(&validators, 1)
 			case delegatorNick:
 				atomic.AddInt32(&delegators, 1)
+			case fullNodeNick:
+				atomic.AddInt32(&fullNodes, 1)
 			default:
 				fmt.Println("Unknown data type received:", nickname)
 			}
@@ -163,10 +167,11 @@ func logData() {
 		ticker := time.NewTicker(2 * time.Second)
 
 		for range ticker.C {
-			fmt.Printf("Accounts: %d, Validators: %d, Delegators: %d\n",
+			fmt.Printf("Accounts: %d, Validators: %d, Delegators: %d, FullNodes: %d\n",
 				atomic.LoadInt32(&accounts),
 				atomic.LoadInt32(&validators),
 				atomic.LoadInt32(&delegators),
+				atomic.LoadInt32(&fullNodes),
 			)
 		}
 	}()
@@ -219,6 +224,50 @@ func addAccounts(accounts int, wg *sync.WaitGroup, semaphoreChan chan struct{}, 
 				Amount:  1000000,
 			}
 			nickNames <- accountNick
+		}(i)
+	}
+}
+
+// addFullNodes concurrently creates full nodes (not staked, but with config files)
+func addFullNodes(count int, password string,
+	files *IndividualFiles, gsync *sync.Mutex, wg *sync.WaitGroup, semaphoreChan chan struct{},
+	accountChan chan *fsm.Account) {
+
+	for i := range count {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			semaphoreChan <- struct{}{}
+			defer func() { <-semaphoreChan }()
+
+			nick := fmt.Sprintf("fullnode-%d", i+1)
+			pk := mustCreateKey()
+
+			config := *defaultConfig
+			config.RootChain[0].Url = fmt.Sprintf("http://%s:50002", nick)
+			config.ExternalAddress = nick
+
+			keystore := &crypto.Keystore{
+				AddressMap:  make(map[string]*crypto.EncryptedPrivateKey, 1),
+				NicknameMap: make(map[string]string, 1),
+			}
+			mustUpdateKeystore(pk.Bytes(), nick, password, keystore)
+
+			accountChan <- &fsm.Account{
+				Address: pk.PublicKey().Address().Bytes(),
+				Amount:  1000000,
+			}
+
+			gsync.Lock()
+			files.Files = append(files.Files, &IndividualFile{
+				Config:       &config,
+				ValidatorKey: pk.String(),
+				Nick:         nick,
+				Keystore:     keystore,
+			})
+			gsync.Unlock()
+
+			nickNames <- fullNodeNick
 		}(i)
 	}
 }
@@ -480,7 +529,7 @@ func main() {
 
 	fmt.Println("Creating new files!")
 
-	acountsLen := cfg.Delegators + cfg.Validators + cfg.Accounts
+	acountsLen := cfg.Delegators + cfg.Validators + cfg.FullNodes + cfg.Accounts
 	validatorsLen := cfg.Delegators + cfg.Validators
 
 	accountChan := make(chan *fsm.Account, cfg.Buffer)
@@ -500,6 +549,7 @@ func main() {
 	var wg sync.WaitGroup
 	addValidators(cfg.Validators, false, "validator", cfg.Password, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
 	addValidators(cfg.Delegators, true, "delegator", cfg.Password, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
+	addFullNodes(cfg.FullNodes, cfg.Password, files, &gsync, &wg, semaphoreChan, accountChan)
 	addAccounts(cfg.Accounts, &wg, semaphoreChan, accountChan)
 
 	wg.Wait()

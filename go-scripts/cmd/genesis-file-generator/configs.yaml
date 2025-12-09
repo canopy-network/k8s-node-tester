@@ -1,6 +1,7 @@
 max:
   delegators: 1000
   validators: 500
+  full_nodes: 100
   accounts: 10000
   password: "pablito"
   concurrency: 200
@@ -9,6 +10,7 @@ max:
 medium:
   delegators: 100
   validators: 50
+  full_nodes: 20
   accounts: 1000
   password: "pablito"
   concurrency: 100
@@ -17,6 +19,7 @@ medium:
 default:
   delegators: 10
   validators: 5
+  full_nodes: 2
   accounts: 100
   password: "pablito"
   concurrency: 100
@@ -25,6 +28,7 @@ default:
 min:
   delegators: 1
   validators: 1
+  full_nodes: 1
   accounts: 10
   password: "pablito"
   concurrency: 10
@@ -33,6 +37,7 @@ min:
 mature:
   delegators: 500
   validators: 250
+  full_nodes: 50
   accounts: 5000
   password: "pablito"
   concurrency: 150
