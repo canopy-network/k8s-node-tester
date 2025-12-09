@@ -523,7 +523,8 @@ func createTemplateConfig(chainID int, rootChainID int) *lib.Config {
 }
 
 func processChain(chainName string, chainCfg *ChainConfig, startIdx int, password string,
-	semaphoreChan chan struct{}, allIdentities *[]NodeIdentity, globalSync *sync.Mutex) int {
+	semaphoreChan chan struct{}, allIdentities *[]NodeIdentity, globalSync *sync.Mutex, chainWG *sync.WaitGroup) {
+	defer chainWG.Done()
 
 	chainDir := filepath.Join(".config", chainName)
 	mustSetDirectory(chainDir)
@@ -601,9 +602,6 @@ func processChain(chainName string, chainCfg *ChainConfig, startIdx int, passwor
 
 	fmt.Printf("Chain %s: %d validators, %d delegators, %d full nodes, %d accounts\n",
 		chainName, chainCfg.Validators, chainCfg.Delegators, chainCfg.FullNodes, chainCfg.Accounts)
-
-	// Return next available idx
-	return fullNodeStartIdx + chainCfg.FullNodes
 }
 
 func main() {
@@ -635,19 +633,30 @@ func main() {
 	allIdentities := make([]NodeIdentity, 0)
 	var globalSync sync.Mutex
 
-	// Sort chain names for consistent processing order
+	// Sort chain names for consistent idx assignment
 	chainNames := make([]string, 0, len(cfg.Chains))
 	for name := range cfg.Chains {
 		chainNames = append(chainNames, name)
 	}
 	sort.Strings(chainNames)
 
-	// Process each chain
+	// Pre-calculate starting indices for each chain
+	chainStartIndices := make(map[string]int)
 	currentIdx := 1
 	for _, chainName := range chainNames {
 		chainCfg := cfg.Chains[chainName]
-		currentIdx = processChain(chainName, chainCfg, currentIdx, cfg.Password, semaphoreChan, &allIdentities, &globalSync)
+		chainStartIndices[chainName] = currentIdx
+		// Calculate total nodes for this chain
+		currentIdx += chainCfg.Validators + chainCfg.Delegators + chainCfg.FullNodes
 	}
+
+	// Process all chains concurrently
+	var chainWG sync.WaitGroup
+	for _, chainName := range chainNames {
+		chainWG.Add(1)
+		go processChain(chainName, cfg.Chains[chainName], chainStartIndices[chainName], cfg.Password, semaphoreChan, &allIdentities, &globalSync, &chainWG)
+	}
+	chainWG.Wait()
 
 	// Sort all identities by idx for consistent output
 	sort.Slice(allIdentities, func(i, j int) bool {
