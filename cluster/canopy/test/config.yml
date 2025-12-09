@@ -1,0 +1,323 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: canopy
+  name: config
+data:
+  node-1: |
+    {
+      "logStructured": false,
+      "logJSON": false,
+      "logLevel": "debug",
+      "chainId": 1,
+      "sleepUntil": 0,
+      "rootChain": [
+        {
+          "chainId": 1,
+          "url": "http://node-1:50002/"
+        }
+      ],
+      "runVDF": false,
+      "headless": false,
+      "autoUpdate": false,
+      "runningAutoUpdate": false,
+      "walletPort": "50000",
+      "explorerPort": "50001",
+      "rpcPort": "50002",
+      "adminPort": "50003",
+      "rpcURL": "https://rpc-node-1.canopy-knight.site",
+      "adminRPCUrl": "https://admin-rpc-node-1.canopy-knight.site",
+      "timeoutS": 3,
+      "dataDirPath": "/root/.canopy",
+      "dbName": "canopy",
+      "inMemory": false,
+      "networkID": 1,
+      "listenAddress": "0.0.0.0:9001",
+      "externalAddress": "node-1",
+      "maxInbound": 21,
+      "maxOutbound": 7,
+      "trustedPeerIDs": null,
+      "dialPeers": [],
+      "bannedPeerIDs": null,
+      "bannedIPs": null,
+      "minimumPeersToStart": 0,
+      "newHeightTimeoutMS": 4500,
+      "electionTimeoutMS": 1500,
+      "electionVoteTimeoutMS": 1500,
+      "proposeTimeoutMS": 2500,
+      "proposeVoteTimeoutMS": 4000,
+      "precommitTimeoutMS": 2000,
+      "precommitVoteTimeoutMS": 2000,
+      "commitTimeoutMS": 2000,
+      "roundInterruptTimeoutMS": 2000,
+      "maxTotalBytes": 1000000,
+      "maxTransactionCount": 5000,
+      "individualMaxTxSize": 4000,
+      "dropPercentage": 35,
+      "metricsEnabled": true,
+      "prometheusAddress": "0.0.0.0:9090"
+    }
+  node-2: |
+    {
+      "logStructured": false,
+      "logJSON": false,
+      "logLevel": "debug",
+      "chainId": 1,
+      "sleepUntil": 0,
+      "rootChain": [
+        {
+          "chainId": 1,
+          "url": "http://node-1:50002"
+        },
+        {
+          "chainId": 2,
+          "url": "http://node-2:40002"
+        }
+      ],
+      "runVDF": false,
+      "headless": false,
+      "autoUpdate": false,
+      "runningAutoUpdate": false,
+      "walletPort": "40000",
+      "explorerPort": "40001",
+      "rpcPort": "40002",
+      "adminPort": "40003",
+      "rpcURL": "https://rpc-node-2.canopy-knight.site",
+      "adminRPCUrl": "https://admin-rpc-node-2.canopy-knight.site",
+      "timeoutS": 3,
+      "dataDirPath": "/root/.canopy",
+      "dbName": "canopy",
+      "inMemory": false,
+      "networkID": 1,
+      "listenAddress": "0.0.0.0:9002",
+      "externalAddress": "node-2",
+      "maxInbound": 21,
+      "maxOutbound": 7,
+      "trustedPeerIDs": null,
+      "dialPeers": [],
+      "bannedPeerIDs": null,
+      "bannedIPs": null,
+      "minimumPeersToStart": 0,
+      "newHeightTimeoutMS": 4500,
+      "electionTimeoutMS": 1500,
+      "electionVoteTimeoutMS": 1500,
+      "proposeTimeoutMS": 2500,
+      "proposeVoteTimeoutMS": 4000,
+      "precommitTimeoutMS": 2000,
+      "precommitVoteTimeoutMS": 2000,
+      "commitTimeoutMS": 2000,
+      "roundInterruptTimeoutMS": 2000,
+      "maxTotalBytes": 1000000,
+      "maxTransactionCount": 5000,
+      "individualMaxTxSize": 4000,
+      "dropPercentage": 35,
+      "metricsEnabled": true,
+      "prometheusAddress": "0.0.0.0:9090"
+    }
+
+  genesis-node-1: |
+    {
+      "time": "2024-12-14 20:10:52",
+      "accounts": [
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "amount": 1000000
+        },
+        {
+          "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
+          "amount": 1000000
+        },
+        {
+          "address": "6f94783856d5ce46d24dd5946215086211d70776",
+          "amount": 1000000
+        }
+      ],
+      "nonSigners": null,
+      "validators": [
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2",
+          "committees": [
+            1
+          ],
+          "netAddress": "tcp://node-1",
+          "stakedAmount": 1000000000,
+          "output": "851e90eaef1fa27debaee2c2591503bdeec1d123"
+        },
+        {
+          "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
+          "publicKey": "98d45087a99bcbfde91993502e77dde869d4485c3778fe46513958320da560823d56a0108f4cf3513393f4d561bc489b",
+          "committees": [
+            1
+          ],
+          "netAddress": "tcp://node-2",
+          "stakedAmount": 1000000000,
+          "output": "02cd4e5eb53ea665702042a6ed6d31d616054dc5"
+        }
+      ],
+      "params": {
+        "consensus": {
+          "blockSize": 1000000,
+          "protocolVersion": "1/0",
+          "rootChainID": 1,
+          "retired": 0
+        },
+        "validator": {
+          "unstakingBlocks": 2,
+          "maxPauseBlocks": 4380,
+          "doubleSignSlashPercentage": 10,
+          "nonSignSlashPercentage": 1,
+          "maxNonSign": 4,
+          "nonSignWindow": 10,
+          "maxCommittees": 15,
+          "maxCommitteeSize": 100,
+          "earlyWithdrawalPenalty": 20,
+          "delegateUnstakingBlocks": 2,
+          "minimumOrderSize": 1000,
+          "stakePercentForSubsidizedCommittee": 33,
+          "maxSlashPerCommittee": 15,
+          "delegateRewardPercentage": 10,
+          "buyDeadlineBlocks": 15,
+          "lockOrderFeeMultiplier": 2
+        },
+        "fee": {
+          "sendFee": 10000,
+          "stakeFee": 10000,
+          "editStakeFee": 10000,
+          "unstakeFee": 10000,
+          "pauseFee": 10000,
+          "unpauseFee": 10000,
+          "changeParameterFee": 10000,
+          "daoTransferFee": 10000,
+          "subsidyFee": 10000,
+          "createOrderFee": 10000,
+          "editOrderFee": 10000,
+          "deleteOrderFee": 10000
+        },
+        "governance": {
+          "daoRewardPercentage": 10
+        }
+      },
+      "supply": null
+    }
+
+  genesis-node-2: |
+    {
+      "time": "2024-12-14 20:10:52",
+      "accounts": [
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "amount": 1000000
+        },
+        {
+          "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
+          "amount": 1000000
+        },
+        {
+          "address": "6f94783856d5ce46d24dd5946215086211d70776",
+          "amount": 1000000
+        }
+      ],
+      "nonSigners": null,
+      "validators": [
+        {
+          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2",
+          "committees": [
+            1
+          ],
+          "netAddress": "tcp://node-1",
+          "stakedAmount": 1000000000,
+          "output": "851e90eaef1fa27debaee2c2591503bdeec1d123"
+        },
+        {
+          "address": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
+          "publicKey": "98d45087a99bcbfde91993502e77dde869d4485c3778fe46513958320da560823d56a0108f4cf3513393f4d561bc489b",
+          "committees": [
+            1
+          ],
+          "netAddress": "tcp://node-2",
+          "stakedAmount": 1000000000,
+          "output": "02cd4e5eb53ea665702042a6ed6d31d616054dc5"
+        }
+      ],
+      "params": {
+        "consensus": {
+          "blockSize": 1000000,
+          "protocolVersion": "1/0",
+          "rootChainID": 1,
+          "retired": 0
+        },
+        "validator": {
+          "unstakingBlocks": 2,
+          "maxPauseBlocks": 4380,
+          "doubleSignSlashPercentage": 10,
+          "nonSignSlashPercentage": 1,
+          "maxNonSign": 4,
+          "nonSignWindow": 10,
+          "maxCommittees": 15,
+          "maxCommitteeSize": 100,
+          "earlyWithdrawalPenalty": 20,
+          "delegateUnstakingBlocks": 2,
+          "minimumOrderSize": 1000,
+          "stakePercentForSubsidizedCommittee": 33,
+          "maxSlashPerCommittee": 15,
+          "delegateRewardPercentage": 10,
+          "buyDeadlineBlocks": 15,
+          "lockOrderFeeMultiplier": 2
+        },
+        "fee": {
+          "sendFee": 10000,
+          "stakeFee": 10000,
+          "editStakeFee": 10000,
+          "unstakeFee": 10000,
+          "pauseFee": 10000,
+          "unpauseFee": 10000,
+          "changeParameterFee": 10000,
+          "daoTransferFee": 10000,
+          "subsidyFee": 10000,
+          "createOrderFee": 10000,
+          "editOrderFee": 10000,
+          "deleteOrderFee": 10000
+        },
+        "governance": {
+          "daoRewardPercentage": 10
+        }
+      },
+      "supply": null
+    }
+  keystore: |
+    {
+      "addressMap": {
+        "02cd4e5eb53ea665702042a6ed6d31d616054dc5": {
+          "publicKey": "98d45087a99bcbfde91993502e77dde869d4485c3778fe46513958320da560823d56a0108f4cf3513393f4d561bc489b",
+          "salt": "74f0112bcffc91215b6f6266acec38ca",
+          "encrypted": "183444bb69d2693a892e90ef7ebca9167719113488e4e803f8e87603ea84ccb40c423bc72db7303e81d7d216368ed763",
+          "keyAddress": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
+          "keyNickname": "node_2"
+        },
+        "6f94783856d5ce46d24dd5946215086211d70776": {
+          "publicKey": "abda38eb50fbe53db9e9c3b141c6a1ec54ad40a4840e34784c975da4ee175eb4c5dd10b6d759ae8fdf8bc22511bbd97b",
+          "salt": "cfbafc41835a47660f822ee26112d2c6",
+          "encrypted": "f18135d9509b41b5edc42e74d22396cba3f11fd8a5acae008a49b6e8bd3540a48f74c0d9e65872b922091286a531eee7",
+          "keyAddress": "6f94783856d5ce46d24dd5946215086211d70776",
+          "keyNickname": "node_3"
+        },
+        "851e90eaef1fa27debaee2c2591503bdeec1d123": {
+          "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2",
+          "salt": "3bff15134210c811e308eaa9b7b6024c",
+          "encrypted": "8b757090dfc98bfbff4f5972f0ae4bb0339a82a753f633cd37aa921955d76cda6a5f521120e7559eb57f497e88f7f555",
+          "keyAddress": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+          "keyNickname": "node_1"
+        }
+      },
+      "nicknameMap": {
+        "node_1": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+        "node_2": "02cd4e5eb53ea665702042a6ed6d31d616054dc5",
+        "node_3": "6f94783856d5ce46d24dd5946215086211d70776"
+      }
+    }
+  validator-key-node-1: |
+    "6c275055a4f6ae6bccf1e6552e172c7b8cc538a7b8d2dd645125df9e25c9ed2d"
+  validator-key-node-2: |
+    "0add1e53f45d439b98182216a9215db238aaff12d1b057b3130b0c5e8e9b0b36"
