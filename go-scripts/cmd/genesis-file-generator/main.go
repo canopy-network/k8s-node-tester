@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -86,7 +87,7 @@ const (
 	accountNick   = "account"
 )
 
-// AppConfig represents the YAML configuration structure
+// AppConfig represents the configuration structure
 type AppConfig struct {
 	Delegators            int    `yaml:"delegators"`
 	Validators            int    `yaml:"validators"`
@@ -99,28 +100,49 @@ type AppConfig struct {
 	CustomExternalAddress string `yaml:"external_address"`
 }
 
-func loadConfig(path string) (*AppConfig, error) {
-	data, err := os.ReadFile(path)
+const configFile = "configs.yaml"
+
+func loadConfigs() (map[string]*AppConfig, error) {
+	data, err := os.ReadFile(configFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
+		return nil, fmt.Errorf("failed to read config file '%s': %w", configFile, err)
 	}
 
-	config := &AppConfig{
-		// Set defaults
-		Delegators:  10,
-		Validators:  5,
-		Accounts:    100,
-		Password:    "pablito",
-		MultiNode:   false,
-		Concurrency: 100,
-		Buffer:      1000,
-	}
-
-	if err := yaml.Unmarshal(data, config); err != nil {
+	configs := make(map[string]*AppConfig)
+	if err := yaml.Unmarshal(data, &configs); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	return configs, nil
+}
+
+func getConfig(name string) (*AppConfig, error) {
+	configs, err := loadConfigs()
+	if err != nil {
+		return nil, err
+	}
+
+	config, exists := configs[strings.ToLower(name)]
+	if !exists {
+		availableConfigs := make([]string, 0, len(configs))
+		for k := range configs {
+			availableConfigs = append(availableConfigs, k)
+		}
+		return nil, fmt.Errorf("unknown config '%s'. Available configs: %s", name, strings.Join(availableConfigs, ", "))
+	}
 	return config, nil
+}
+
+func listAvailableConfigs() []string {
+	configs, err := loadConfigs()
+	if err != nil {
+		return []string{}
+	}
+	availableConfigs := make([]string, 0, len(configs))
+	for k := range configs {
+		availableConfigs = append(availableConfigs, k)
+	}
+	return availableConfigs
 }
 
 func logData() {
@@ -461,19 +483,20 @@ func genesisWriter(multiNode bool, validatorLen int, wg, accountsWG *sync.WaitGr
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run main.go <config-file.yaml>")
-		fmt.Println("Example: go run main.go config-mature.yaml")
+		fmt.Println("Usage: go run main.go <config-name>")
+		fmt.Printf("Available configs: %s\n", strings.Join(listAvailableConfigs(), ", "))
+		fmt.Println("Example: go run main.go max")
 		os.Exit(1)
 	}
 
-	configPath := os.Args[1]
-	cfg, err := loadConfig(configPath)
+	configName := os.Args[1]
+	cfg, err := getConfig(configName)
 	if err != nil {
-		fmt.Printf("Error loading config: %v\n", err)
+		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Loaded config from: %s\n", configPath)
+	fmt.Printf("Using config: %s\n", configName)
 	fmt.Println("Deleting old files!")
 
 	mustSetDirectory(".config")

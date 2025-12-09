@@ -1,0 +1,45 @@
+max:
+  delegators: 1000
+  validators: 500
+  accounts: 10000
+  password: "pablito"
+  multi_node: true
+  concurrency: 200
+  buffer: 2000
+
+medium:
+  delegators: 100
+  validators: 50
+  accounts: 1000
+  password: "pablito"
+  multi_node: true
+  concurrency: 100
+  buffer: 1000
+
+default:
+  delegators: 10
+  validators: 5
+  accounts: 100
+  password: "pablito"
+  multi_node: false
+  concurrency: 100
+  buffer: 1000
+
+min:
+  delegators: 1
+  validators: 1
+  accounts: 10
+  password: "pablito"
+  multi_node: false
+  concurrency: 10
+  buffer: 100
+
+mature:
+  delegators: 500
+  validators: 250
+  accounts: 5000
+  password: "pablito"
+  multi_node: true
+  concurrency: 150
+  buffer: 1500
+
