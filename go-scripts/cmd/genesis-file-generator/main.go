@@ -243,7 +243,7 @@ func addValidators(validators int, isDelegate, multiNode bool, nickPrefix, passw
 			if multiNode || (i == 0 && !isDelegate) {
 				stakedAmount = 1000000000
 			}
-			nick := fmt.Sprintf("%s-%d", nickPrefix, i)
+			nick := fmt.Sprintf("%s-%d", nickPrefix, i+1)
 			pk := mustCreateKey()
 			// fmt.Printf("Creating key for: %s \n", nick)
 
