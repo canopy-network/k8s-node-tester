@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,28 +28,45 @@ const (
 	fullNodeNick  = "fullnode"
 )
 
+// ChainConfig represents a single chain's configuration
+type ChainConfig struct {
+	ID           int      `yaml:"id"`
+	RootChain    int      `yaml:"root_chain"`
+	Committees   []uint64 `yaml:"committees"`
+	Delegators   int      `yaml:"delegators"`
+	Validators   int      `yaml:"validators"`
+	FullNodes    int      `yaml:"full_nodes"`
+	Accounts     int      `yaml:"accounts"`
+	StakedAmount uint64   `yaml:"staked_amount"`
+}
+
 // AppConfig represents the configuration structure
 type AppConfig struct {
-	Delegators   int    `yaml:"delegators"`
-	Validators   int    `yaml:"validators"`
-	FullNodes    int    `yaml:"full_nodes"`
-	Accounts     int    `yaml:"accounts"`
-	StakedAmount uint64 `yaml:"staked_amount"`
-	Password     string `yaml:"password"`
-	Concurrency  int64  `yaml:"concurrency"`
-	Buffer       int64  `yaml:"buffer"`
+	Password    string                  `yaml:"password"`
+	Concurrency int64                   `yaml:"concurrency"`
+	Buffer      int64                   `yaml:"buffer"`
+	Chains      map[string]*ChainConfig `yaml:"chains"`
 }
 
 // NodeIdentity represents a node's identity for ids.json
 type NodeIdentity struct {
-	Idx            int      `json:"idx"`
-	ChainID        int      `json:"chainId"`
-	RootChainID    []int    `json:"rootChainId"`
-	Address        string   `json:"address"`
-	PublicKey      string   `json:"publicKey"`
-	PrivateKey     string   `json:"privateKey"`
-	NodeType       string   `json:"nodeType"`
-	PrivateKeyBytes []byte  `json:"-"` // Not exported to JSON, used for keystore
+	Idx             int    `json:"idx"`
+	ChainID         int    `json:"chainId"`
+	RootChainID     []int  `json:"rootChainId"`
+	Address         string `json:"address"`
+	PublicKey       string `json:"publicKey"`
+	PrivateKey      string `json:"privateKey"`
+	NodeType        string `json:"nodeType"`
+	PrivateKeyBytes []byte `json:"-"` // Not exported to JSON, used for keystore
+}
+
+// ChainData holds all data for a single chain during processing
+type ChainData struct {
+	Name         string
+	Config       *ChainConfig
+	Identities   []NodeIdentity
+	AccountChan  chan *fsm.Account
+	ValidatorChan chan *fsm.Validator
 }
 
 const configFile = "configs.yaml"
@@ -160,7 +178,7 @@ func addAccounts(accounts int, wg *sync.WaitGroup, semaphoreChan chan struct{}, 
 }
 
 // addFullNodes concurrently creates full nodes (not staked, but with identities)
-func addFullNodes(count int, startIdx int,
+func addFullNodes(count int, startIdx int, chainID int, rootChainID int,
 	identities *[]NodeIdentity, gsync *sync.Mutex, wg *sync.WaitGroup, semaphoreChan chan struct{},
 	accountChan chan *fsm.Account) {
 
@@ -180,8 +198,8 @@ func addFullNodes(count int, startIdx int,
 
 			identity := NodeIdentity{
 				Idx:             startIdx + i,
-				ChainID:         1,
-				RootChainID:     []int{1},
+				ChainID:         chainID,
+				RootChainID:     []int{rootChainID},
 				Address:         hex.EncodeToString(pk.PublicKey().Address().Bytes()),
 				PublicKey:       hex.EncodeToString(pk.PublicKey().Bytes()),
 				PrivateKey:      hex.EncodeToString(pk.Bytes()),
@@ -200,6 +218,7 @@ func addFullNodes(count int, startIdx int,
 
 // addValidators concurrently creates validators and delegators
 func addValidators(validators int, isDelegate bool, startIdx int, stakedAmount uint64,
+	chainID int, rootChainID int, committees []uint64,
 	identities *[]NodeIdentity, gsync *sync.Mutex, wg *sync.WaitGroup, semaphoreChan chan struct{},
 	accountChan chan *fsm.Account, validatorChan chan *fsm.Validator) {
 
@@ -220,7 +239,7 @@ func addValidators(validators int, isDelegate bool, startIdx int, stakedAmount u
 			validatorChan <- &fsm.Validator{
 				Address:      pk.PublicKey().Address().Bytes(),
 				PublicKey:    pk.PublicKey().Bytes(),
-				Committees:   []uint64{1},
+				Committees:   committees,
 				NetAddress:   fmt.Sprintf("tcp://node-%d", startIdx+i),
 				StakedAmount: stakedAmount,
 				Output:       pk.PublicKey().Address().Bytes(),
@@ -234,8 +253,8 @@ func addValidators(validators int, isDelegate bool, startIdx int, stakedAmount u
 
 			identity := NodeIdentity{
 				Idx:             startIdx + i,
-				ChainID:         1,
-				RootChainID:     []int{1},
+				ChainID:         chainID,
+				RootChainID:     []int{rootChainID},
 				Address:         hex.EncodeToString(pk.PublicKey().Address().Bytes()),
 				PublicKey:       hex.EncodeToString(pk.PublicKey().Bytes()),
 				PrivateKey:      hex.EncodeToString(pk.Bytes()),
@@ -293,18 +312,16 @@ func mustSaveAsJSON(filename string, data any) {
 	}
 }
 
-func accountsWriter(accountLen int, wg *sync.WaitGroup, accountChan chan *fsm.Account) {
+func accountsWriter(chainDir string, accountLen int, wg *sync.WaitGroup, accountChan chan *fsm.Account) {
 	defer wg.Done()
 
-	accountsFile, err := os.Create(".config/accounts.json")
+	accountsFile, err := os.Create(filepath.Join(chainDir, "accounts.json"))
 	if err != nil {
 		panic(err)
 	}
 	defer accountsFile.Close()
 
 	writer := jwriter.NewStreamingWriter(accountsFile, 1024)
-
-	fmt.Println("Starting to write accounts!")
 
 	arr := writer.Array()
 	for range accountLen {
@@ -321,10 +338,10 @@ func accountsWriter(accountLen int, wg *sync.WaitGroup, accountChan chan *fsm.Ac
 	}
 }
 
-func genesisWriter(validatorLen int, wg, accountsWG *sync.WaitGroup, validatorChan chan *fsm.Validator) {
+func genesisWriter(chainDir string, rootChainID int, validatorLen int, wg, accountsWG *sync.WaitGroup, validatorChan chan *fsm.Validator) {
 	defer wg.Done()
 
-	genesisFile, err := os.Create(".config/genesis.json")
+	genesisFile, err := os.Create(filepath.Join(chainDir, "genesis.json"))
 	if err != nil {
 		panic(err)
 	}
@@ -334,8 +351,6 @@ func genesisWriter(validatorLen int, wg, accountsWG *sync.WaitGroup, validatorCh
 
 	obj := writer.Object()
 	obj.Name("time").String("2024-12-14 20:10:52")
-
-	fmt.Println("Starting to write validators!")
 
 	obj.Name("validators")
 	arr := writer.Array()
@@ -359,8 +374,7 @@ func genesisWriter(validatorLen int, wg, accountsWG *sync.WaitGroup, validatorCh
 	arr.End()
 
 	accountsWG.Wait()
-	fmt.Println("Accounts arrived to main thread!")
-	rawAccounts, err := os.ReadFile(".config/accounts.json")
+	rawAccounts, err := os.ReadFile(filepath.Join(chainDir, "accounts.json"))
 	if err != nil {
 		panic(err)
 	}
@@ -371,7 +385,7 @@ func genesisWriter(validatorLen int, wg, accountsWG *sync.WaitGroup, validatorCh
 			Consensus: &fsm.ConsensusParams{
 				BlockSize:       1000000,
 				ProtocolVersion: "1/0",
-				RootChainId:     1,
+				RootChainId:     uint64(rootChainID),
 				Retired:         0,
 			},
 			Validator: &fsm.ValidatorParams{
@@ -428,18 +442,37 @@ func genesisWriter(validatorLen int, wg, accountsWG *sync.WaitGroup, validatorCh
 	}
 }
 
-func createTemplateConfig() *lib.Config {
+func createTemplateConfig(chainID int, rootChainID int) *lib.Config {
+	var rootChain []lib.RootChain
+
+	if chainID == rootChainID {
+		// Root chain: single entry with ROOT_NODE_ID
+		rootChain = []lib.RootChain{
+			{
+				ChainId: uint64(chainID),
+				Url:     "http://node-{{ROOT_NODE_ID}}:50002",
+			},
+		}
+	} else {
+		// Nested chain: two entries - own chain with NODE_ID, root chain with ROOT_NODE_ID
+		rootChain = []lib.RootChain{
+			{
+				ChainId: uint64(chainID),
+				Url:     "http://node-{{NODE_ID}}:50002",
+			},
+			{
+				ChainId: uint64(rootChainID),
+				Url:     "http://node-{{ROOT_NODE_ID}}:50002",
+			},
+		}
+	}
+
 	return &lib.Config{
 		MainConfig: lib.MainConfig{
-			LogLevel: "debug",
-			ChainId:  1,
-			RootChain: []lib.RootChain{
-				{
-					ChainId: 1,
-					Url:     "http://node-{{ROOT_NODE_ID}}:50002",
-				},
-			},
-			RunVDF: true,
+			LogLevel:  "debug",
+			ChainId:   uint64(chainID),
+			RootChain: rootChain,
+			RunVDF:    true,
 		},
 		RPCConfig: lib.RPCConfig{
 			WalletPort:   "50000",
@@ -456,7 +489,7 @@ func createTemplateConfig() *lib.Config {
 			InMemory:    false,
 		},
 		P2PConfig: lib.P2PConfig{
-			NetworkID:       1,
+			NetworkID:       uint64(chainID),
 			ListenAddress:   "0.0.0.0:{{9000 + chain_id}}",
 			ExternalAddress: "node-{{NODE_ID}}",
 			MaxInbound:      21,
@@ -489,6 +522,90 @@ func createTemplateConfig() *lib.Config {
 	}
 }
 
+func processChain(chainName string, chainCfg *ChainConfig, startIdx int, password string,
+	semaphoreChan chan struct{}, allIdentities *[]NodeIdentity, globalSync *sync.Mutex) int {
+
+	chainDir := filepath.Join(".config", chainName)
+	mustSetDirectory(chainDir)
+
+	fmt.Printf("Processing chain: %s (ID: %d, RootChain: %d)\n", chainName, chainCfg.ID, chainCfg.RootChain)
+
+	accountsLen := chainCfg.Delegators + chainCfg.Validators + chainCfg.FullNodes + chainCfg.Accounts
+	validatorsLen := chainCfg.Delegators + chainCfg.Validators
+
+	accountChan := make(chan *fsm.Account, 1000)
+	validatorChan := make(chan *fsm.Validator, 1000)
+
+	var genesisWG, accountsWG sync.WaitGroup
+	genesisWG.Add(1)
+	accountsWG.Add(1)
+	go genesisWriter(chainDir, chainCfg.RootChain, validatorsLen, &genesisWG, &accountsWG, validatorChan)
+	go accountsWriter(chainDir, accountsLen, &accountsWG, accountChan)
+
+	chainIdentities := make([]NodeIdentity, 0, chainCfg.Validators+chainCfg.Delegators+chainCfg.FullNodes)
+	var chainSync sync.Mutex
+	var wg sync.WaitGroup
+
+	// Assign unique idx within this chain
+	validatorStartIdx := startIdx
+	delegatorStartIdx := validatorStartIdx + chainCfg.Validators
+	fullNodeStartIdx := delegatorStartIdx + chainCfg.Delegators
+
+	addValidators(chainCfg.Validators, false, validatorStartIdx, chainCfg.StakedAmount,
+		chainCfg.ID, chainCfg.RootChain, chainCfg.Committees,
+		&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan, validatorChan)
+	addValidators(chainCfg.Delegators, true, delegatorStartIdx, chainCfg.StakedAmount,
+		chainCfg.ID, chainCfg.RootChain, chainCfg.Committees,
+		&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan, validatorChan)
+	addFullNodes(chainCfg.FullNodes, fullNodeStartIdx, chainCfg.ID, chainCfg.RootChain,
+		&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan)
+	addAccounts(chainCfg.Accounts, &wg, semaphoreChan, accountChan)
+
+	wg.Wait()
+	genesisWG.Wait()
+
+	// Delete accounts.json as it was only needed for genesis.json
+	if err := os.Remove(filepath.Join(chainDir, "accounts.json")); err != nil {
+		panic(err)
+	}
+
+	// Sort chain identities by idx
+	sort.Slice(chainIdentities, func(i, j int) bool {
+		return chainIdentities[i].Idx < chainIdentities[j].Idx
+	})
+
+	// Write config.json for this chain
+	templateConfig := createTemplateConfig(chainCfg.ID, chainCfg.RootChain)
+	mustSaveAsJSON(filepath.Join(chainDir, "config.json"), templateConfig)
+
+	// Create keystore.json for this chain
+	keystore := &crypto.Keystore{
+		AddressMap:  make(map[string]*crypto.EncryptedPrivateKey, len(chainIdentities)),
+		NicknameMap: make(map[string]string, len(chainIdentities)),
+	}
+	for _, identity := range chainIdentities {
+		nickname := fmt.Sprintf("node-%d", identity.Idx)
+		_, err := keystore.ImportRaw(identity.PrivateKeyBytes, password, crypto.ImportRawOpts{
+			Nickname: nickname,
+		})
+		if err != nil {
+			panic(err)
+		}
+	}
+	mustSaveAsJSON(filepath.Join(chainDir, "keystore.json"), keystore)
+
+	// Add chain identities to global identities
+	globalSync.Lock()
+	*allIdentities = append(*allIdentities, chainIdentities...)
+	globalSync.Unlock()
+
+	fmt.Printf("Chain %s: %d validators, %d delegators, %d full nodes, %d accounts\n",
+		chainName, chainCfg.Validators, chainCfg.Delegators, chainCfg.FullNodes, chainCfg.Accounts)
+
+	// Return next available idx
+	return fullNodeStartIdx + chainCfg.FullNodes
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: go run main.go <config-name>")
@@ -512,82 +629,35 @@ func main() {
 
 	fmt.Println("Creating new files!")
 
-	acountsLen := cfg.Delegators + cfg.Validators + cfg.FullNodes + cfg.Accounts
-	validatorsLen := cfg.Delegators + cfg.Validators
-
-	accountChan := make(chan *fsm.Account, cfg.Buffer)
-	validatorChan := make(chan *fsm.Validator, cfg.Buffer)
-
 	logData()
 
-	var genesisWG, accountsWG sync.WaitGroup
-	genesisWG.Add(1)
-	accountsWG.Add(1)
-	go genesisWriter(validatorsLen, &genesisWG, &accountsWG, validatorChan)
-	go accountsWriter(acountsLen, &accountsWG, accountChan)
-
-	identities := make([]NodeIdentity, 0, cfg.Validators+cfg.Delegators+cfg.FullNodes)
 	semaphoreChan := make(chan struct{}, cfg.Concurrency)
-	var gsync sync.Mutex
-	var wg sync.WaitGroup
+	allIdentities := make([]NodeIdentity, 0)
+	var globalSync sync.Mutex
 
-	// Assign unique idx: validators start at 1, delegators after validators, fullnodes after delegators
-	validatorStartIdx := 1
-	delegatorStartIdx := validatorStartIdx + cfg.Validators
-	fullNodeStartIdx := delegatorStartIdx + cfg.Delegators
+	// Sort chain names for consistent processing order
+	chainNames := make([]string, 0, len(cfg.Chains))
+	for name := range cfg.Chains {
+		chainNames = append(chainNames, name)
+	}
+	sort.Strings(chainNames)
 
-	addValidators(cfg.Validators, false, validatorStartIdx, cfg.StakedAmount, &identities, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
-	addValidators(cfg.Delegators, true, delegatorStartIdx, cfg.StakedAmount, &identities, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
-	addFullNodes(cfg.FullNodes, fullNodeStartIdx, &identities, &gsync, &wg, semaphoreChan, accountChan)
-	addAccounts(cfg.Accounts, &wg, semaphoreChan, accountChan)
-
-	wg.Wait()
-	genesisWG.Wait()
-
-	// Sort identities by idx for consistent output
-	sortedIdentities := make([]NodeIdentity, len(identities))
-	copy(sortedIdentities, identities)
-	for i := 0; i < len(sortedIdentities)-1; i++ {
-		for j := i + 1; j < len(sortedIdentities); j++ {
-			if sortedIdentities[i].Idx > sortedIdentities[j].Idx {
-				sortedIdentities[i], sortedIdentities[j] = sortedIdentities[j], sortedIdentities[i]
-			}
-		}
+	// Process each chain
+	currentIdx := 1
+	for _, chainName := range chainNames {
+		chainCfg := cfg.Chains[chainName]
+		currentIdx = processChain(chainName, chainCfg, currentIdx, cfg.Password, semaphoreChan, &allIdentities, &globalSync)
 	}
 
-	// Delete accounts.json as it was only needed for genesis.json
-	fmt.Println("Cleaning up accounts.json...")
-	if err := os.Remove(".config/accounts.json"); err != nil {
-		panic(err)
-	}
+	// Sort all identities by idx for consistent output
+	sort.Slice(allIdentities, func(i, j int) bool {
+		return allIdentities[i].Idx < allIdentities[j].Idx
+	})
 
-	// Write ids.json
-	fmt.Println("Writing ids.json...")
-	mustSaveAsJSON(".config/ids.json", sortedIdentities)
-
-	// Write single config.json with wildcards
-	fmt.Println("Writing config.json...")
-	templateConfig := createTemplateConfig()
-	mustSaveAsJSON(".config/config.json", templateConfig)
-
-	// Create keystore.json with all keys
-	fmt.Println("Writing keystore.json...")
-	keystore := &crypto.Keystore{
-		AddressMap:  make(map[string]*crypto.EncryptedPrivateKey, len(sortedIdentities)),
-		NicknameMap: make(map[string]string, len(sortedIdentities)),
-	}
-	for _, identity := range sortedIdentities {
-		nickname := fmt.Sprintf("node-%d", identity.Idx)
-		_, err := keystore.ImportRaw(identity.PrivateKeyBytes, cfg.Password, crypto.ImportRawOpts{
-			Nickname: nickname,
-		})
-		if err != nil {
-			panic(err)
-		}
-	}
-	mustSaveAsJSON(".config/keystore.json", keystore)
+	// Write global ids.json with ALL nodes from ALL chains
+	fmt.Println("Writing global ids.json...")
+	mustSaveAsJSON(".config/ids.json", allIdentities)
 
 	fmt.Println("Done!")
-	fmt.Printf("Generated %d validators, %d delegators, %d full nodes, %d accounts\n",
-		cfg.Validators, cfg.Delegators, cfg.FullNodes, cfg.Accounts)
+	fmt.Printf("Total nodes across all chains: %d\n", len(allIdentities))
 }

@@ -1,49 +1,101 @@
 max:
-  delegators: 1000
-  validators: 500
-  full_nodes: 100
-  accounts: 10000
-  staked_amount: 1000000000
   password: "pablito"
   concurrency: 200
   buffer: 2000
+  chains:
+    chain_1:
+      id: 1
+      root_chain: 1
+      committees: [1,2]
+      delegators: 500
+      validators: 250
+      full_nodes: 50
+      accounts: 5000
+      staked_amount: 1000000000
+    chain_2:
+      id: 2
+      root_chain: 1
+      committees: [2]
+      delegators: 250
+      validators: 125
+      full_nodes: 25
+      accounts: 2500
+      staked_amount: 1000000000
 
 medium:
-  delegators: 100
-  validators: 50
-  full_nodes: 20
-  accounts: 1000
-  staked_amount: 1000000000
   password: "pablito"
   concurrency: 100
   buffer: 1000
+  chains:
+    chain_1:
+      id: 1
+      root_chain: 1
+      committees: [1,2]
+      delegators: 100
+      validators: 50
+      full_nodes: 20
+      accounts: 1000
+      staked_amount: 1000000000
+    chain_2:
+      id: 2
+      root_chain: 1
+      committees: [2]
+      delegators: 50
+      validators: 25
+      full_nodes: 10
+      accounts: 500
+      staked_amount: 1000000000
 
 default:
-  delegators: 10
-  validators: 5
-  full_nodes: 2
-  accounts: 100
-  staked_amount: 1000000000
   password: "pablito"
   concurrency: 100
   buffer: 1000
+  chains:
+    chain_1:
+      id: 1
+      root_chain: 1
+      committees: [1,2]
+      delegators: 10
+      validators: 5
+      full_nodes: 2
+      accounts: 100
+      staked_amount: 1000000000
+    chain_2:
+      id: 2
+      root_chain: 1
+      committees: [2]
+      delegators: 1
+      validators: 3
+      full_nodes: 5
+      accounts: 100
+      staked_amount: 1000000000
 
 min:
-  delegators: 1
-  validators: 1
-  full_nodes: 1
-  accounts: 10
-  staked_amount: 1000000000
   password: "pablito"
   concurrency: 10
   buffer: 100
+  chains:
+    chain_1:
+      id: 1
+      root_chain: 1
+      committees: [1]
+      delegators: 1
+      validators: 1
+      full_nodes: 1
+      accounts: 10
+      staked_amount: 1000000000
 
 mature:
-  delegators: 500
-  validators: 250
-  full_nodes: 50
-  accounts: 5000
-  staked_amount: 1000000000
   password: "pablito"
   concurrency: 150
   buffer: 1500
+  chains:
+    chain_1:
+      id: 1
+      root_chain: 1
+      committees: [1]
+      delegators: 500
+      validators: 250
+      full_nodes: 50
+      accounts: 5000
+      staked_amount: 1000000000
