@@ -89,13 +89,14 @@ const (
 
 // AppConfig represents the configuration structure
 type AppConfig struct {
-	Delegators  int    `yaml:"delegators"`
-	Validators  int    `yaml:"validators"`
-	FullNodes   int    `yaml:"full_nodes"`
-	Accounts    int    `yaml:"accounts"`
-	Password    string `yaml:"password"`
-	Concurrency int64  `yaml:"concurrency"`
-	Buffer      int64  `yaml:"buffer"`
+	Delegators   int    `yaml:"delegators"`
+	Validators   int    `yaml:"validators"`
+	FullNodes    int    `yaml:"full_nodes"`
+	Accounts     int    `yaml:"accounts"`
+	StakedAmount uint64 `yaml:"staked_amount"`
+	Password     string `yaml:"password"`
+	Concurrency  int64  `yaml:"concurrency"`
+	Buffer       int64  `yaml:"buffer"`
 }
 
 const configFile = "configs.yaml"
@@ -273,7 +274,7 @@ func addFullNodes(count int, password string,
 }
 
 // addValidators concurrently creates validators and optional config
-func addValidators(validators int, isDelegate bool, nickPrefix, password string,
+func addValidators(validators int, isDelegate bool, nickPrefix, password string, stakedAmount uint64,
 	files *IndividualFiles, gsync *sync.Mutex, wg *sync.WaitGroup, semaphoreChan chan struct{},
 	accountChan chan *fsm.Account, validatorChan chan *fsm.Validator) {
 
@@ -305,7 +306,7 @@ func addValidators(validators int, isDelegate bool, nickPrefix, password string,
 				PublicKey:    pk.PublicKey().Bytes(),
 				Committees:   []uint64{1},
 				NetAddress:   fmt.Sprintf("tcp://%s", nick),
-				StakedAmount: 1000000000,
+				StakedAmount: stakedAmount,
 				Output:       pk.PublicKey().Address().Bytes(),
 				Delegate:     isDelegate,
 			}
@@ -547,8 +548,8 @@ func main() {
 	semaphoreChan := make(chan struct{}, cfg.Concurrency)
 	var gsync sync.Mutex
 	var wg sync.WaitGroup
-	addValidators(cfg.Validators, false, "validator", cfg.Password, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
-	addValidators(cfg.Delegators, true, "delegator", cfg.Password, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
+	addValidators(cfg.Validators, false, "validator", cfg.Password, cfg.StakedAmount, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
+	addValidators(cfg.Delegators, true, "delegator", cfg.Password, cfg.StakedAmount, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
 	addFullNodes(cfg.FullNodes, cfg.Password, files, &gsync, &wg, semaphoreChan, accountChan)
 	addAccounts(cfg.Accounts, &wg, semaphoreChan, accountChan)
 

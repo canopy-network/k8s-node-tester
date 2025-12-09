@@ -3,6 +3,7 @@ max:
   validators: 500
   full_nodes: 100
   accounts: 10000
+  staked_amount: 1000000000
   password: "pablito"
   concurrency: 200
   buffer: 2000
@@ -12,6 +13,7 @@ medium:
   validators: 50
   full_nodes: 20
   accounts: 1000
+  staked_amount: 1000000000
   password: "pablito"
   concurrency: 100
   buffer: 1000
@@ -21,6 +23,7 @@ default:
   validators: 5
   full_nodes: 2
   accounts: 100
+  staked_amount: 1000000000
   password: "pablito"
   concurrency: 100
   buffer: 1000
@@ -30,6 +33,7 @@ min:
   validators: 1
   full_nodes: 1
   accounts: 10
+  staked_amount: 1000000000
   password: "pablito"
   concurrency: 10
   buffer: 100
@@ -39,6 +43,7 @@ mature:
   validators: 250
   full_nodes: 50
   accounts: 5000
+  staked_amount: 1000000000
   password: "pablito"
   concurrency: 150
   buffer: 1500
