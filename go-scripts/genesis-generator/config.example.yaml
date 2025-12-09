@@ -1,0 +1,24 @@
+# name of the configuration
+default:
+  # total amount of nodes, the sum of all nodes in all chains must
+  # be the same as the total amount of nodes
+  nodes:
+    count: 3
+  # individual chain configuration
+  chains:
+    # identifier of the chain so other chains can reference it
+    chain_1:
+      id: 1
+      # root chain for the given chain, can be itself
+      rootChain: 1
+      nodes:
+        count: 2
+      accounts:
+        count: 0
+    chain_2:
+      id: 2
+      rootChain: 1
+      nodes:
+        count: 1
+      accounts:
+        count: 2
