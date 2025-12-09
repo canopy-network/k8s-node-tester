@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -89,15 +88,12 @@ const (
 
 // AppConfig represents the configuration structure
 type AppConfig struct {
-	Delegators            int    `yaml:"delegators"`
-	Validators            int    `yaml:"validators"`
-	Accounts              int    `yaml:"accounts"`
-	Password              string `yaml:"password"`
-	MultiNode             bool   `yaml:"multi_node"`
-	Concurrency           int64  `yaml:"concurrency"`
-	Buffer                int64  `yaml:"buffer"`
-	CustomRootChainURL    string `yaml:"root_chain_url"`
-	CustomExternalAddress string `yaml:"external_address"`
+	Delegators  int    `yaml:"delegators"`
+	Validators  int    `yaml:"validators"`
+	Accounts    int    `yaml:"accounts"`
+	Password    string `yaml:"password"`
+	Concurrency int64  `yaml:"concurrency"`
+	Buffer      int64  `yaml:"buffer"`
 }
 
 const configFile = "configs.yaml"
@@ -228,7 +224,7 @@ func addAccounts(accounts int, wg *sync.WaitGroup, semaphoreChan chan struct{}, 
 }
 
 // addValidators concurrently creates validators and optional config
-func addValidators(validators int, isDelegate, multiNode bool, nickPrefix, password, customRootChainURL, customExternalAddress string,
+func addValidators(validators int, isDelegate bool, nickPrefix, password string,
 	files *IndividualFiles, gsync *sync.Mutex, wg *sync.WaitGroup, semaphoreChan chan struct{},
 	accountChan chan *fsm.Account, validatorChan chan *fsm.Validator) {
 
@@ -239,31 +235,18 @@ func addValidators(validators int, isDelegate, multiNode bool, nickPrefix, passw
 			semaphoreChan <- struct{}{}
 			defer func() { <-semaphoreChan }()
 
-			stakedAmount := 0
-			if multiNode || (i == 0 && !isDelegate) {
-				stakedAmount = 1000000000
-			}
 			nick := fmt.Sprintf("%s-%d", nickPrefix, i+1)
 			pk := mustCreateKey()
-			// fmt.Printf("Creating key for: %s \n", nick)
 
 			var configCopy *lib.Config
 			keystore := &crypto.Keystore{
 				AddressMap:  make(map[string]*crypto.EncryptedPrivateKey, 1),
 				NicknameMap: make(map[string]string, 1),
 			}
-			if (multiNode || i == 0) && !isDelegate {
+			if !isDelegate {
 				config := *defaultConfig
-				if customRootChainURL != "" {
-					config.RootChain[0].Url = customRootChainURL
-				} else {
-					config.RootChain[0].Url = fmt.Sprintf("http://%s:50002", nick)
-				}
-				if customExternalAddress != "" {
-					config.ExternalAddress = customExternalAddress
-				} else {
-					config.ExternalAddress = nick
-				}
+				config.RootChain[0].Url = fmt.Sprintf("http://%s:50002", nick)
+				config.ExternalAddress = nick
 				configCopy = &config
 				mustUpdateKeystore(pk.Bytes(), nick, password, keystore)
 			}
@@ -273,7 +256,7 @@ func addValidators(validators int, isDelegate, multiNode bool, nickPrefix, passw
 				PublicKey:    pk.PublicKey().Bytes(),
 				Committees:   []uint64{1},
 				NetAddress:   fmt.Sprintf("tcp://%s", nick),
-				StakedAmount: uint64(stakedAmount),
+				StakedAmount: 1000000000,
 				Output:       pk.PublicKey().Address().Bytes(),
 				Delegate:     isDelegate,
 			}
@@ -367,7 +350,7 @@ func accountsWriter(accountLen int, wg *sync.WaitGroup, accountChan chan *fsm.Ac
 	}
 }
 
-func genesisWriter(multiNode bool, validatorLen int, wg, accountsWG *sync.WaitGroup, validatorChan chan *fsm.Validator) {
+func genesisWriter(validatorLen int, wg, accountsWG *sync.WaitGroup, validatorChan chan *fsm.Validator) {
 	defer wg.Done()
 
 	genesisFile, err := os.Create(".config/genesis.json")
@@ -412,13 +395,6 @@ func genesisWriter(multiNode bool, validatorLen int, wg, accountsWG *sync.WaitGr
 	}
 	obj.Name("accounts").Raw(rawAccounts)
 
-	nonSignWindow := 10
-	maxNonSign := 4
-	if !multiNode {
-		maxNonSign = math.MaxInt64
-		nonSignWindow = math.MaxInt64
-	}
-
 	remainingFields := map[string]interface{}{
 		"params": &fsm.Params{
 			Consensus: &fsm.ConsensusParams{
@@ -432,8 +408,8 @@ func genesisWriter(multiNode bool, validatorLen int, wg, accountsWG *sync.WaitGr
 				MaxPauseBlocks:                     4380,
 				DoubleSignSlashPercentage:          10,
 				NonSignSlashPercentage:             1,
-				MaxNonSign:                         uint64(maxNonSign),
-				NonSignWindow:                      uint64(nonSignWindow),
+				MaxNonSign:                         4,
+				NonSignWindow:                      10,
 				MaxCommittees:                      15,
 				MaxCommitteeSize:                   100,
 				EarlyWithdrawalPenalty:             20,
@@ -504,10 +480,6 @@ func main() {
 
 	fmt.Println("Creating new files!")
 
-	if cfg.MultiNode && (cfg.CustomRootChainURL != "" || cfg.CustomExternalAddress != "") {
-		panic("Custom root chain url and/or external address can just be used on not multi node")
-	}
-
 	acountsLen := cfg.Delegators + cfg.Validators + cfg.Accounts
 	validatorsLen := cfg.Delegators + cfg.Validators
 
@@ -519,15 +491,15 @@ func main() {
 	var genesisWG, accountsWG sync.WaitGroup
 	genesisWG.Add(1)
 	accountsWG.Add(1)
-	go genesisWriter(cfg.MultiNode, validatorsLen, &genesisWG, &accountsWG, validatorChan)
+	go genesisWriter(validatorsLen, &genesisWG, &accountsWG, validatorChan)
 	go accountsWriter(acountsLen, &accountsWG, accountChan)
 
 	files := &IndividualFiles{}
 	semaphoreChan := make(chan struct{}, cfg.Concurrency)
 	var gsync sync.Mutex
 	var wg sync.WaitGroup
-	addValidators(cfg.Validators, false, cfg.MultiNode, "validator", cfg.Password, cfg.CustomRootChainURL, cfg.CustomExternalAddress, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
-	addValidators(cfg.Delegators, true, cfg.MultiNode, "delegator", cfg.Password, cfg.CustomRootChainURL, cfg.CustomExternalAddress, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
+	addValidators(cfg.Validators, false, "validator", cfg.Password, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
+	addValidators(cfg.Delegators, true, "delegator", cfg.Password, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
 	addAccounts(cfg.Accounts, &wg, semaphoreChan, accountChan)
 
 	wg.Wait()
