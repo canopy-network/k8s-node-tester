@@ -51,7 +51,7 @@ type AppConfig struct {
 type NodeIdentity struct {
 	Idx             int    `json:"idx"`
 	ChainID         int    `json:"chainId"`
-	RootChainID     []int  `json:"rootChainId"`
+	RootChainID     int    `json:"rootChainId"`
 	Address         string `json:"address"`
 	PublicKey       string `json:"publicKey"`
 	PrivateKey      string `json:"privateKey"`
@@ -198,7 +198,7 @@ func addFullNodes(count int, startIdx int, chainID int, rootChainID int,
 			identity := NodeIdentity{
 				Idx:             startIdx + i,
 				ChainID:         chainID,
-				RootChainID:     []int{rootChainID},
+				RootChainID:     rootChainID,
 				Address:         hex.EncodeToString(pk.PublicKey().Address().Bytes()),
 				PublicKey:       hex.EncodeToString(pk.PublicKey().Bytes()),
 				PrivateKey:      hex.EncodeToString(pk.Bytes()),
@@ -253,7 +253,7 @@ func addValidators(validators int, isDelegate bool, startIdx int, stakedAmount u
 			identity := NodeIdentity{
 				Idx:             startIdx + i,
 				ChainID:         chainID,
-				RootChainID:     []int{rootChainID},
+				RootChainID:     rootChainID,
 				Address:         hex.EncodeToString(pk.PublicKey().Address().Bytes()),
 				PublicKey:       hex.EncodeToString(pk.PublicKey().Bytes()),
 				PrivateKey:      hex.EncodeToString(pk.Bytes()),
