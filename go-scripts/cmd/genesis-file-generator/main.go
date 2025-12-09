@@ -18,67 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var (
-	defaultConfig = &lib.Config{
-		MainConfig: lib.MainConfig{
-			LogLevel: "debug",
-			ChainId:  1,
-			RootChain: []lib.RootChain{
-				{
-					ChainId: 1,
-					Url:     "http://node-1:50002",
-				},
-			},
-			RunVDF: true,
-		},
-		RPCConfig: lib.RPCConfig{
-			WalletPort:   "50000",
-			ExplorerPort: "50001",
-			RPCPort:      "50002",
-			AdminPort:    "50003",
-			RPCUrl:       "http://0.0.0.0:50002",
-			AdminRPCUrl:  "http://0.0.0.0:50003",
-			TimeoutS:     3,
-		},
-		StoreConfig: lib.StoreConfig{
-			DataDirPath: "/root/.canopy",
-			DBName:      "canopy",
-			InMemory:    false,
-		},
-		P2PConfig: lib.P2PConfig{
-			NetworkID:       1,
-			ListenAddress:   "0.0.0.0:9001",
-			ExternalAddress: "node-1",
-			MaxInbound:      21,
-			MaxOutbound:     7,
-			TrustedPeerIDs:  nil,
-			DialPeers:       []string{},
-			BannedPeerIDs:   nil,
-			BannedIPs:       nil,
-		},
-		ConsensusConfig: lib.ConsensusConfig{
-			ElectionTimeoutMS:       2000,
-			ElectionVoteTimeoutMS:   3000,
-			ProposeTimeoutMS:        3000,
-			ProposeVoteTimeoutMS:    2000,
-			PrecommitTimeoutMS:      2000,
-			PrecommitVoteTimeoutMS:  2000,
-			CommitTimeoutMS:         6000,
-			RoundInterruptTimeoutMS: 2000,
-		},
-		MempoolConfig: lib.MempoolConfig{
-			MaxTotalBytes:       1000000,
-			MaxTransactionCount: 5000,
-			IndividualMaxTxSize: 4000,
-			DropPercentage:      35,
-		},
-		MetricsConfig: lib.MetricsConfig{
-			MetricsEnabled:    true,
-			PrometheusAddress: "0.0.0.0:9090",
-		},
-	}
-	nickNames = make(chan string, 1000)
-)
+var nickNames = make(chan string, 1000)
 
 const (
 	validatorNick = "validator"
@@ -97,6 +37,18 @@ type AppConfig struct {
 	Password     string `yaml:"password"`
 	Concurrency  int64  `yaml:"concurrency"`
 	Buffer       int64  `yaml:"buffer"`
+}
+
+// NodeIdentity represents a node's identity for ids.json
+type NodeIdentity struct {
+	Idx            int      `json:"idx"`
+	ChainID        int      `json:"chainId"`
+	RootChainID    []int    `json:"rootChainId"`
+	Address        string   `json:"address"`
+	PublicKey      string   `json:"publicKey"`
+	PrivateKey     string   `json:"privateKey"`
+	NodeType       string   `json:"nodeType"`
+	PrivateKeyBytes []byte  `json:"-"` // Not exported to JSON, used for keystore
 }
 
 const configFile = "configs.yaml"
@@ -178,17 +130,6 @@ func logData() {
 	}()
 }
 
-type IndividualFile struct {
-	ValidatorKey string
-	Config       *lib.Config
-	Keystore     *crypto.Keystore
-	Nick         string
-}
-
-type IndividualFiles struct {
-	Files []*IndividualFile
-}
-
 func mustCreateKey() crypto.PrivateKeyI {
 	pk, err := crypto.NewBLS12381PrivateKey()
 	if err != nil {
@@ -196,15 +137,6 @@ func mustCreateKey() crypto.PrivateKeyI {
 	}
 
 	return pk
-}
-
-func mustUpdateKeystore(privateKey []byte, nickName, password string, keystore *crypto.Keystore) {
-	_, err := keystore.ImportRaw(privateKey, password, crypto.ImportRawOpts{
-		Nickname: nickName,
-	})
-	if err != nil {
-		panic(err)
-	}
 }
 
 // addAccounts concurrently creates keys and accounts
@@ -218,8 +150,6 @@ func addAccounts(accounts int, wg *sync.WaitGroup, semaphoreChan chan struct{}, 
 
 			addrStr := fmt.Sprintf("%020x", i)
 
-			// fmt.Printf("Creating key for: %s \n", nick)
-
 			accountChan <- &fsm.Account{
 				Address: []byte(addrStr),
 				Amount:  1000000,
@@ -229,9 +159,9 @@ func addAccounts(accounts int, wg *sync.WaitGroup, semaphoreChan chan struct{}, 
 	}
 }
 
-// addFullNodes concurrently creates full nodes (not staked, but with config files)
-func addFullNodes(count int, password string,
-	files *IndividualFiles, gsync *sync.Mutex, wg *sync.WaitGroup, semaphoreChan chan struct{},
+// addFullNodes concurrently creates full nodes (not staked, but with identities)
+func addFullNodes(count int, startIdx int,
+	identities *[]NodeIdentity, gsync *sync.Mutex, wg *sync.WaitGroup, semaphoreChan chan struct{},
 	accountChan chan *fsm.Account) {
 
 	for i := range count {
@@ -241,31 +171,26 @@ func addFullNodes(count int, password string,
 			semaphoreChan <- struct{}{}
 			defer func() { <-semaphoreChan }()
 
-			nick := fmt.Sprintf("fullnode-%d", i+1)
 			pk := mustCreateKey()
-
-			config := *defaultConfig
-			config.RootChain[0].Url = fmt.Sprintf("http://%s:50002", nick)
-			config.ExternalAddress = nick
-
-			keystore := &crypto.Keystore{
-				AddressMap:  make(map[string]*crypto.EncryptedPrivateKey, 1),
-				NicknameMap: make(map[string]string, 1),
-			}
-			mustUpdateKeystore(pk.Bytes(), nick, password, keystore)
 
 			accountChan <- &fsm.Account{
 				Address: pk.PublicKey().Address().Bytes(),
 				Amount:  1000000,
 			}
 
+			identity := NodeIdentity{
+				Idx:             startIdx + i,
+				ChainID:         1,
+				RootChainID:     []int{1},
+				Address:         hex.EncodeToString(pk.PublicKey().Address().Bytes()),
+				PublicKey:       hex.EncodeToString(pk.PublicKey().Bytes()),
+				PrivateKey:      hex.EncodeToString(pk.Bytes()),
+				NodeType:        "fullnode",
+				PrivateKeyBytes: pk.Bytes(),
+			}
+
 			gsync.Lock()
-			files.Files = append(files.Files, &IndividualFile{
-				Config:       &config,
-				ValidatorKey: pk.String(),
-				Nick:         nick,
-				Keystore:     keystore,
-			})
+			*identities = append(*identities, identity)
 			gsync.Unlock()
 
 			nickNames <- fullNodeNick
@@ -273,10 +198,15 @@ func addFullNodes(count int, password string,
 	}
 }
 
-// addValidators concurrently creates validators and optional config
-func addValidators(validators int, isDelegate bool, nickPrefix, password string, stakedAmount uint64,
-	files *IndividualFiles, gsync *sync.Mutex, wg *sync.WaitGroup, semaphoreChan chan struct{},
+// addValidators concurrently creates validators and delegators
+func addValidators(validators int, isDelegate bool, startIdx int, stakedAmount uint64,
+	identities *[]NodeIdentity, gsync *sync.Mutex, wg *sync.WaitGroup, semaphoreChan chan struct{},
 	accountChan chan *fsm.Account, validatorChan chan *fsm.Validator) {
+
+	nodeType := "validator"
+	if isDelegate {
+		nodeType = "delegator"
+	}
 
 	for i := range validators {
 		wg.Add(1)
@@ -285,27 +215,13 @@ func addValidators(validators int, isDelegate bool, nickPrefix, password string,
 			semaphoreChan <- struct{}{}
 			defer func() { <-semaphoreChan }()
 
-			nick := fmt.Sprintf("%s-%d", nickPrefix, i+1)
 			pk := mustCreateKey()
-
-			var configCopy *lib.Config
-			keystore := &crypto.Keystore{
-				AddressMap:  make(map[string]*crypto.EncryptedPrivateKey, 1),
-				NicknameMap: make(map[string]string, 1),
-			}
-			if !isDelegate {
-				config := *defaultConfig
-				config.RootChain[0].Url = fmt.Sprintf("http://%s:50002", nick)
-				config.ExternalAddress = nick
-				configCopy = &config
-				mustUpdateKeystore(pk.Bytes(), nick, password, keystore)
-			}
 
 			validatorChan <- &fsm.Validator{
 				Address:      pk.PublicKey().Address().Bytes(),
 				PublicKey:    pk.PublicKey().Bytes(),
 				Committees:   []uint64{1},
-				NetAddress:   fmt.Sprintf("tcp://%s", nick),
+				NetAddress:   fmt.Sprintf("tcp://node-%d", startIdx+i),
 				StakedAmount: stakedAmount,
 				Output:       pk.PublicKey().Address().Bytes(),
 				Delegate:     isDelegate,
@@ -316,16 +232,21 @@ func addValidators(validators int, isDelegate bool, nickPrefix, password string,
 				Amount:  1000000,
 			}
 
-			if configCopy != nil {
-				gsync.Lock()
-				files.Files = append(files.Files, &IndividualFile{
-					Config:       configCopy,
-					ValidatorKey: pk.String(),
-					Nick:         nick,
-					Keystore:     keystore,
-				})
-				gsync.Unlock()
+			identity := NodeIdentity{
+				Idx:             startIdx + i,
+				ChainID:         1,
+				RootChainID:     []int{1},
+				Address:         hex.EncodeToString(pk.PublicKey().Address().Bytes()),
+				PublicKey:       hex.EncodeToString(pk.PublicKey().Bytes()),
+				PrivateKey:      hex.EncodeToString(pk.Bytes()),
+				NodeType:        nodeType,
+				PrivateKeyBytes: pk.Bytes(),
 			}
+
+			gsync.Lock()
+			*identities = append(*identities, identity)
+			gsync.Unlock()
+
 			if isDelegate {
 				nickNames <- delegatorNick
 			} else {
@@ -507,6 +428,67 @@ func genesisWriter(validatorLen int, wg, accountsWG *sync.WaitGroup, validatorCh
 	}
 }
 
+func createTemplateConfig() *lib.Config {
+	return &lib.Config{
+		MainConfig: lib.MainConfig{
+			LogLevel: "debug",
+			ChainId:  1,
+			RootChain: []lib.RootChain{
+				{
+					ChainId: 1,
+					Url:     "http://node-{{ROOT_NODE_ID}}:50002",
+				},
+			},
+			RunVDF: true,
+		},
+		RPCConfig: lib.RPCConfig{
+			WalletPort:   "50000",
+			ExplorerPort: "50001",
+			RPCPort:      "50002",
+			AdminPort:    "50003",
+			RPCUrl:       "http://0.0.0.0:50002",
+			AdminRPCUrl:  "http://0.0.0.0:50003",
+			TimeoutS:     3,
+		},
+		StoreConfig: lib.StoreConfig{
+			DataDirPath: "/root/.canopy",
+			DBName:      "canopy",
+			InMemory:    false,
+		},
+		P2PConfig: lib.P2PConfig{
+			NetworkID:       1,
+			ListenAddress:   "0.0.0.0:{{9000 + chain_id}}",
+			ExternalAddress: "node-{{NODE_ID}}",
+			MaxInbound:      21,
+			MaxOutbound:     7,
+			TrustedPeerIDs:  nil,
+			DialPeers:       []string{},
+			BannedPeerIDs:   nil,
+			BannedIPs:       nil,
+		},
+		ConsensusConfig: lib.ConsensusConfig{
+			ElectionTimeoutMS:       2000,
+			ElectionVoteTimeoutMS:   3000,
+			ProposeTimeoutMS:        3000,
+			ProposeVoteTimeoutMS:    2000,
+			PrecommitTimeoutMS:      2000,
+			PrecommitVoteTimeoutMS:  2000,
+			CommitTimeoutMS:         6000,
+			RoundInterruptTimeoutMS: 2000,
+		},
+		MempoolConfig: lib.MempoolConfig{
+			MaxTotalBytes:       1000000,
+			MaxTransactionCount: 5000,
+			IndividualMaxTxSize: 4000,
+			DropPercentage:      35,
+		},
+		MetricsConfig: lib.MetricsConfig{
+			MetricsEnabled:    true,
+			PrometheusAddress: "0.0.0.0:9090",
+		},
+	}
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: go run main.go <config-name>")
@@ -544,35 +526,68 @@ func main() {
 	go genesisWriter(validatorsLen, &genesisWG, &accountsWG, validatorChan)
 	go accountsWriter(acountsLen, &accountsWG, accountChan)
 
-	files := &IndividualFiles{}
+	identities := make([]NodeIdentity, 0, cfg.Validators+cfg.Delegators+cfg.FullNodes)
 	semaphoreChan := make(chan struct{}, cfg.Concurrency)
 	var gsync sync.Mutex
 	var wg sync.WaitGroup
-	addValidators(cfg.Validators, false, "validator", cfg.Password, cfg.StakedAmount, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
-	addValidators(cfg.Delegators, true, "delegator", cfg.Password, cfg.StakedAmount, files, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
-	addFullNodes(cfg.FullNodes, cfg.Password, files, &gsync, &wg, semaphoreChan, accountChan)
+
+	// Assign unique idx: validators start at 1, delegators after validators, fullnodes after delegators
+	validatorStartIdx := 1
+	delegatorStartIdx := validatorStartIdx + cfg.Validators
+	fullNodeStartIdx := delegatorStartIdx + cfg.Delegators
+
+	addValidators(cfg.Validators, false, validatorStartIdx, cfg.StakedAmount, &identities, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
+	addValidators(cfg.Delegators, true, delegatorStartIdx, cfg.StakedAmount, &identities, &gsync, &wg, semaphoreChan, accountChan, validatorChan)
+	addFullNodes(cfg.FullNodes, fullNodeStartIdx, &identities, &gsync, &wg, semaphoreChan, accountChan)
 	addAccounts(cfg.Accounts, &wg, semaphoreChan, accountChan)
 
 	wg.Wait()
 	genesisWG.Wait()
 
-	for _, file := range files.Files {
-		nodePath := fmt.Sprintf(".config/%s", file.Nick)
-
-		mustSetDirectory(nodePath)
-
-		input, err := os.ReadFile(".config/genesis.json")
-		if err != nil {
-			panic(err)
+	// Sort identities by idx for consistent output
+	sortedIdentities := make([]NodeIdentity, len(identities))
+	copy(sortedIdentities, identities)
+	for i := 0; i < len(sortedIdentities)-1; i++ {
+		for j := i + 1; j < len(sortedIdentities); j++ {
+			if sortedIdentities[i].Idx > sortedIdentities[j].Idx {
+				sortedIdentities[i], sortedIdentities[j] = sortedIdentities[j], sortedIdentities[i]
+			}
 		}
-
-		err = os.WriteFile(fmt.Sprintf("%s/genesis.json", nodePath), input, 0644)
-		if err != nil {
-			panic(err)
-		}
-
-		mustSaveAsJSON(fmt.Sprintf("%s/keystore.json", nodePath), file.Keystore)
-		mustSaveAsJSON(fmt.Sprintf("%s/config.json", nodePath), file.Config)
-		mustSaveAsJSON(fmt.Sprintf("%s/validator_key.json", nodePath), file.ValidatorKey)
 	}
+
+	// Delete accounts.json as it was only needed for genesis.json
+	fmt.Println("Cleaning up accounts.json...")
+	if err := os.Remove(".config/accounts.json"); err != nil {
+		panic(err)
+	}
+
+	// Write ids.json
+	fmt.Println("Writing ids.json...")
+	mustSaveAsJSON(".config/ids.json", sortedIdentities)
+
+	// Write single config.json with wildcards
+	fmt.Println("Writing config.json...")
+	templateConfig := createTemplateConfig()
+	mustSaveAsJSON(".config/config.json", templateConfig)
+
+	// Create keystore.json with all keys
+	fmt.Println("Writing keystore.json...")
+	keystore := &crypto.Keystore{
+		AddressMap:  make(map[string]*crypto.EncryptedPrivateKey, len(sortedIdentities)),
+		NicknameMap: make(map[string]string, len(sortedIdentities)),
+	}
+	for _, identity := range sortedIdentities {
+		nickname := fmt.Sprintf("node-%d", identity.Idx)
+		_, err := keystore.ImportRaw(identity.PrivateKeyBytes, cfg.Password, crypto.ImportRawOpts{
+			Nickname: nickname,
+		})
+		if err != nil {
+			panic(err)
+		}
+	}
+	mustSaveAsJSON(".config/keystore.json", keystore)
+
+	fmt.Println("Done!")
+	fmt.Printf("Generated %d validators, %d delegators, %d full nodes, %d accounts\n",
+		cfg.Validators, cfg.Delegators, cfg.FullNodes, cfg.Accounts)
 }
