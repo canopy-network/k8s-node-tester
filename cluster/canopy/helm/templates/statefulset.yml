@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: node
+  namespace: {{ .Values.namespace }}
+spec:
+  serviceName: canopy-headless
+  replicas: {{ .Values.replicas }}
+  ordinals:
+    start: 1
+  selector:
+    matchLabels:
+      app: node
+  template:
+    metadata:
+      labels:
+        app: node
+    spec:
+      {{- if .Values.topologySpreadConstraints.enabled }}
+        topologySpreadConstraints:
+        - maxSkew: {{ .Values.topologySpreadConstraints.maxSkew }}
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: {{ .Values.topologySpreadConstraints.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              app: node
+      {{- end }}
+      initContainers:
+      - name: init-node
+        image: busybox:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          # extract validator key from ConfigMap based on pod ordinal
+          POD_INDEX=${HOSTNAME##*-}
+          echo "Initializing node with index: ${POD_INDEX}"
+          sleep infinity
+        volumeMounts:
+        - name: data
+          mountPath: /root/.canopy
+      containers:
+      - name: canopy
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: 50000
+          name: wallet
+        - containerPort: 50001
+          name: explorer
+        - containerPort: 50002
+          name: rpc
+        - containerPort: 50003
+          name: admin-rpc
+        - containerPort: 9090
+          name: metrics
+        {{- range untilStep .Values.ports.p2p.start .Values.ports.p2p.end 1 }}
+        - containerPort: {{ . }}
+          name: p2p-{{ . }}
+        {{- end }}
+        resources:
+          {{ toYaml .Values.resources | nindent 10 }}
+        volumeMounts:
+        - name: data
+          mountPath: /root/.canopy
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: {{ .Values.storage.storageClassName }}
+      resources:
+        requests:
+          storage: {{ .Values.storage.size }}

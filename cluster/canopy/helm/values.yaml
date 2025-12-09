@@ -1,0 +1,38 @@
+# number of nodes to deploy
+replicaCount: 3
+
+# namespace
+namespace: canopy
+
+# container image
+image:
+  repository: canopynetwork/canopy
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# container ports
+ports:
+  p2p:
+    start: 9001
+    end: 9100
+
+# storage per pod
+storage:
+  size: 1Gi
+  storageClassName: local-path
+
+# resources per pod
+resources:
+  requests:
+    memory: "2Gi"
+    cpu: "1000m"
+  limits:
+    memory: "2Gi"
+    cpu: "1000m"
+
+# even distribution across servers
+topologySpreadConstraints:
+  enabled: true
+  maxSkew: 1
+  whenUnsatisfiable: DoNotSchedule
+
