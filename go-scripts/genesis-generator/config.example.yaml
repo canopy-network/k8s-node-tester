@@ -1,7 +1,12 @@
 # name of the configuration
 default:
-  # total amount of nodes, the sum of all nodes in all chains must
-  # be the same as the total amount of nodes
+  general:
+    concurrency: 10,
+    password: "password"
+    buffer: 100
+    external-address: "node-"
+  # total amount of nodes, including validators and full nodes,
+  # the sum of all nodes in all chains must be the same as the total amount of nodes
   nodes:
     count: 3
   # individual chain configuration
@@ -11,14 +16,30 @@ default:
       id: 1
       # root chain for the given chain, can be itself
       rootChain: 1
-      nodes:
+      # validator: nodes providing consensus
+      validators:
         count: 2
-      accounts:
+      # fullNode: nodes providing full services without being part of consensus
+      fullNodes:
         count: 0
+      accounts:
+        count: 1
+      delegators:
+        count: 0
+      stakedAmount:
+        count: 1000000000
+      committees: [1, 2]
     chain_2:
       id: 2
       rootChain: 1
-      nodes:
+      validators:
         count: 1
+      fullNodes:
+        count: 0
       accounts:
         count: 2
+      delegators:
+        count: 0
+      stakedAmount:
+        count: 1000000000
+      committees: [2]

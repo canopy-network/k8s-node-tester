@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   namespace: canopy
-  name: genesis
+  name: config
 data:
   config_1.json:
     {
