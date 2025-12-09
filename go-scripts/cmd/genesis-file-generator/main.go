@@ -488,7 +488,7 @@ func createTemplateConfig(chainID int, rootChainID int) *lib.Config {
 			InMemory:    false,
 		},
 		P2PConfig: lib.P2PConfig{
-			NetworkID:       uint64(chainID),
+			NetworkID:       1,
 			ListenAddress:   fmt.Sprintf("0.0.0.0:%d", 9000+chainID),
 			ExternalAddress: "node-{{NODE_ID}}",
 			MaxInbound:      21,
