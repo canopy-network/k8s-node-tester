@@ -36,8 +36,8 @@ var (
 			ExplorerPort: "50001",
 			RPCPort:      "50002",
 			AdminPort:    "50003",
-			RPCUrl:       "http://localhost:50002",
-			AdminRPCUrl:  "http://localhost:50003",
+			RPCUrl:       "http://0.0.0.0:50002",
+			AdminRPCUrl:  "http://0.0.0.0:50003",
 			TimeoutS:     3,
 		},
 		StoreConfig: lib.StoreConfig{
