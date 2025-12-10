@@ -31,18 +31,18 @@ spec:
       {{- end }}
       initContainers:
       - name: init-node
-        image: busybox:latest
+        image: golang:1.25-alpine3.22
         command: ["/bin/sh", "-c"]
         args:
         - |
-          # extract validator key from ConfigMap based on pod ordinal
-          POD_INDEX=${HOSTNAME##*-}
-          echo "Initializing node with index: ${POD_INDEX}"
+          CGO_ENABLED=0 GO111MODULE=off go run /root/init-node/main.go
         volumeMounts:
         - name: data
           mountPath: /root/.canopy
         - name: configs
           mountPath: /root/configs
+        - name: init-script
+          mountPath: /root/init-node
       containers:
       - name: canopy
         image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
@@ -79,6 +79,9 @@ spec:
               name: {{ .Values.volumes.configMaps.keystore }}
           - configMap:
               name: {{ .Values.volumes.configMaps.keys }}
+      - name: init-script
+        configMap:
+          name: init-node-script
   volumeClaimTemplates:
   - metadata:
       name: data
