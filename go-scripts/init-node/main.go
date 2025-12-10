@@ -115,9 +115,9 @@ func main() {
 	}
 	// perform the substitutions
 	configFileContents = performSubstitution(configFileContents, map[string]string{
-		"{{NODE_ID}}":              strconv.Itoa(podId) + serviceSuffix,
-		"{{ROOT_NODE_ID}}":         strconv.Itoa(rootNode.Id) + serviceSuffix,
-		"{{ROOT_NODE_PUBLIC_KEY}}": rootNode.PublicKey,
+		"|NODE_ID|":              strconv.Itoa(podId) + serviceSuffix,
+		"|ROOT_NODE_ID|":         strconv.Itoa(rootNode.Id) + serviceSuffix,
+		"|ROOT_NODE_PUBLIC_KEY|": rootNode.PublicKey,
 	})
 	// copy the config file to the canopy's directory
 	dst = fullFilePath(canopyPath, configFile, configFileExt)
@@ -126,15 +126,17 @@ func main() {
 		log.Error("failed to copy config file", slog.String("err", err.Error()), slog.String("dst", dst))
 		os.Exit(1)
 	}
+	log.Info("finished setting up the config for the node " + hostname)
 }
 
 // getPodId returns the hostname, prefix and id of the pod
 func getPodId() (hostname, prefix string, id int, err error) {
+	separator := "-"
 	hostname, err = os.Hostname()
 	if err != nil {
 		return "", "", 0, fmt.Errorf("failed to get hostname: %w", err)
 	}
-	parts := strings.Split(hostname, "-")
+	parts := strings.Split(hostname, separator)
 	if len(parts) < 2 {
 		return "", "", 0, fmt.Errorf("invalid hostname format: %s", hostname)
 	}
@@ -142,7 +144,7 @@ func getPodId() (hostname, prefix string, id int, err error) {
 	if err != nil {
 		return "", "", 0, fmt.Errorf("invalid pod id: %w", err)
 	}
-	return hostname, parts[0], id, nil
+	return hostname, parts[0] + separator, id, nil
 }
 
 // fullFilePath returns the full path to the file with the given name and extension
