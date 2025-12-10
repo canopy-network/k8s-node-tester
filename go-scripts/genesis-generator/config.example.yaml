@@ -1,45 +1,51 @@
-# name of the configuration
 default:
   general:
-    concurrency: 10,
-    password: "password"
-    buffer: 100
-    external-address: "node-"
-  # total amount of nodes, including validators and full nodes,
-  # the sum of all nodes in all chains must be the same as the total amount of nodes
+    concurrency: 100
+    password: "pablito"
+    buffer: 1000
+    netAddressSuffix: .p2p
   nodes:
     count: 3
-  # individual chain configuration
   chains:
-    # identifier of the chain so other chains can reference it
     chain_1:
       id: 1
-      # root chain for the given chain, can be itself
       rootChain: 1
-      # validator: nodes providing consensus
       validators:
         count: 2
-      # fullNode: nodes providing full services without being part of consensus
+        stakedAmount: 1000000000
+        amount: 1000000
+        committees: [1, 2]
       fullNodes:
         count: 0
+        amount: 1000000
       accounts:
         count: 1
+        amount: 1000000
       delegators:
         count: 0
-      stakedAmount:
-        count: 1000000000
-      committees: [1, 2]
+        stakedAmount: 1000000000
+        amount: 1000000
+        committees: [1, 2]
+      committees:
+        id: 2
+        # must be less than or equal to the number of validators
+        count: 1
     chain_2:
       id: 2
       rootChain: 1
       validators:
         count: 1
+        stakedAmount: 1000000000
+        amount: 1000000
+        committees: [2]
       fullNodes:
         count: 0
+        amount: 1000000
       accounts:
         count: 2
+        amount: 1000000
       delegators:
         count: 0
-      stakedAmount:
-        count: 1000000000
-      committees: [2]
+        stakedAmount: 1000000000
+        amount: 1000000
+        committees: [2]

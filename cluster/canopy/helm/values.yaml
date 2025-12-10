@@ -1,5 +1,5 @@
 # number of nodes to deploy
-replicaCount: 3
+replicaCount: 4
 
 # launch behavior of statefulset
 # default: launch all pods in parallel
@@ -47,11 +47,11 @@ storage:
 # resources per pod
 resources:
   requests:
-    memory: "2Gi"
-    cpu: "1000m"
+    memory: "1Gi"
+    # cpu: "1000m"
   limits:
-    memory: "2Gi"
-    cpu: "1000m"
+    memory: "1Gi"
+    # cpu: "1000m"
 
 # even distribution across servers
 topologySpreadConstraints:
