@@ -21,7 +21,7 @@
   "dbName": "canopy",
   "inMemory": false,
   "networkID": 1,
-  "listenAddress": "0.0.0.0:{{9000 + CHAIN_ID}}",
+  "listenAddress": "0.0.0.0:9001",
   "externalAddress": "node-{{NODE_ID}}",
   "maxInbound": 21,
   "maxOutbound": 7,
