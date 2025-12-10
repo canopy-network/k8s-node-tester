@@ -4,8 +4,8 @@
   "sleepUntil": 0,
   "rootChain": [
     {
-      "chainId": "{{ROOT_CHAIN_ID}}",
-      "url": "http://node-{{ROOT_NODE_ID}}:50002"
+      "chainId": 1,
+      "url": "http://node-|ROOT_NODE_ID|:50002"
     }
   ],
   "runVDF": false,
@@ -22,7 +22,7 @@
   "inMemory": false,
   "networkID": 1,
   "listenAddress": "0.0.0.0:9001",
-  "externalAddress": "node-{{NODE_ID}}",
+  "externalAddress": "node-|NODE_ID|",
   "maxInbound": 21,
   "maxOutbound": 7,
   "trustedPeerIDs": null,
