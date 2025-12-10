@@ -1,6 +1,17 @@
 # number of nodes to deploy
 replicaCount: 3
 
+# launch behavior of statefulset
+# default: launch all pods in parallel
+podManagementPolicy: Parallel
+
+# persistent volume claim retention policy
+# default: delete pvc when pod is deleted,
+# retain pvc when pod is scaled
+persistentVolumeClaimRetentionPolicy:
+  whenDeleted: Delete
+  whenScaled: Retain
+
 # name of the statefulset
 name: node
 
@@ -19,6 +30,14 @@ ports:
     start: 9001
     # not inclusive
     end: 9003
+
+# volume mounts
+volumes:
+  configMaps:
+    genesis: genesis
+    config: config
+    keystore: keystore
+    keys: keys
 
 # storage per pod
 storage:
