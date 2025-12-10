@@ -20,33 +20,67 @@ Configuration is defined in `configs.yaml`. Each named config (e.g., `max`, `med
 
 ```yaml
 default:
-  password: "pablito"       # Password for keystore encryption
-  concurrency: 100          # Number of concurrent goroutines for key generation
+  general:
+    concurrency: 100          # Number of concurrent goroutines for key generation
+    password: "pablito"       # Password for keystore encryption
+  # Total amount of nodes (validators + delegators + full nodes across all chains)
+  nodes:
+    count: 3
+  # Individual chain configuration
   chains:
+    # Identifier of the chain so other chains can reference it
     chain_1:
-      id: 1                 # Unique chain ID
-      root_chain: 1         # Root chain ID (self for root chains)
-      committees: [1, 2]    # Committees validators are staked to
-      delegators: 10
-      validators: 5
-      full_nodes: 2
-      accounts: 100
-      staked_amount: 1000000000
+      id: 1                   # Unique chain ID
+      rootChain: 1            # Root chain ID (can be itself for root chains)
+      # Validators: nodes providing consensus
+      validators:
+        count: 2
+        stakedAmount: 1000000000
+        amount: 1000000       # Account balance
+        committees: [1, 2]
+      # Full nodes: nodes providing full services without being part of consensus
+      fullNodes:
+        count: 0
+        amount: 1000000
+      # Accounts: regular accounts without node infrastructure
+      accounts:
+        count: 1
+        amount: 1000000
+      # Delegators: staked nodes that delegate to validators
+      delegators:
+        count: 0
+        stakedAmount: 1000000000
+        amount: 1000000
+        committees: [1, 2]
     chain_2:
       id: 2
-      root_chain: 1         # Nested chain (chain_1 is root)
-      committees: [2]
-      delegators: 1
-      validators: 3
-      full_nodes: 5
-      accounts: 100
-      staked_amount: 1000000000
+      rootChain: 1            # Nested chain (chain_1 is root)
+      validators:
+        count: 1
+        stakedAmount: 1000000000
+        amount: 1000000
+        committees: [2]
+      fullNodes:
+        count: 0
+        amount: 1000000
+      accounts:
+        count: 2
+        amount: 1000000
+      delegators:
+        count: 0
+        stakedAmount: 1000000000
+        amount: 1000000
+        committees: [2]
 ```
+
+### Validation
+
+The script validates that the sum of all validators, delegators, and full nodes across all chains equals the `nodes.count` value before running. If there's a mismatch, the script will exit with an error.
 
 ### Chain Types
 
-- **Root Chain**: A chain where `root_chain` equals its own `id`
-- **Nested Chain**: A chain where `root_chain` points to another chain's `id`
+- **Root Chain**: A chain where `rootChain` equals its own `id`
+- **Nested Chain**: A chain where `rootChain` points to another chain's `id`
 
 ## Output Structure
 
@@ -145,11 +179,11 @@ Encrypted private keys for all nodes in the chain, with nicknames `node-{idx}`.
 
 | Config | Description |
 |--------|-------------|
-| `max` | Large scale deployment |
-| `medium` | Medium scale deployment |
-| `default` | Standard deployment with 2 chains |
-| `min` | Minimal single-chain setup |
-| `mature` | Production-like setup |
+| `max` | Large scale deployment (500 nodes) |
+| `medium` | Medium scale deployment (100 nodes) |
+| `default` | Standard deployment with 2 chains (3 nodes) |
+| `min` | Minimal single-chain setup (2 nodes) |
+| `mature` | Production-like setup (300 nodes) |
 
 ## Adding Custom Configs
 
@@ -157,22 +191,36 @@ Add a new entry to `configs.yaml`:
 
 ```yaml
 my_custom:
-  password: "mypassword"
-  concurrency: 50
+  general:
+    concurrency: 50
+    password: "mypassword"
+  nodes:
+    count: 10
   chains:
     my_chain:
       id: 1
-      root_chain: 1
-      committees: [1]
-      delegators: 5
-      validators: 3
-      full_nodes: 2
-      accounts: 50
-      staked_amount: 500000000
+      rootChain: 1
+      validators:
+        count: 5
+        stakedAmount: 500000000
+        amount: 1000000
+        committees: [1]
+      fullNodes:
+        count: 3
+        amount: 1000000
+      accounts:
+        count: 50
+        amount: 1000000
+      delegators:
+        count: 2
+        stakedAmount: 500000000
+        amount: 1000000
+        committees: [1]
 ```
+
+**Note:** Ensure `nodes.count` (10) equals the sum of validators (5) + delegators (2) + full nodes (3) = 10.
 
 Then run:
 ```bash
 go run main.go my_custom
 ```
-

@@ -28,23 +28,60 @@ const (
 	fullNodeNick  = "fullnode"
 )
 
+// GeneralConfig holds general configuration
+type GeneralConfig struct {
+	Concurrency int64  `yaml:"concurrency"`
+	Password    string `yaml:"password"`
+}
+
+// NodesConfig holds the total node count
+type NodesConfig struct {
+	Count int `yaml:"count"`
+}
+
+// ValidatorsConfig holds validator-specific configuration
+type ValidatorsConfig struct {
+	Count        int      `yaml:"count"`
+	StakedAmount uint64   `yaml:"stakedAmount"`
+	Amount       uint64   `yaml:"amount"`
+	Committees   []uint64 `yaml:"committees"`
+}
+
+// FullNodesConfig holds full node-specific configuration
+type FullNodesConfig struct {
+	Count  int    `yaml:"count"`
+	Amount uint64 `yaml:"amount"`
+}
+
+// AccountsConfig holds account-specific configuration
+type AccountsConfig struct {
+	Count  int    `yaml:"count"`
+	Amount uint64 `yaml:"amount"`
+}
+
+// DelegatorsConfig holds delegator-specific configuration
+type DelegatorsConfig struct {
+	Count        int      `yaml:"count"`
+	StakedAmount uint64   `yaml:"stakedAmount"`
+	Amount       uint64   `yaml:"amount"`
+	Committees   []uint64 `yaml:"committees"`
+}
+
 // ChainConfig represents a single chain's configuration
 type ChainConfig struct {
-	ID           int      `yaml:"id"`
-	RootChain    int      `yaml:"root_chain"`
-	Committees   []uint64 `yaml:"committees"`
-	Delegators   int      `yaml:"delegators"`
-	Validators   int      `yaml:"validators"`
-	FullNodes    int      `yaml:"full_nodes"`
-	Accounts     int      `yaml:"accounts"`
-	StakedAmount uint64   `yaml:"staked_amount"`
+	ID         int              `yaml:"id"`
+	RootChain  int              `yaml:"rootChain"`
+	Validators ValidatorsConfig `yaml:"validators"`
+	FullNodes  FullNodesConfig  `yaml:"fullNodes"`
+	Accounts   AccountsConfig   `yaml:"accounts"`
+	Delegators DelegatorsConfig `yaml:"delegators"`
 }
 
 // AppConfig represents the configuration structure
 type AppConfig struct {
-	Password    string                  `yaml:"password"`
-	Concurrency int64                   `yaml:"concurrency"`
-	Chains      map[string]*ChainConfig `yaml:"chains"`
+	General GeneralConfig           `yaml:"general"`
+	Nodes   NodesConfig             `yaml:"nodes"`
+	Chains  map[string]*ChainConfig `yaml:"chains"`
 }
 
 // NodeIdentity represents a node's identity for ids.json
@@ -57,15 +94,6 @@ type NodeIdentity struct {
 	PrivateKey      string `json:"privateKey"`
 	NodeType        string `json:"nodeType"`
 	PrivateKeyBytes []byte `json:"-"` // Not exported to JSON, used for keystore
-}
-
-// ChainData holds all data for a single chain during processing
-type ChainData struct {
-	Name         string
-	Config       *ChainConfig
-	Identities   []NodeIdentity
-	AccountChan  chan *fsm.Account
-	ValidatorChan chan *fsm.Validator
 }
 
 const configFile = "configs.yaml"
@@ -113,6 +141,25 @@ func listAvailableConfigs() []string {
 	return availableConfigs
 }
 
+// validateConfig checks that the sum of all validators, delegators, and full nodes equals nodes.count
+func validateConfig(cfg *AppConfig) error {
+	totalNodes := 0
+	for chainName, chainCfg := range cfg.Chains {
+		chainNodes := chainCfg.Validators.Count + chainCfg.Delegators.Count + chainCfg.FullNodes.Count
+		totalNodes += chainNodes
+		fmt.Printf("  Chain %s: %d validators + %d delegators + %d full nodes = %d nodes\n",
+			chainName, chainCfg.Validators.Count, chainCfg.Delegators.Count, chainCfg.FullNodes.Count, chainNodes)
+	}
+
+	if totalNodes != cfg.Nodes.Count {
+		return fmt.Errorf("node count mismatch: sum of all validators, delegators, and full nodes (%d) does not equal nodes.count (%d)",
+			totalNodes, cfg.Nodes.Count)
+	}
+
+	fmt.Printf("  Total nodes: %d (matches nodes.count: %d) ✓\n", totalNodes, cfg.Nodes.Count)
+	return nil
+}
+
 func logData() {
 	var accounts, validators, delegators, fullNodes int32
 
@@ -157,8 +204,8 @@ func mustCreateKey() crypto.PrivateKeyI {
 }
 
 // addAccounts concurrently creates keys and accounts
-func addAccounts(accounts int, wg *sync.WaitGroup, semaphoreChan chan struct{}, accountChan chan *fsm.Account) {
-	for i := range accounts {
+func addAccounts(count int, amount uint64, wg *sync.WaitGroup, semaphoreChan chan struct{}, accountChan chan *fsm.Account) {
+	for i := range count {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -169,7 +216,7 @@ func addAccounts(accounts int, wg *sync.WaitGroup, semaphoreChan chan struct{}, 
 
 			accountChan <- &fsm.Account{
 				Address: []byte(addrStr),
-				Amount:  1000000,
+				Amount:  amount,
 			}
 			nickNames <- accountNick
 		}(i)
@@ -177,7 +224,7 @@ func addAccounts(accounts int, wg *sync.WaitGroup, semaphoreChan chan struct{}, 
 }
 
 // addFullNodes concurrently creates full nodes (not staked, but with identities)
-func addFullNodes(count int, startIdx int, chainID int, rootChainID int,
+func addFullNodes(count int, amount uint64, startIdx int, chainID int, rootChainID int,
 	identities *[]NodeIdentity, gsync *sync.Mutex, wg *sync.WaitGroup, semaphoreChan chan struct{},
 	accountChan chan *fsm.Account) {
 
@@ -192,7 +239,7 @@ func addFullNodes(count int, startIdx int, chainID int, rootChainID int,
 
 			accountChan <- &fsm.Account{
 				Address: pk.PublicKey().Address().Bytes(),
-				Amount:  1000000,
+				Amount:  amount,
 			}
 
 			identity := NodeIdentity{
@@ -216,7 +263,7 @@ func addFullNodes(count int, startIdx int, chainID int, rootChainID int,
 }
 
 // addValidators concurrently creates validators and delegators
-func addValidators(validators int, isDelegate bool, startIdx int, stakedAmount uint64,
+func addValidators(count int, isDelegate bool, startIdx int, stakedAmount uint64, amount uint64,
 	chainID int, rootChainID int, committees []uint64,
 	identities *[]NodeIdentity, gsync *sync.Mutex, wg *sync.WaitGroup, semaphoreChan chan struct{},
 	accountChan chan *fsm.Account, validatorChan chan *fsm.Validator) {
@@ -226,7 +273,7 @@ func addValidators(validators int, isDelegate bool, startIdx int, stakedAmount u
 		nodeType = "delegator"
 	}
 
-	for i := range validators {
+	for i := range count {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -247,7 +294,7 @@ func addValidators(validators int, isDelegate bool, startIdx int, stakedAmount u
 
 			accountChan <- &fsm.Account{
 				Address: pk.PublicKey().Address().Bytes(),
-				Amount:  1000000,
+				Amount:  amount,
 			}
 
 			identity := NodeIdentity{
@@ -530,8 +577,8 @@ func processChain(chainName string, chainCfg *ChainConfig, startIdx int, passwor
 
 	fmt.Printf("Processing chain: %s (ID: %d, RootChain: %d)\n", chainName, chainCfg.ID, chainCfg.RootChain)
 
-	accountsLen := chainCfg.Delegators + chainCfg.Validators + chainCfg.FullNodes + chainCfg.Accounts
-	validatorsLen := chainCfg.Delegators + chainCfg.Validators
+	accountsLen := chainCfg.Delegators.Count + chainCfg.Validators.Count + chainCfg.FullNodes.Count + chainCfg.Accounts.Count
+	validatorsLen := chainCfg.Delegators.Count + chainCfg.Validators.Count
 
 	accountChan := make(chan *fsm.Account, 1000)
 	validatorChan := make(chan *fsm.Validator, 1000)
@@ -542,24 +589,24 @@ func processChain(chainName string, chainCfg *ChainConfig, startIdx int, passwor
 	go genesisWriter(chainDir, chainCfg.RootChain, validatorsLen, &genesisWG, &accountsWG, validatorChan)
 	go accountsWriter(chainDir, accountsLen, &accountsWG, accountChan)
 
-	chainIdentities := make([]NodeIdentity, 0, chainCfg.Validators+chainCfg.Delegators+chainCfg.FullNodes)
+	chainIdentities := make([]NodeIdentity, 0, chainCfg.Validators.Count+chainCfg.Delegators.Count+chainCfg.FullNodes.Count)
 	var chainSync sync.Mutex
 	var wg sync.WaitGroup
 
 	// Assign unique idx within this chain
 	validatorStartIdx := startIdx
-	delegatorStartIdx := validatorStartIdx + chainCfg.Validators
-	fullNodeStartIdx := delegatorStartIdx + chainCfg.Delegators
+	delegatorStartIdx := validatorStartIdx + chainCfg.Validators.Count
+	fullNodeStartIdx := delegatorStartIdx + chainCfg.Delegators.Count
 
-	addValidators(chainCfg.Validators, false, validatorStartIdx, chainCfg.StakedAmount,
-		chainCfg.ID, chainCfg.RootChain, chainCfg.Committees,
+	addValidators(chainCfg.Validators.Count, false, validatorStartIdx, chainCfg.Validators.StakedAmount, chainCfg.Validators.Amount,
+		chainCfg.ID, chainCfg.RootChain, chainCfg.Validators.Committees,
 		&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan, validatorChan)
-	addValidators(chainCfg.Delegators, true, delegatorStartIdx, chainCfg.StakedAmount,
-		chainCfg.ID, chainCfg.RootChain, chainCfg.Committees,
+	addValidators(chainCfg.Delegators.Count, true, delegatorStartIdx, chainCfg.Delegators.StakedAmount, chainCfg.Delegators.Amount,
+		chainCfg.ID, chainCfg.RootChain, chainCfg.Delegators.Committees,
 		&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan, validatorChan)
-	addFullNodes(chainCfg.FullNodes, fullNodeStartIdx, chainCfg.ID, chainCfg.RootChain,
+	addFullNodes(chainCfg.FullNodes.Count, chainCfg.FullNodes.Amount, fullNodeStartIdx, chainCfg.ID, chainCfg.RootChain,
 		&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan)
-	addAccounts(chainCfg.Accounts, &wg, semaphoreChan, accountChan)
+	addAccounts(chainCfg.Accounts.Count, chainCfg.Accounts.Amount, &wg, semaphoreChan, accountChan)
 
 	wg.Wait()
 	genesisWG.Wait()
@@ -600,7 +647,7 @@ func processChain(chainName string, chainCfg *ChainConfig, startIdx int, passwor
 	globalSync.Unlock()
 
 	fmt.Printf("Chain %s: %d validators, %d delegators, %d full nodes, %d accounts\n",
-		chainName, chainCfg.Validators, chainCfg.Delegators, chainCfg.FullNodes, chainCfg.Accounts)
+		chainName, chainCfg.Validators.Count, chainCfg.Delegators.Count, chainCfg.FullNodes.Count, chainCfg.Accounts.Count)
 }
 
 func main() {
@@ -619,6 +666,14 @@ func main() {
 	}
 
 	fmt.Printf("Using config: %s\n", configName)
+
+	// Validate node count
+	fmt.Println("Validating configuration...")
+	if err := validateConfig(cfg); err != nil {
+		fmt.Printf("Configuration error: %v\n", err)
+		os.Exit(1)
+	}
+
 	fmt.Println("Deleting old files!")
 
 	mustSetDirectory(".config")
@@ -628,7 +683,7 @@ func main() {
 
 	logData()
 
-	semaphoreChan := make(chan struct{}, cfg.Concurrency)
+	semaphoreChan := make(chan struct{}, cfg.General.Concurrency)
 	allIdentities := make([]NodeIdentity, 0)
 	var globalSync sync.Mutex
 
@@ -646,14 +701,14 @@ func main() {
 		chainCfg := cfg.Chains[chainName]
 		chainStartIndices[chainName] = currentIdx
 		// Calculate total nodes for this chain
-		currentIdx += chainCfg.Validators + chainCfg.Delegators + chainCfg.FullNodes
+		currentIdx += chainCfg.Validators.Count + chainCfg.Delegators.Count + chainCfg.FullNodes.Count
 	}
 
 	// Process all chains concurrently
 	var chainWG sync.WaitGroup
 	for _, chainName := range chainNames {
 		chainWG.Add(1)
-		go processChain(chainName, cfg.Chains[chainName], chainStartIndices[chainName], cfg.Password, semaphoreChan, &allIdentities, &globalSync, &chainWG)
+		go processChain(chainName, cfg.Chains[chainName], chainStartIndices[chainName], cfg.General.Password, semaphoreChan, &allIdentities, &globalSync, &chainWG)
 	}
 	chainWG.Wait()
 
