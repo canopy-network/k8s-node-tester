@@ -14,7 +14,8 @@ image:
 ports:
   p2p:
     start: 9001
-    end: 9100
+    # not inclusive
+    end: 9003
 
 # storage per pod
 storage:
@@ -35,4 +36,3 @@ topologySpreadConstraints:
   enabled: true
   maxSkew: 1
   whenUnsatisfiable: DoNotSchedule
-

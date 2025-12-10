@@ -1,0 +1,22 @@
+apiVersion: v2
+name: canopy
+description: Canopy blockchain testnet nodes
+type: application
+version: 0.1.0
+
+# ---- Example commands ---
+
+# install or upgrade (basic)
+# helm upgrade --install canopy ./cluster/canopy/helm -n canopy --create-namespace
+
+# with specific values file
+# helm upgrade --install canopy ./cluster/canopy/helm -f ./cluster/canopy/helm/values-dev.yaml -n canopy --create-namespace
+
+# override specific values
+# helm upgrade --install canopy ./cluster/canopy/helm --set replicaCount=100 -n canopy --create-namespace
+
+# wait for deployment to complete (10 min timeout)
+# helm upgrade --install canopy ./cluster/canopy/helm --wait --timeout 10m -n canopy --create-namespace
+
+# uninstall
+# helm uninstall canopy -n canopy
