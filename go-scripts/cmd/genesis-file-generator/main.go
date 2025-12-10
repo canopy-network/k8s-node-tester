@@ -32,6 +32,7 @@ const (
 type GeneralConfig struct {
 	Concurrency int64  `yaml:"concurrency"`
 	Password    string `yaml:"password"`
+	Buffer      int    `yaml:"buffer"`
 }
 
 // NodesConfig holds the total node count
@@ -568,7 +569,7 @@ func createTemplateConfig(chainID int, rootChainID int) *lib.Config {
 	}
 }
 
-func processChain(chainName string, chainCfg *ChainConfig, startIdx int, password string,
+func processChain(chainName string, chainCfg *ChainConfig, startIdx int, password string, buffer int,
 	semaphoreChan chan struct{}, allIdentities *[]NodeIdentity, globalSync *sync.Mutex, chainWG *sync.WaitGroup) {
 	defer chainWG.Done()
 
@@ -580,8 +581,8 @@ func processChain(chainName string, chainCfg *ChainConfig, startIdx int, passwor
 	accountsLen := chainCfg.Delegators.Count + chainCfg.Validators.Count + chainCfg.FullNodes.Count + chainCfg.Accounts.Count
 	validatorsLen := chainCfg.Delegators.Count + chainCfg.Validators.Count
 
-	accountChan := make(chan *fsm.Account, 1000)
-	validatorChan := make(chan *fsm.Validator, 1000)
+	accountChan := make(chan *fsm.Account, buffer)
+	validatorChan := make(chan *fsm.Validator, buffer)
 
 	var genesisWG, accountsWG sync.WaitGroup
 	genesisWG.Add(1)
@@ -708,7 +709,7 @@ func main() {
 	var chainWG sync.WaitGroup
 	for _, chainName := range chainNames {
 		chainWG.Add(1)
-		go processChain(chainName, cfg.Chains[chainName], chainStartIndices[chainName], cfg.General.Password, semaphoreChan, &allIdentities, &globalSync, &chainWG)
+		go processChain(chainName, cfg.Chains[chainName], chainStartIndices[chainName], cfg.General.Password, cfg.General.Buffer, semaphoreChan, &allIdentities, &globalSync, &chainWG)
 	}
 	chainWG.Wait()
 
