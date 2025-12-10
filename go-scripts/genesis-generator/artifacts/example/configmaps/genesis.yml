@@ -4,7 +4,7 @@ metadata:
   namespace: canopy
   name: genesis
 data:
-  genesis_1.json:
+  genesis_1.json: |
     {
       "time": "2024-12-14 20:10:52",
       "accounts":
@@ -75,7 +75,7 @@ data:
         },
       "supply": null,
     }
-  genesis_2.json:
+  genesis_2.json: |
     {
       "time": "2024-12-14 20:10:52",
       "accounts":

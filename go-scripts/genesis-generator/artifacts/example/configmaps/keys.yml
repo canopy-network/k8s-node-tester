@@ -4,30 +4,39 @@ metadata:
   namespace: canopy
   name: keys
 data:
-  keys.json:
-    [
-      {
-        "idx": 1,
-        "chainId": 1,
-        "rootChainId": [1],
-        "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
-        "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2",
-        "privateKey": "6c275055a4f6ae6bccf1e6552e172c7b8cc538a7b8d2dd645125df9e25c9ed2d",
-      },
-      {
-        "idx": 2,
-        "chainId": 1,
-        "rootChainId": [1],
-        "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
-        "publicKey": "98d45087a99bcbfde91993502e77dde869d4485c3778fe46513958320da560823d56a0108f4cf3513393f4d561bc489b",
-        "privateKey": "0add1e53f45d439b98182216a9215db238aaff12d1b057b3130b0c5e8e9b0b36",
-      },
-      {
-        "idx": 3,
-        "chainId": 2,
-        "rootChainId": [1],
-        "address": "6f94783856d5ce46d24dd5946215086211d70776",
-        "publicKey": "abda38eb50fbe53db9e9c3b141c6a1ec54ad40a4840e34784c975da4ee175eb4c5dd10b6d759ae8fdf8bc22511bbd97b",
-        "privateKey": "3e9eb7a46defde2fa42dc74d85d0ee8cebaf327efa24b972e97b54af38d6e602",
-      },
-    ]
+  keys.json: |
+    {
+      "idsMap":
+        {
+          "node-1":
+            {
+              "idx": 1,
+              "chainId": 1,
+              "rootChainId": 1,
+              "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+              "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2",
+              "privateKey": "6c275055a4f6ae6bccf1e6552e172c7b8cc538a7b8d2dd645125df9e25c9ed2d",
+              "nodeType": "validator",
+            },
+          "node-2":
+            {
+              "idx": 2,
+              "chainId": 1,
+              "rootChainId": 1,
+              "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+              "publicKey": "98d45087a99bcbfde91993502e77dde869d4485c3778fe46513958320da560823d56a0108f4cf3513393f4d561bc489b",
+              "privateKey": "0add1e53f45d439b98182216a9215db238aaff12d1b057b3130b0c5e8e9b0b36",
+              "nodeType": "validator",
+            },
+          "node-3":
+            {
+              "idx": 3,
+              "chainId": 2,
+              "rootChainId": 1,
+              "address": "6f94783856d5ce46d24dd5946215086211d70776",
+              "publicKey": "abda38eb50fbe53db9e9c3b141c6a1ec54ad40a4840e34784c975da4ee175eb4c5dd10b6d759ae8fdf8bc22511bbd97b",
+              "privateKey": "3e9eb7a46defde2fa42dc74d85d0ee8cebaf327efa24b972e97b54af38d6e602",
+              "nodeType": "validator",
+            },
+        },
+    }
