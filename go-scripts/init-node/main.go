@@ -20,6 +20,7 @@ const (
 	genesisFile   = "genesis"       // file containing the genesis data for the node
 	configFile    = "config"        // file containing the config data for the node
 	keystoreFile  = "keystore"      // file containing the keystore data for the node
+	validatorFile = "validator_key" // file containing the validator data for the node
 
 	serviceSuffix = ".p2p" // suffix for the service name in order for the node to be discoverable
 
@@ -124,6 +125,15 @@ func main() {
 	if err := os.WriteFile(dst,
 		configFileContents, configFilePerms); err != nil {
 		log.Error("failed to copy config file", slog.String("err", err.Error()), slog.String("dst", dst))
+		os.Exit(1)
+	}
+	// write the validator key file to the canopy's directory
+	validatorKeyFile := fmt.Sprintf("\"%s\" ", nodeKey.PrivateKey)
+	dst = fullFilePath(canopyPath, validatorFile, configFileExt)
+	if err := os.WriteFile(dst,
+		[]byte(validatorKeyFile), configFilePerms); err != nil {
+		log.Error("failed to copy validator key file", slog.String("err", err.Error()),
+			slog.String("dst", dst))
 		os.Exit(1)
 	}
 	log.Info("finished setting up the config for the node " + hostname)

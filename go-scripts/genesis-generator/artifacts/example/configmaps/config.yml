@@ -6,6 +6,8 @@ metadata:
 data:
   config_1.json: |
     {
+      "autoUpdate": false,
+      "runningAutoUpdate": false,
       "logLevel": "debug",
       "chainId": 1,
       "sleepUntil": 0,
@@ -47,17 +49,19 @@ data:
       "individualMaxTxSize": 4000,
       "dropPercentage": 35,
       "metricsEnabled": true,
-      "prometheusAddress": "0.0.0.0:9090",
+      "prometheusAddress": "0.0.0.0:9090"
     }
   config_2.json: |
     {
+      "autoUpdate": false,
+      "runningAutoUpdate": false,
       "logLevel": "debug",
       "chainId": 2,
       "sleepUntil": 0,
       "rootChain":
         [
           { "chainId": 2, "url": "http://node-|NODE_ID|:50002" },
-          { "chainId": 1, "url": "http://node-|ROOT_NODE_ID|:50002" },
+          { "chainId": 1, "url": "http://node-|ROOT_NODE_ID|:50002" }
         ],
       "runVDF": false,
       "headless": false,
@@ -95,5 +99,5 @@ data:
       "individualMaxTxSize": 4000,
       "dropPercentage": 35,
       "metricsEnabled": true,
-      "prometheusAddress": "0.0.0.0:9090",
+      "prometheusAddress": "0.0.0.0:9090"
     }

@@ -47,6 +47,7 @@ spec:
       - name: canopy
         image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args: ["start"]
         ports:
         - containerPort: 50000
           name: wallet
