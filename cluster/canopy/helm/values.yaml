@@ -1,6 +1,9 @@
 # number of nodes to deploy
 replicaCount: 3
 
+# name of the statefulset
+name: node
+
 # namespace
 namespace: canopy
 
