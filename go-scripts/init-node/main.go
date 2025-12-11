@@ -23,7 +23,7 @@ const (
 	configPath    = "/root/configs" // path where the config files are stored
 	canopyPath    = "/root/.canopy" // path where the canopy files are stored
 	configFileExt = ".json"         // extension of the config files
-	keysFile      = "keys"          // file containing the keys for the node
+	idsFile       = "ids"           // file containing the keys for the node
 	genesisFile   = "genesis"       // file containing the genesis data for the node
 	configFile    = "config"        // file containing the config data for the node
 	keystoreFile  = "keystore"      // file containing the keystore data for the node
@@ -61,16 +61,16 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info("starting config setup for pod", slog.Int("podId", podId))
-	// open the keys file
-	keysFile, err := os.Open(fullFilePath(configPath, keysFile, configFileExt))
+	// open the ids file
+	idsFile, err := os.Open(fullFilePath(configPath, idsFile, configFileExt))
 	if err != nil {
 		log.Error("failed to open keys file", slog.String("err", err.Error()))
 		os.Exit(1)
 	}
-	defer keysFile.Close()
+	defer idsFile.Close()
 	// load the keys file into memory
 	var keys Keys
-	err = json.NewDecoder(keysFile).Decode(&keys)
+	err = json.NewDecoder(idsFile).Decode(&keys)
 	if err != nil {
 		log.Error("failed to decode keys file", slog.String("err", err.Error()))
 		os.Exit(1)
@@ -125,9 +125,10 @@ func main() {
 	}
 	// perform the substitutions
 	configFileContents = performSubstitution(configFileContents, map[string]string{
-		"|NODE_ID|":              strconv.Itoa(podId) + serviceSuffix,
-		"|ROOT_NODE_ID|":         strconv.Itoa(rootNode.Id) + serviceSuffix,
-		"|ROOT_NODE_PUBLIC_KEY|": rootNode.PublicKey,
+		"|NODE_ID|":      strconv.Itoa(podId) + serviceSuffix,
+		"|ROOT_NODE_ID|": strconv.Itoa(rootNode.Id) + serviceSuffix,
+		"|DIAL_PEER|": fmt.Sprintf("%s@tcp://node-%s", rootNode.PublicKey,
+			strconv.Itoa(rootNode.Id)+serviceSuffix),
 	})
 	// copy the config file to the canopy's directory
 	dst = fullFilePath(canopyPath, configFile, configFileExt)
