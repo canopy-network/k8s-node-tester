@@ -24,6 +24,7 @@ default:
     concurrency: 100          # Number of concurrent goroutines for key generation
     password: "pablito"       # Password for keystore encryption
     buffer: 1000              # Buffer size for internal channels
+    netAddressSuffix: ".p2p"  # Suffix appended to netAddress in genesis.json
   # Total amount of nodes (validators + delegators + full nodes across all chains)
   nodes:
     count: 3
@@ -196,6 +197,7 @@ my_custom:
     concurrency: 50
     password: "mypassword"
     buffer: 1000
+    netAddressSuffix: ".p2p"
   nodes:
     count: 10
   chains:

@@ -30,9 +30,10 @@ const (
 
 // GeneralConfig holds general configuration
 type GeneralConfig struct {
-	Concurrency int64  `yaml:"concurrency"`
-	Password    string `yaml:"password"`
-	Buffer      int    `yaml:"buffer"`
+	Concurrency      int64  `yaml:"concurrency"`
+	Password         string `yaml:"password"`
+	Buffer           int    `yaml:"buffer"`
+	NetAddressSuffix string `yaml:"netAddressSuffix"`
 }
 
 // NodesConfig holds the total node count
@@ -270,7 +271,7 @@ func addFullNodes(count int, amount uint64, startIdx int, chainID int, rootChain
 
 // addValidators concurrently creates validators and delegators
 func addValidators(count int, isDelegate bool, startIdx int, stakedAmount uint64, amount uint64,
-	chainID int, rootChainID int, committees []uint64,
+	chainID int, rootChainID int, committees []uint64, netAddressSuffix string,
 	identities *[]NodeIdentity, gsync *sync.Mutex, wg *sync.WaitGroup, semaphoreChan chan struct{},
 	accountChan chan *fsm.Account, validatorChan chan *fsm.Validator) {
 
@@ -292,7 +293,7 @@ func addValidators(count int, isDelegate bool, startIdx int, stakedAmount uint64
 				Address:      pk.PublicKey().Address().Bytes(),
 				PublicKey:    pk.PublicKey().Bytes(),
 				Committees:   committees,
-				NetAddress:   fmt.Sprintf("tcp://node-%d", startIdx+i),
+				NetAddress:   fmt.Sprintf("tcp://node-%d%s", startIdx+i, netAddressSuffix),
 				StakedAmount: stakedAmount,
 				Output:       pk.PublicKey().Address().Bytes(),
 				Delegate:     isDelegate,
@@ -574,7 +575,7 @@ func createTemplateConfig(chainID int, rootChainID int) *lib.Config {
 	}
 }
 
-func processChain(chainName string, chainCfg *ChainConfig, startIdx int, password string, buffer int,
+func processChain(chainName string, chainCfg *ChainConfig, startIdx int, password string, buffer int, netAddressSuffix string,
 	semaphoreChan chan struct{}, allIdentities *[]NodeIdentity, globalSync *sync.Mutex, chainWG *sync.WaitGroup) {
 	defer chainWG.Done()
 
@@ -605,10 +606,10 @@ func processChain(chainName string, chainCfg *ChainConfig, startIdx int, passwor
 	fullNodeStartIdx := delegatorStartIdx + chainCfg.Delegators.Count
 
 	addValidators(chainCfg.Validators.Count, false, validatorStartIdx, chainCfg.Validators.StakedAmount, chainCfg.Validators.Amount,
-		chainCfg.ID, chainCfg.RootChain, chainCfg.Validators.Committees,
+		chainCfg.ID, chainCfg.RootChain, chainCfg.Validators.Committees, netAddressSuffix,
 		&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan, validatorChan)
 	addValidators(chainCfg.Delegators.Count, true, delegatorStartIdx, chainCfg.Delegators.StakedAmount, chainCfg.Delegators.Amount,
-		chainCfg.ID, chainCfg.RootChain, chainCfg.Delegators.Committees,
+		chainCfg.ID, chainCfg.RootChain, chainCfg.Delegators.Committees, netAddressSuffix,
 		&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan, validatorChan)
 	addFullNodes(chainCfg.FullNodes.Count, chainCfg.FullNodes.Amount, fullNodeStartIdx, chainCfg.ID, chainCfg.RootChain,
 		&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan)
@@ -714,7 +715,7 @@ func main() {
 	var chainWG sync.WaitGroup
 	for _, chainName := range chainNames {
 		chainWG.Add(1)
-		go processChain(chainName, cfg.Chains[chainName], chainStartIndices[chainName], cfg.General.Password, cfg.General.Buffer, semaphoreChan, &allIdentities, &globalSync, &chainWG)
+		go processChain(chainName, cfg.Chains[chainName], chainStartIndices[chainName], cfg.General.Password, cfg.General.Buffer, cfg.General.NetAddressSuffix, semaphoreChan, &allIdentities, &globalSync, &chainWG)
 	}
 	chainWG.Wait()
 

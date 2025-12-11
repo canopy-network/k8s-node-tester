@@ -3,6 +3,7 @@ default:
     concurrency: 100
     password: "pablito"
     buffer: 1000
+    netAddressSuffix: ".p2p"
   nodes:
     count: 3
   chains:
@@ -50,6 +51,7 @@ min:
     concurrency: 10
     password: "pablito"
     buffer: 1000
+    netAddressSuffix: ".p2p"
   nodes:
     count: 2
   chains:
@@ -78,6 +80,7 @@ medium:
     concurrency: 100
     password: "pablito"
     buffer: 1000
+    netAddressSuffix: ".p2p"
   nodes:
     count: 100
   chains:
@@ -125,6 +128,7 @@ max:
     concurrency: 200
     password: "pablito"
     buffer: 1000
+    netAddressSuffix: ".p2p"
   nodes:
     count: 500
   chains:
@@ -172,6 +176,7 @@ mature:
     concurrency: 150
     password: "pablito"
     buffer: 1000
+    netAddressSuffix: ".p2p"
   nodes:
     count: 300
   chains:
