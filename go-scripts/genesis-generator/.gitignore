@@ -1,6 +1,0 @@
-# Ignore all artifacts
-artifacts/*
-
-# But keep the example directory
-!artifacts/example/
-
