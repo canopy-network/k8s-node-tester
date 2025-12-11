@@ -31,30 +31,28 @@ default:
     count: 3
   # Individual chain configuration
   chains:
-    # Identifier of the chain so other chains can reference it
     chain_1:
       id: 1                   # Unique chain ID
       rootChain: 1            # Root chain ID (can be itself for root chains)
-      # Validators: nodes providing consensus
       validators:
         count: 2
         stakedAmount: 1000000000
         amount: 1000000       # Account balance
-        committees: [1, 2]
-      # Full nodes: nodes providing full services without being part of consensus
       fullNodes:
         count: 0
         amount: 1000000
-      # Accounts: regular accounts without node infrastructure
       accounts:
         count: 1
         amount: 1000000
-      # Delegators: staked nodes that delegate to validators
       delegators:
         count: 0
         stakedAmount: 1000000000
         amount: 1000000
-        committees: [1, 2]
+      # Cross-chain committee assignments
+      committees:
+        - id: 2               # Committee ID (typically another chain's ID)
+          validatorCount: 1   # Number of validators to assign to this committee
+          delegatorCount: 0   # Number of delegators to assign to this committee
     chain_2:
       id: 2
       rootChain: 1            # Nested chain (chain_1 is root)
@@ -62,7 +60,6 @@ default:
         count: 1
         stakedAmount: 1000000000
         amount: 1000000
-        committees: [2]
       fullNodes:
         count: 0
         amount: 1000000
@@ -73,12 +70,41 @@ default:
         count: 0
         stakedAmount: 1000000000
         amount: 1000000
-        committees: [2]
+      committees: []          # No cross-chain assignments
 ```
+
+### Committee Assignments
+
+Validators and delegators are automatically assigned to their own chain's committee (using the chain's ID). The `committees` field allows assigning validators/delegators to **additional** committees on other chains.
+
+**Example:**
+```yaml
+chain_1:
+  id: 1
+  validators:
+    count: 2
+  committees:
+    - id: 2
+      validatorCount: 1
+      delegatorCount: 0
+```
+
+This means:
+- 2 validators are created for chain_1
+- 1 validator will participate in **both** committee 1 (its own chain) AND committee 2
+- 1 validator will only participate in committee 1
+
+**Multi-committee validators:**
+- Appear in **both** chains' genesis files
+- In the root chain genesis: `committees: [1, 2]`
+- In the nested chain genesis: `committees: [2]`
+- Have **multiple entries** in `ids.json` (one per committee, with different IDs)
 
 ### Validation
 
-The script validates that the sum of all validators, delegators, and full nodes across all chains equals the `nodes.count` value before running. If there's a mismatch, the script will exit with an error.
+The script validates:
+1. The sum of all validators, delegators, and full nodes equals `nodes.count`
+2. Committee assignment counts don't exceed available validators/delegators
 
 ### Chain Types
 
@@ -104,30 +130,43 @@ The script validates that the sum of all validators, delegators, and full nodes 
 
 ### ids.json
 
-Contains all node identities from all chains with unique `idx`:
+Contains all node identities in a map structure. Multi-committee validators appear multiple times with different IDs:
 
 ```json
-[
-  {
-    "idx": 1,
-    "chainId": 1,
-    "rootChainId": 1,
-    "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
-    "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba...",
-    "privateKey": "6c275055a4f6ae6bccf1e6552e172c7b8cc538a7...",
-    "nodeType": "validator"
-  },
-  {
-    "idx": 2,
-    "chainId": 1,
-    "rootChainId": 1,
-    "address": "...",
-    "publicKey": "...",
-    "privateKey": "...",
-    "nodeType": "delegator"
+{
+  "keys": {
+    "node-1": {
+      "id": 1,
+      "chainId": 1,
+      "rootChainId": 1,
+      "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+      "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba...",
+      "privateKey": "6c275055a4f6ae6bccf1e6552e172c7b8cc538a7...",
+      "nodeType": "validator"
+    },
+    "node-2": {
+      "id": 2,
+      "chainId": 1,
+      "rootChainId": 1,
+      "address": "...",
+      "publicKey": "...",
+      "privateKey": "...",
+      "nodeType": "validator"
+    },
+    "node-4": {
+      "id": 4,
+      "chainId": 2,
+      "rootChainId": 1,
+      "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
+      "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba...",
+      "privateKey": "6c275055a4f6ae6bccf1e6552e172c7b8cc538a7...",
+      "nodeType": "validator"
+    }
   }
-]
+}
 ```
+
+Note: `node-1` and `node-4` have the same keys but different IDs - this is a multi-committee validator appearing once for each committee.
 
 **Node Types:** `validator`, `delegator`, `fullnode`
 
@@ -141,42 +180,48 @@ Node configuration with wildcards for dynamic values:
   "rootChain": [
     {
       "chainId": 1,
-      "url": "http://node-{{ROOT_NODE_ID}}:50002"
+      "url": "http://node-|ROOT_NODE_ID|:50002"
     }
   ],
-  "externalAddress": "node-{{NODE_ID}}",
-  "listenAddress": "0.0.0.0:9001"
+  "externalAddress": "node-|NODE_ID|",
+  "listenAddress": "0.0.0.0:9001",
+  "dialPeers": ["|DIAL_PEER|"]
 }
 ```
 
 **Wildcards:**
-- `{{NODE_ID}}` - Replace with the node's `idx` from ids.json
-- `{{ROOT_NODE_ID}}` - Replace with a root chain node's `idx`
+- `|NODE_ID|` - Replace with the node's `id` from ids.json
+- `|ROOT_NODE_ID|` - Replace with a root chain node's `id`
+- `|DIAL_PEER|` - Replace with peer address to dial
 
 **Root vs Nested Chain Config:**
 
 For **root chains** (chain is its own root):
 ```json
 "rootChain": [
-  { "chainId": 1, "url": "http://node-{{ROOT_NODE_ID}}:50002" }
+  { "chainId": 1, "url": "http://node-|ROOT_NODE_ID|:50002" }
 ]
 ```
 
 For **nested chains** (different root chain):
 ```json
 "rootChain": [
-  { "chainId": 2, "url": "http://node-{{NODE_ID}}:50002" },
-  { "chainId": 1, "url": "http://node-{{ROOT_NODE_ID}}:50002" }
+  { "chainId": 2, "url": "http://node-|NODE_ID|:50002" },
+  { "chainId": 1, "url": "http://node-|ROOT_NODE_ID|:50002" }
 ]
 ```
 
 ### genesis.json
 
-Chain genesis file containing validators, accounts, and parameters.
+Chain genesis file containing validators, accounts, and parameters. Validators from other chains that participate in this chain's committee are included with only this chain's committee in their committees list.
 
 ### keystore.json
 
-Encrypted private keys for all nodes in the chain, with nicknames `node-{idx}`.
+Encrypted private keys for all nodes participating in the chain, including:
+- Native validators, delegators, and full nodes
+- Cross-chain validators/delegators from other chains that participate in this chain's committee
+
+Nicknames follow the pattern `node-{id}`.
 
 ## Available Configs
 
@@ -199,7 +244,7 @@ my_custom:
     password: "mypassword"
     buffer: 1000
     netAddressSuffix: ".p2p"
-    jsonBeautify: false       # Set to true to beautify genesis.json output
+    jsonBeautify: false
   nodes:
     count: 10
   chains:
@@ -210,7 +255,6 @@ my_custom:
         count: 5
         stakedAmount: 500000000
         amount: 1000000
-        committees: [1]
       fullNodes:
         count: 3
         amount: 1000000
@@ -221,7 +265,7 @@ my_custom:
         count: 2
         stakedAmount: 500000000
         amount: 1000000
-        committees: [1]
+      committees: []
 ```
 
 **Note:** Ensure `nodes.count` (10) equals the sum of validators (5) + delegators (2) + full nodes (3) = 10.

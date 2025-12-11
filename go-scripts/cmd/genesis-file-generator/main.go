@@ -44,10 +44,9 @@ type NodesConfig struct {
 
 // ValidatorsConfig holds validator-specific configuration
 type ValidatorsConfig struct {
-	Count        int      `yaml:"count"`
-	StakedAmount uint64   `yaml:"stakedAmount"`
-	Amount       uint64   `yaml:"amount"`
-	Committees   []uint64 `yaml:"committees"`
+	Count        int    `yaml:"count"`
+	StakedAmount uint64 `yaml:"stakedAmount"`
+	Amount       uint64 `yaml:"amount"`
 }
 
 // FullNodesConfig holds full node-specific configuration
@@ -64,20 +63,27 @@ type AccountsConfig struct {
 
 // DelegatorsConfig holds delegator-specific configuration
 type DelegatorsConfig struct {
-	Count        int      `yaml:"count"`
-	StakedAmount uint64   `yaml:"stakedAmount"`
-	Amount       uint64   `yaml:"amount"`
-	Committees   []uint64 `yaml:"committees"`
+	Count        int    `yaml:"count"`
+	StakedAmount uint64 `yaml:"stakedAmount"`
+	Amount       uint64 `yaml:"amount"`
+}
+
+// CommitteeAssignment defines cross-chain committee participation
+type CommitteeAssignment struct {
+	ID             int `yaml:"id"`
+	ValidatorCount int `yaml:"validatorCount"`
+	DelegatorCount int `yaml:"delegatorCount"`
 }
 
 // ChainConfig represents a single chain's configuration
 type ChainConfig struct {
-	ID         int              `yaml:"id"`
-	RootChain  int              `yaml:"rootChain"`
-	Validators ValidatorsConfig `yaml:"validators"`
-	FullNodes  FullNodesConfig  `yaml:"fullNodes"`
-	Accounts   AccountsConfig   `yaml:"accounts"`
-	Delegators DelegatorsConfig `yaml:"delegators"`
+	ID         int                   `yaml:"id"`
+	RootChain  int                   `yaml:"rootChain"`
+	Validators ValidatorsConfig      `yaml:"validators"`
+	FullNodes  FullNodesConfig       `yaml:"fullNodes"`
+	Accounts   AccountsConfig        `yaml:"accounts"`
+	Delegators DelegatorsConfig      `yaml:"delegators"`
+	Committees []CommitteeAssignment `yaml:"committees"`
 }
 
 // AppConfig represents the configuration structure
@@ -89,14 +95,19 @@ type AppConfig struct {
 
 // NodeIdentity represents a node's identity for ids.json
 type NodeIdentity struct {
-	ID              int    `json:"id"`
-	ChainID         int    `json:"chainId"`
-	RootChainID     int    `json:"rootChainId"`
-	Address         string `json:"address"`
-	PublicKey       string `json:"publicKey"`
-	PrivateKey      string `json:"privateKey"`
-	NodeType        string `json:"nodeType"`
-	PrivateKeyBytes []byte `json:"-"` // Not exported to JSON, used for keystore
+	ID              int      `json:"id"`
+	ChainID         int      `json:"chainId"`
+	RootChainID     int      `json:"rootChainId"`
+	Address         string   `json:"address"`
+	PublicKey       string   `json:"publicKey"`
+	PrivateKey      string   `json:"privateKey"`
+	NodeType        string   `json:"nodeType"`
+	Committees      []uint64 `json:"-"`           // Not exported to JSON, used internally
+	PrivateKeyBytes []byte   `json:"-"`           // Not exported to JSON, used for keystore
+	StakedAmount    uint64   `json:"-"`           // Not exported to JSON, used for genesis
+	Amount          uint64   `json:"-"`           // Not exported to JSON, used for genesis
+	IsDelegate      bool     `json:"-"`           // Not exported to JSON, used for genesis
+	NetAddress      string   `json:"-"`           // Not exported to JSON, used for genesis
 }
 
 // IdsFile represents the structure of ids.json
@@ -166,6 +177,48 @@ func validateConfig(cfg *AppConfig) error {
 
 	fmt.Printf("  Total nodes: %d (matches nodes.count: %d) ✓\n", totalNodes, cfg.Nodes.Count)
 	return nil
+}
+
+// validateCommitteeAssignments checks that committee assignments don't exceed available validators/delegators
+// and that committee IDs reference valid chain IDs
+func validateCommitteeAssignments(cfg *AppConfig) error {
+	// Build a set of valid chain IDs
+	validChainIDs := make(map[int]string) // map from chain ID to chain name
+	for chainName, chainCfg := range cfg.Chains {
+		validChainIDs[chainCfg.ID] = chainName
+	}
+
+	for chainName, chainCfg := range cfg.Chains {
+		for _, ca := range chainCfg.Committees {
+			// Validate committee ID exists as a chain ID
+			if _, exists := validChainIDs[ca.ID]; !exists {
+				return fmt.Errorf("chain %s: committee ID %d does not match any chain ID (available chain IDs: %v)",
+					chainName, ca.ID, getChainIDs(cfg))
+			}
+
+			if ca.ValidatorCount > chainCfg.Validators.Count {
+				return fmt.Errorf("chain %s: committee %d validatorCount (%d) exceeds total validators (%d)",
+					chainName, ca.ID, ca.ValidatorCount, chainCfg.Validators.Count)
+			}
+			if ca.DelegatorCount > chainCfg.Delegators.Count {
+				return fmt.Errorf("chain %s: committee %d delegatorCount (%d) exceeds total delegators (%d)",
+					chainName, ca.ID, ca.DelegatorCount, chainCfg.Delegators.Count)
+			}
+			fmt.Printf("  Chain %s: committee %d assignment - %d validators, %d delegators ✓\n",
+				chainName, ca.ID, ca.ValidatorCount, ca.DelegatorCount)
+		}
+	}
+	return nil
+}
+
+// getChainIDs returns a slice of all chain IDs in the config
+func getChainIDs(cfg *AppConfig) []int {
+	ids := make([]int, 0, len(cfg.Chains))
+	for _, chainCfg := range cfg.Chains {
+		ids = append(ids, chainCfg.ID)
+	}
+	sort.Ints(ids)
+	return ids
 }
 
 func logData() {
@@ -271,10 +324,11 @@ func addFullNodes(count int, amount uint64, startIdx int, chainID int, rootChain
 }
 
 // addValidators concurrently creates validators and delegators
+// committeeAssignments maps validator index to additional committees they participate in
 func addValidators(count int, isDelegate bool, startIdx int, stakedAmount uint64, amount uint64,
-	chainID int, rootChainID int, committees []uint64, netAddressSuffix string,
+	chainID int, rootChainID int, committeeAssignments map[int][]uint64, netAddressSuffix string,
 	identities *[]NodeIdentity, gsync *sync.Mutex, wg *sync.WaitGroup, semaphoreChan chan struct{},
-	accountChan chan *fsm.Account, validatorChan chan *fsm.Validator) {
+	accountChan chan *fsm.Account) {
 
 	nodeType := "validator"
 	if isDelegate {
@@ -290,15 +344,15 @@ func addValidators(count int, isDelegate bool, startIdx int, stakedAmount uint64
 
 			pk := mustCreateKey()
 
-			validatorChan <- &fsm.Validator{
-				Address:      pk.PublicKey().Address().Bytes(),
-				PublicKey:    pk.PublicKey().Bytes(),
-				Committees:   committees,
-				NetAddress:   fmt.Sprintf("tcp://node-%d%s", startIdx+i, netAddressSuffix),
-				StakedAmount: stakedAmount,
-				Output:       pk.PublicKey().Address().Bytes(),
-				Delegate:     isDelegate,
+			// Base committee is the chain's own ID
+			committees := []uint64{uint64(chainID)}
+
+			// Add additional committee assignments if any
+			if additionalCommittees, ok := committeeAssignments[i]; ok {
+				committees = append(committees, additionalCommittees...)
 			}
+
+			netAddress := fmt.Sprintf("tcp://node-%d%s", startIdx+i, netAddressSuffix)
 
 			accountChan <- &fsm.Account{
 				Address: pk.PublicKey().Address().Bytes(),
@@ -313,7 +367,12 @@ func addValidators(count int, isDelegate bool, startIdx int, stakedAmount uint64
 				PublicKey:       hex.EncodeToString(pk.PublicKey().Bytes()),
 				PrivateKey:      hex.EncodeToString(pk.Bytes()),
 				NodeType:        nodeType,
+				Committees:      committees,
 				PrivateKeyBytes: pk.Bytes(),
+				StakedAmount:    stakedAmount,
+				Amount:          amount,
+				IsDelegate:      isDelegate,
+				NetAddress:      netAddress,
 			}
 
 			gsync.Lock()
@@ -392,9 +451,9 @@ func accountsWriter(chainDir string, accountLen int, wg *sync.WaitGroup, account
 	}
 }
 
-func genesisWriter(chainDir string, rootChainID int, validatorLen int, wg, accountsWG *sync.WaitGroup, validatorChan chan *fsm.Validator) {
-	defer wg.Done()
-
+// writeGenesisFromIdentities writes genesis.json for a specific chain using identities
+// For validators from other chains (cross-chain), only include this chain's committee
+func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, validators []NodeIdentity, accountsPath string) {
 	genesisFile, err := os.Create(filepath.Join(chainDir, "genesis.json"))
 	if err != nil {
 		panic(err)
@@ -408,27 +467,41 @@ func genesisWriter(chainDir string, rootChainID int, validatorLen int, wg, accou
 
 	obj.Name("validators")
 	arr := writer.Array()
-	for range validatorLen {
-		validator := <-validatorChan
+	for _, v := range validators {
+		// Determine which committees to include in this genesis
+		var committeesForGenesis []uint64
+		if v.ChainID == chainID {
+			// Native validator: include all their committees
+			committeesForGenesis = v.Committees
+		} else {
+			// Cross-chain validator: only include this chain's committee
+			committeesForGenesis = []uint64{uint64(chainID)}
+		}
+
+		addressBytes, _ := hex.DecodeString(v.Address)
+		publicKeyBytes, _ := hex.DecodeString(v.PublicKey)
+
 		validatorObj := writer.Object()
-		validatorObj.Name("address").String(hex.EncodeToString(validator.Address))
-		validatorObj.Name("publicKey").String(hex.EncodeToString(validator.PublicKey))
+		validatorObj.Name("address").String(v.Address)
+		validatorObj.Name("publicKey").String(v.PublicKey)
 		validatorObj.Name("committees")
 		cArr := writer.Array()
-		for _, committee := range validator.Committees {
+		for _, committee := range committeesForGenesis {
 			writer.Int(int(committee))
 		}
 		cArr.End()
-		validatorObj.Name("netAddress").String(validator.NetAddress)
-		validatorObj.Name("stakedAmount").Int(int(validator.StakedAmount))
-		validatorObj.Name("output").String(hex.EncodeToString(validator.Output))
-		validatorObj.Name("delegate").Bool(validator.Delegate)
+		validatorObj.Name("netAddress").String(v.NetAddress)
+		validatorObj.Name("stakedAmount").Int(int(v.StakedAmount))
+		validatorObj.Name("output").String(hex.EncodeToString(addressBytes))
+		validatorObj.Name("delegate").Bool(v.IsDelegate)
 		validatorObj.End()
+
+		// Suppress unused variable warning
+		_ = publicKeyBytes
 	}
 	arr.End()
 
-	accountsWG.Wait()
-	rawAccounts, err := os.ReadFile(filepath.Join(chainDir, "accounts.json"))
+	rawAccounts, err := os.ReadFile(accountsPath)
 	if err != nil {
 		panic(err)
 	}
@@ -576,30 +649,45 @@ func createTemplateConfig(chainID int, rootChainID int) *lib.Config {
 	}
 }
 
-func processChain(chainName string, chainCfg *ChainConfig, startIdx int, password string, buffer int, netAddressSuffix string, jsonBeautify bool,
-	semaphoreChan chan struct{}, allIdentities *[]NodeIdentity, globalSync *sync.Mutex, chainWG *sync.WaitGroup) {
-	defer chainWG.Done()
+// generateChainIdentities generates all identities for a chain (validators, delegators, fullnodes)
+// Returns the identities and accounts for this chain
+func generateChainIdentities(chainName string, chainCfg *ChainConfig, startIdx int, buffer int, netAddressSuffix string,
+	semaphoreChan chan struct{}) ([]NodeIdentity, []*fsm.Account) {
 
-	chainDir := filepath.Join(".config", chainName)
-	mustSetDirectory(chainDir)
-
-	fmt.Printf("Processing chain: %s (ID: %d, RootChain: %d)\n", chainName, chainCfg.ID, chainCfg.RootChain)
-
-	accountsLen := chainCfg.Delegators.Count + chainCfg.Validators.Count + chainCfg.FullNodes.Count + chainCfg.Accounts.Count
-	validatorsLen := chainCfg.Delegators.Count + chainCfg.Validators.Count
-
-	accountChan := make(chan *fsm.Account, buffer)
-	validatorChan := make(chan *fsm.Validator, buffer)
-
-	var genesisWG, accountsWG sync.WaitGroup
-	genesisWG.Add(1)
-	accountsWG.Add(1)
-	go genesisWriter(chainDir, chainCfg.RootChain, validatorsLen, &genesisWG, &accountsWG, validatorChan)
-	go accountsWriter(chainDir, accountsLen, &accountsWG, accountChan)
+	fmt.Printf("Generating identities for chain: %s (ID: %d, RootChain: %d)\n", chainName, chainCfg.ID, chainCfg.RootChain)
 
 	chainIdentities := make([]NodeIdentity, 0, chainCfg.Validators.Count+chainCfg.Delegators.Count+chainCfg.FullNodes.Count)
 	var chainSync sync.Mutex
 	var wg sync.WaitGroup
+
+	accountChan := make(chan *fsm.Account, buffer)
+	accounts := make([]*fsm.Account, 0, chainCfg.Delegators.Count+chainCfg.Validators.Count+chainCfg.FullNodes.Count+chainCfg.Accounts.Count)
+	var accountSync sync.Mutex
+
+	// Collect accounts from channel
+	go func() {
+		for acc := range accountChan {
+			accountSync.Lock()
+			accounts = append(accounts, acc)
+			accountSync.Unlock()
+		}
+	}()
+
+	// Build committee assignments for validators
+	validatorCommitteeAssignments := make(map[int][]uint64)
+	for _, ca := range chainCfg.Committees {
+		for i := 0; i < ca.ValidatorCount && i < chainCfg.Validators.Count; i++ {
+			validatorCommitteeAssignments[i] = append(validatorCommitteeAssignments[i], uint64(ca.ID))
+		}
+	}
+
+	// Build committee assignments for delegators
+	delegatorCommitteeAssignments := make(map[int][]uint64)
+	for _, ca := range chainCfg.Committees {
+		for i := 0; i < ca.DelegatorCount && i < chainCfg.Delegators.Count; i++ {
+			delegatorCommitteeAssignments[i] = append(delegatorCommitteeAssignments[i], uint64(ca.ID))
+		}
+	}
 
 	// Assign unique idx within this chain
 	validatorStartIdx := startIdx
@@ -607,17 +695,73 @@ func processChain(chainName string, chainCfg *ChainConfig, startIdx int, passwor
 	fullNodeStartIdx := delegatorStartIdx + chainCfg.Delegators.Count
 
 	addValidators(chainCfg.Validators.Count, false, validatorStartIdx, chainCfg.Validators.StakedAmount, chainCfg.Validators.Amount,
-		chainCfg.ID, chainCfg.RootChain, chainCfg.Validators.Committees, netAddressSuffix,
-		&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan, validatorChan)
+		chainCfg.ID, chainCfg.RootChain, validatorCommitteeAssignments, netAddressSuffix,
+		&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan)
 	addValidators(chainCfg.Delegators.Count, true, delegatorStartIdx, chainCfg.Delegators.StakedAmount, chainCfg.Delegators.Amount,
-		chainCfg.ID, chainCfg.RootChain, chainCfg.Delegators.Committees, netAddressSuffix,
-		&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan, validatorChan)
+		chainCfg.ID, chainCfg.RootChain, delegatorCommitteeAssignments, netAddressSuffix,
+		&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan)
 	addFullNodes(chainCfg.FullNodes.Count, chainCfg.FullNodes.Amount, fullNodeStartIdx, chainCfg.ID, chainCfg.RootChain,
 		&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan)
 	addAccounts(chainCfg.Accounts.Count, chainCfg.Accounts.Amount, &wg, semaphoreChan, accountChan)
 
 	wg.Wait()
-	genesisWG.Wait()
+	close(accountChan)
+
+	// Sort chain identities by ID
+	sort.Slice(chainIdentities, func(i, j int) bool {
+		return chainIdentities[i].ID < chainIdentities[j].ID
+	})
+
+	fmt.Printf("Chain %s: %d validators, %d delegators, %d full nodes, %d accounts\n",
+		chainName, chainCfg.Validators.Count, chainCfg.Delegators.Count, chainCfg.FullNodes.Count, chainCfg.Accounts.Count)
+
+	return chainIdentities, accounts
+}
+
+// writeChainFiles writes genesis.json, config.json, and keystore.json for a chain
+func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []NodeIdentity, allIdentities []NodeIdentity,
+	accounts []*fsm.Account, password string, jsonBeautify bool) {
+
+	chainDir := filepath.Join(".config", chainName)
+	mustSetDirectory(chainDir)
+
+	// Find all validators/delegators that should be in this chain's genesis
+	// (those whose committees include this chain's ID)
+	var validatorsForGenesis []NodeIdentity
+	for _, identity := range allIdentities {
+		if identity.NodeType == "validator" || identity.NodeType == "delegator" {
+			for _, c := range identity.Committees {
+				if int(c) == chainCfg.ID {
+					validatorsForGenesis = append(validatorsForGenesis, identity)
+					break
+				}
+			}
+		}
+	}
+
+	// Write accounts.json first (needed for genesis)
+	accountsPath := filepath.Join(chainDir, "accounts.json")
+	accountsFile, err := os.Create(accountsPath)
+	if err != nil {
+		panic(err)
+	}
+
+	writer := jwriter.NewStreamingWriter(accountsFile, 1024)
+	arr := writer.Array()
+	for _, account := range accounts {
+		accountObj := writer.Object()
+		accountObj.Name("address").String(hex.EncodeToString(account.Address))
+		accountObj.Name("amount").Int(int(account.Amount))
+		accountObj.End()
+	}
+	arr.End()
+	if err := writer.Flush(); err != nil {
+		panic(err)
+	}
+	accountsFile.Close()
+
+	// Write genesis.json
+	writeGenesisFromIdentities(chainDir, chainCfg.ID, chainCfg.RootChain, validatorsForGenesis, accountsPath)
 
 	// Beautify genesis.json if configured
 	if jsonBeautify {
@@ -640,25 +784,34 @@ func processChain(chainName string, chainCfg *ChainConfig, startIdx int, passwor
 	}
 
 	// Delete accounts.json as it was only needed for genesis.json
-	if err := os.Remove(filepath.Join(chainDir, "accounts.json")); err != nil {
+	if err := os.Remove(accountsPath); err != nil {
 		panic(err)
 	}
-
-	// Sort chain identities by idx
-	sort.Slice(chainIdentities, func(i, j int) bool {
-		return chainIdentities[i].ID < chainIdentities[j].ID
-	})
 
 	// Write config.json for this chain
 	templateConfig := createTemplateConfig(chainCfg.ID, chainCfg.RootChain)
 	mustSaveAsJSON(filepath.Join(chainDir, "config.json"), templateConfig)
 
 	// Create keystore.json for this chain
-	keystore := &crypto.Keystore{
-		AddressMap:  make(map[string]*crypto.EncryptedPrivateKey, len(chainIdentities)),
-		NicknameMap: make(map[string]string, len(chainIdentities)),
-	}
+	// Include all validators/delegators that participate in this chain (including cross-chain)
+	// Plus all native full nodes
+	keystoreIdentities := make([]NodeIdentity, 0)
+
+	// Add all validators/delegators for this chain's genesis (includes cross-chain)
+	keystoreIdentities = append(keystoreIdentities, validatorsForGenesis...)
+
+	// Add native full nodes
 	for _, identity := range chainIdentities {
+		if identity.NodeType == "fullnode" {
+			keystoreIdentities = append(keystoreIdentities, identity)
+		}
+	}
+
+	keystore := &crypto.Keystore{
+		AddressMap:  make(map[string]*crypto.EncryptedPrivateKey, len(keystoreIdentities)),
+		NicknameMap: make(map[string]string, len(keystoreIdentities)),
+	}
+	for _, identity := range keystoreIdentities {
 		nickname := fmt.Sprintf("node-%d", identity.ID)
 		_, err := keystore.ImportRaw(identity.PrivateKeyBytes, password, crypto.ImportRawOpts{
 			Nickname: nickname,
@@ -669,13 +822,7 @@ func processChain(chainName string, chainCfg *ChainConfig, startIdx int, passwor
 	}
 	mustSaveAsJSON(filepath.Join(chainDir, "keystore.json"), keystore)
 
-	// Add chain identities to global identities
-	globalSync.Lock()
-	*allIdentities = append(*allIdentities, chainIdentities...)
-	globalSync.Unlock()
-
-	fmt.Printf("Chain %s: %d validators, %d delegators, %d full nodes, %d accounts\n",
-		chainName, chainCfg.Validators.Count, chainCfg.Delegators.Count, chainCfg.FullNodes.Count, chainCfg.Accounts.Count)
+	fmt.Printf("Written files for chain %s\n", chainName)
 }
 
 func main() {
@@ -702,6 +849,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Validate committee assignments
+	fmt.Println("Validating committee assignments...")
+	if err := validateCommitteeAssignments(cfg); err != nil {
+		fmt.Printf("Committee assignment error: %v\n", err)
+		os.Exit(1)
+	}
+
 	fmt.Println("Deleting old files!")
 
 	mustSetDirectory(".config")
@@ -712,8 +866,6 @@ func main() {
 	logData()
 
 	semaphoreChan := make(chan struct{}, cfg.General.Concurrency)
-	allIdentities := make([]NodeIdentity, 0)
-	var globalSync sync.Mutex
 
 	// Sort chain names for consistent idx assignment
 	chainNames := make([]string, 0, len(cfg.Chains))
@@ -732,32 +884,89 @@ func main() {
 		currentIdx += chainCfg.Validators.Count + chainCfg.Delegators.Count + chainCfg.FullNodes.Count
 	}
 
-	// Process all chains concurrently
-	var chainWG sync.WaitGroup
-	for _, chainName := range chainNames {
-		chainWG.Add(1)
-		go processChain(chainName, cfg.Chains[chainName], chainStartIndices[chainName], cfg.General.Password, cfg.General.Buffer, cfg.General.NetAddressSuffix, cfg.General.JsonBeautify, semaphoreChan, &allIdentities, &globalSync, &chainWG)
-	}
-	chainWG.Wait()
+	// Phase 1: Generate all identities for all chains
+	fmt.Println("Phase 1: Generating identities...")
+	chainIdentitiesMap := make(map[string][]NodeIdentity)
+	chainAccountsMap := make(map[string][]*fsm.Account)
+	var allIdentities []NodeIdentity
 
-	// Sort all identities by idx for consistent output
+	for _, chainName := range chainNames {
+		identities, accounts := generateChainIdentities(
+			chainName,
+			cfg.Chains[chainName],
+			chainStartIndices[chainName],
+			cfg.General.Buffer,
+			cfg.General.NetAddressSuffix,
+			semaphoreChan,
+		)
+		chainIdentitiesMap[chainName] = identities
+		chainAccountsMap[chainName] = accounts
+		allIdentities = append(allIdentities, identities...)
+	}
+
+	// Sort all identities by ID
 	sort.Slice(allIdentities, func(i, j int) bool {
 		return allIdentities[i].ID < allIdentities[j].ID
 	})
 
-	// Build ids.json with keys map structure
-	idsFile := IdsFile{
-		Keys: make(map[string]NodeIdentity, len(allIdentities)),
-	}
-	for _, identity := range allIdentities {
-		key := fmt.Sprintf("node-%d", identity.ID)
-		idsFile.Keys[key] = identity
+	// Phase 2: Write files for all chains
+	fmt.Println("Phase 2: Writing chain files...")
+	for _, chainName := range chainNames {
+		writeChainFiles(
+			chainName,
+			cfg.Chains[chainName],
+			chainIdentitiesMap[chainName],
+			allIdentities,
+			chainAccountsMap[chainName],
+			cfg.General.Password,
+			cfg.General.JsonBeautify,
+		)
 	}
 
-	// Write global ids.json with ALL nodes from ALL chains
-	fmt.Println("Writing global ids.json...")
+	// Phase 3: Generate ids.json with multi-committee validators having multiple entries
+	fmt.Println("Phase 3: Writing ids.json...")
+
+	// Expand multi-committee validators into multiple entries
+	idsFile := IdsFile{
+		Keys: make(map[string]NodeIdentity),
+	}
+
+	// Track the next available ID for expanded entries
+	nextExpandedID := len(allIdentities) + 1
+
+	for _, identity := range allIdentities {
+		if identity.NodeType == "fullnode" {
+			// Full nodes only appear once
+			key := fmt.Sprintf("node-%d", identity.ID)
+			idsFile.Keys[key] = identity
+		} else if len(identity.Committees) == 1 {
+			// Single committee validator/delegator - appears once
+			key := fmt.Sprintf("node-%d", identity.ID)
+			idsFile.Keys[key] = identity
+		} else {
+			// Multi-committee validator/delegator - appears once per committee
+			for i, committee := range identity.Committees {
+				expandedIdentity := identity
+				if i == 0 {
+					// First entry keeps original ID
+					expandedIdentity.ID = identity.ID
+				} else {
+					// Additional entries get new IDs
+					expandedIdentity.ID = nextExpandedID
+					nextExpandedID++
+				}
+				// Update chainId to match the committee
+				expandedIdentity.ChainID = int(committee)
+
+				key := fmt.Sprintf("node-%d", expandedIdentity.ID)
+				idsFile.Keys[key] = expandedIdentity
+			}
+		}
+	}
+
 	mustSaveAsJSON(".config/ids.json", idsFile)
 
 	fmt.Println("Done!")
-	fmt.Printf("Total nodes across all chains: %d\n", len(allIdentities))
+	fmt.Printf("Total base nodes: %d\n", len(allIdentities))
+	fmt.Printf("Total ids.json entries (including multi-committee expansions): %d\n", len(idsFile.Keys))
 }
