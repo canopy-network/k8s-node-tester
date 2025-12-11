@@ -35,6 +35,8 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
         - |
+          # fail the script if any command fails
+          set -euo pipefail
           CGO_ENABLED=0 GO111MODULE=off go run /root/init-node/main.go
         volumeMounts:
         - name: data
