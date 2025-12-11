@@ -162,22 +162,38 @@ func listAvailableConfigs() []string {
 }
 
 // validateConfig checks that the sum of all validators, delegators, and full nodes equals nodes.count
+// Multi-committee validators (not delegators) count once per committee they participate in
 func validateConfig(cfg *AppConfig) error {
 	totalNodes := 0
 	for chainName, chainCfg := range cfg.Chains {
-		// Delegators don't count as physical nodes
-		chainNodes := chainCfg.Validators.Count + chainCfg.FullNodes.Count
+		// Base count: validators + full nodes (delegators don't count as physical nodes)
+		baseNodes := chainCfg.Validators.Count + chainCfg.FullNodes.Count
+
+		// Count additional entries from cross-chain committee assignments
+		// Each validator assigned to another chain's committee creates an additional ids.json entry
+		crossChainExpansions := 0
+		for _, ca := range chainCfg.Committees {
+			crossChainExpansions += ca.ValidatorCount
+		}
+
+		chainNodes := baseNodes + crossChainExpansions
 		totalNodes += chainNodes
-		fmt.Printf("  Chain %s: %d validators + %d full nodes = %d nodes (+ %d delegators)\n",
-			chainName, chainCfg.Validators.Count, chainCfg.FullNodes.Count, chainNodes, chainCfg.Delegators.Count)
+
+		if crossChainExpansions > 0 {
+			fmt.Printf("  Chain %s: %d validators + %d full nodes + %d cross-chain expansions = %d entries (+ %d delegators)\n",
+				chainName, chainCfg.Validators.Count, chainCfg.FullNodes.Count, crossChainExpansions, chainNodes, chainCfg.Delegators.Count)
+		} else {
+			fmt.Printf("  Chain %s: %d validators + %d full nodes = %d entries (+ %d delegators)\n",
+				chainName, chainCfg.Validators.Count, chainCfg.FullNodes.Count, chainNodes, chainCfg.Delegators.Count)
+		}
 	}
 
 	if totalNodes != cfg.Nodes.Count {
-		return fmt.Errorf("node count mismatch: sum of all validators and full nodes (%d) does not equal nodes.count (%d)",
+		return fmt.Errorf("node count mismatch: total entries including cross-chain expansions (%d) does not equal nodes.count (%d)",
 			totalNodes, cfg.Nodes.Count)
 	}
 
-	fmt.Printf("  Total nodes: %d (matches nodes.count: %d) ✓\n", totalNodes, cfg.Nodes.Count)
+	fmt.Printf("  Total entries: %d (matches nodes.count: %d) ✓\n", totalNodes, cfg.Nodes.Count)
 	return nil
 }
 

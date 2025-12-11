@@ -6,7 +6,7 @@ default:
     netAddressSuffix: ".p2p"
     jsonBeautify: true
   nodes:
-    count: 3
+    count: 4
   chains:
     chain_1:
       id: 1
@@ -132,7 +132,7 @@ max:
     buffer: 1000
     netAddressSuffix: ".p2p"
   nodes:
-    count: 500
+    count: 475
   chains:
     chain_1:
       id: 1
@@ -181,7 +181,7 @@ mature:
     buffer: 1000
     netAddressSuffix: ".p2p"
   nodes:
-    count: 300
+    count: 200
   chains:
     chain_1:
       id: 1
