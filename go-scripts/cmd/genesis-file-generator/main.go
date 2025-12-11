@@ -757,6 +757,25 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 		}
 	}
 
+	// Build a set of native account addresses for deduplication
+	nativeAddresses := make(map[string]bool)
+	for _, account := range accounts {
+		nativeAddresses[hex.EncodeToString(account.Address)] = true
+	}
+
+	// Find cross-chain validators/delegators that need accounts in this chain
+	// (validators/delegators from other chains that participate in this chain's committee)
+	var crossChainAccounts []NodeIdentity
+	for _, v := range validatorsForGenesis {
+		if v.ChainID != chainCfg.ID {
+			// This is a cross-chain validator/delegator - needs an account
+			if !nativeAddresses[v.Address] {
+				crossChainAccounts = append(crossChainAccounts, v)
+				nativeAddresses[v.Address] = true // Prevent duplicates
+			}
+		}
+	}
+
 	// Write accounts.json first (needed for genesis)
 	accountsPath := filepath.Join(chainDir, "accounts.json")
 	accountsFile, err := os.Create(accountsPath)
@@ -766,10 +785,18 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 
 	writer := jwriter.NewStreamingWriter(accountsFile, 1024)
 	arr := writer.Array()
+	// Write native accounts
 	for _, account := range accounts {
 		accountObj := writer.Object()
 		accountObj.Name("address").String(hex.EncodeToString(account.Address))
 		accountObj.Name("amount").Int(int(account.Amount))
+		accountObj.End()
+	}
+	// Write accounts for cross-chain validators/delegators
+	for _, v := range crossChainAccounts {
+		accountObj := writer.Object()
+		accountObj.Name("address").String(v.Address)
+		accountObj.Name("amount").Int(int(v.Amount))
 		accountObj.End()
 	}
 	arr.End()
