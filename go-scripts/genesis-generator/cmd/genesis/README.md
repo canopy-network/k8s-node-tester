@@ -5,7 +5,7 @@ A Go script that generates genesis files, config files, keystores, and node iden
 ## Usage
 
 ```bash
-cd go-scripts/cmd/genesis-file-generator
+cd go-scripts/genesis-generator/cmd/genesis
 go run main.go <config-name>
 ```
 
