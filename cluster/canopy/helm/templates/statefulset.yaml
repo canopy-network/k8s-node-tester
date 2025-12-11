@@ -81,7 +81,7 @@ spec:
           - configMap:
               name: {{ .Values.volumes.configMaps.keystore }}
           - configMap:
-              name: {{ .Values.volumes.configMaps.keys }}
+              name: {{ .Values.volumes.configMaps.ids }}
       - name: init-script
         configMap:
           name: init-node-script

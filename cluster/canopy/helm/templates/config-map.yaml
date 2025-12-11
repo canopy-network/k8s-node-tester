@@ -46,6 +46,7 @@ data:
       ChainID       int    `json:"chainId"`
       RootChainID   int    `json:"rootChainId"`
       RootChainNode int    `json:"rootChainNode"`
+      PeerNode      int    `json:"peerNode"`
       Address       string `json:"address"`
       PublicKey     string `json:"publicKey"`
       PrivateKey    string `json:"privateKey"`
@@ -120,17 +121,24 @@ data:
       // obtain the root node full key by splitting the hostname by "-" and obtaining the identifier
       rootNodeKey := fmt.Sprintf("%s%d", podPrefix, nodeKey.RootChainNode)
       rootNode, ok := keys.Keys[rootNodeKey]
+      // do the same for the peer node
+      peerNodeKey := fmt.Sprintf("%s%d", podPrefix, nodeKey.PeerNode)
+      peerNode, ok := keys.Keys[peerNodeKey]
+      if !ok {
+        log.Error("failed to find peer node", slog.String("peerNodeKey", peerNodeKey))
+        os.Exit(1)
+      }
       if !ok {
         log.Error("failed to find root node", slog.String("rootNodeKey", rootNodeKey))
         os.Exit(1)
       }
       // perform the substitutions
       configFileContents = performSubstitution(configFileContents, map[string]string{
-    		"|NODE_ID|":              strconv.Itoa(podId) + serviceSuffix,
-    		"|ROOT_NODE_ID|":         strconv.Itoa(rootNode.Id) + serviceSuffix,
-        "|DIAL_PEER|": fmt.Sprintf("%s@tcp://node-%s", rootNode.PublicKey,
-     			strconv.Itoa(rootNode.Id)+serviceSuffix),
-     	})
+        "|NODE_ID|":              strconv.Itoa(podId) + serviceSuffix,
+        "|ROOT_NODE_ID|":         strconv.Itoa(rootNode.Id) + serviceSuffix,
+        "|DIAL_PEER|": fmt.Sprintf("%s@tcp://node-%s", peerNode.PublicKey,
+          strconv.Itoa(peerNode.Id)+serviceSuffix),
+      })
       // copy the config file to the canopy's directory
       dst = fullFilePath(canopyPath, configFile, configFileExt)
       if err := os.WriteFile(dst,
@@ -138,20 +146,20 @@ data:
         log.Error("failed to copy config file", slog.String("err", err.Error()), slog.String("dst", dst))
         os.Exit(1)
       }
-     	validatorKeyFile := fmt.Sprintf("\"%s\" ", nodeKey.PrivateKey)
-     	dst = fullFilePath(canopyPath, validatorFile, configFileExt)
-     	if err := os.WriteFile(dst,
-      		[]byte(validatorKeyFile), configFilePerms); err != nil {
-      		log.Error("failed to copy validator key file", slog.String("err", err.Error()),
-     			slog.String("dst", dst))
-      		os.Exit(1)
-     	}
-     	log.Info("finished setting up the config for the node " + hostname)
+      validatorKeyFile := fmt.Sprintf("\"%s\" ", nodeKey.PrivateKey)
+      dst = fullFilePath(canopyPath, validatorFile, configFileExt)
+      if err := os.WriteFile(dst,
+          []byte(validatorKeyFile), configFilePerms); err != nil {
+          log.Error("failed to copy validator key file", slog.String("err", err.Error()),
+          slog.String("dst", dst))
+          os.Exit(1)
+      }
+      log.Info("finished setting up the config for the node " + hostname)
     }
 
     // getPodId returns the hostname, prefix and id of the pod
     func getPodId() (hostname, prefix string, id int, err error) {
-    	separator := "-"
+      separator := "-"
       hostname, err = os.Hostname()
       if err != nil {
         return "", "", 0, fmt.Errorf("failed to get hostname: %w", err)

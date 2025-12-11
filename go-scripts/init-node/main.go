@@ -45,6 +45,7 @@ type NodeKey struct {
 	ChainID       int    `json:"chainId"`
 	RootChainID   int    `json:"rootChainId"`
 	RootChainNode int    `json:"rootChainNode"`
+	PeerNode      int    `json:"peerNode"`
 	Address       string `json:"address"`
 	PublicKey     string `json:"publicKey"`
 	PrivateKey    string `json:"privateKey"`
@@ -123,12 +124,19 @@ func main() {
 		log.Error("failed to find root node", slog.String("rootNodeKey", rootNodeKey))
 		os.Exit(1)
 	}
+	// do the same for the peer node
+	peerNodeKey := fmt.Sprintf("%s%d", podPrefix, nodeKey.PeerNode)
+	peerNode, ok := keys.Keys[peerNodeKey]
+	if !ok {
+		log.Error("failed to find peer node", slog.String("peerNodeKey", peerNodeKey))
+		os.Exit(1)
+	}
 	// perform the substitutions
 	configFileContents = performSubstitution(configFileContents, map[string]string{
 		"|NODE_ID|":      strconv.Itoa(podId) + serviceSuffix,
 		"|ROOT_NODE_ID|": strconv.Itoa(rootNode.Id) + serviceSuffix,
-		"|DIAL_PEER|": fmt.Sprintf("%s@tcp://node-%s", rootNode.PublicKey,
-			strconv.Itoa(rootNode.Id)+serviceSuffix),
+		"|DIAL_PEER|": fmt.Sprintf("%s@tcp://node-%s", peerNode.PublicKey,
+			strconv.Itoa(peerNode.Id)+serviceSuffix),
 	})
 	// copy the config file to the canopy's directory
 	dst = fullFilePath(canopyPath, configFile, configFileExt)

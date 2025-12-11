@@ -1,4 +1,5 @@
 {
+  "autoUpdate": false,
   "logLevel": "debug",
   "chainId": 1,
   "sleepUntil": 0,
@@ -26,7 +27,7 @@
   "maxInbound": 21,
   "maxOutbound": 7,
   "trustedPeerIDs": null,
-  "dialPeers": [],
+  "dialPeers": ["|DIAL_PEER|"],
   "bannedPeerIDs": null,
   "bannedIPs": null,
   "minimumPeersToStart": 0,
