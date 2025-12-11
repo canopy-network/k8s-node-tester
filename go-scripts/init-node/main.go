@@ -128,7 +128,7 @@ func main() {
 		os.Exit(1)
 	}
 	// write the validator key file to the canopy's directory
-	validatorKeyFile := fmt.Sprintf("\"%s\" ", nodeKey.PrivateKey)
+	validatorKeyFile := fmt.Sprintf("\"%s\"", nodeKey.PrivateKey)
 	dst = fullFilePath(canopyPath, validatorFile, configFileExt)
 	if err := os.WriteFile(dst,
 		[]byte(validatorKeyFile), configFilePerms); err != nil {

@@ -27,13 +27,17 @@ default:
         amount: 1000000
         committees: [1, 2]
       committees:
-        id: 2
-        # must be less than or equal to the number of validators
-        count: 1
+        - id: 2
+          # must be less than or equal to the number of validators
+          # these will be the validator nodes for the nested chain
+          count: 1
+    # if is a nested chain, these will basically be full nodes because the validator set
+    # comes from the root chain
     chain_2:
       id: 2
       rootChain: 1
       validators:
+        # could be 0 for no full nodes on a nested chain
         count: 1
         stakedAmount: 1000000000
         amount: 1000000
