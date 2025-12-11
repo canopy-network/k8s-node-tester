@@ -1,5 +1,12 @@
 package main
 
+// init-node is a Kubernetes init container script that prepares canopy node configuration files.
+// it reads the pod's hostname to determine its index, looks up the corresponding node key from a keys.json file,
+// then copies and configures the appropriate genesis, keystore, config, and validator_key files for that specific node.
+// the script performs template substitution in the config file, replacing placeholders like |NODE_ID|, |ROOT_NODE_ID|,
+// and |ROOT_NODE_PUBLIC_KEY| with actual values based on the node's chain configuration and root chain node information.
+// all configuration files are written to /root/.canopy for the main canopy container to use.
+
 import (
 	"bytes"
 	"encoding/json"
@@ -24,13 +31,15 @@ const (
 
 	serviceSuffix = ".p2p" // suffix for the service name in order for the node to be discoverable
 
-	configFilePerms = 0644 // permissions for the config files
+	configFilePerms = 0644 // writable file permissions [readable by everyone, writable by owner]
 )
 
+// Keys is the map of node keys
 type Keys struct {
 	Keys map[string]NodeKey `json:"keys"`
 }
 
+// NodeKey is the structure representing the node key information in order to initialize the node
 type NodeKey struct {
 	Id            int    `json:"id"`
 	ChainID       int    `json:"chainId"`
@@ -81,7 +90,7 @@ func main() {
 	// copy the genesis file to the canopy directory
 	src := fullFilePath(configPath, indexedFileName(genesisFile, nodeKey.ChainID), configFileExt)
 	dst := fullFilePath(canopyPath, genesisFile, configFileExt)
-	err = Copy(src, dst)
+	err = copy(src, dst)
 	if err != nil {
 		log.Error("failed to copy genesis file",
 			slog.String("err", err.Error()),
@@ -92,7 +101,7 @@ func main() {
 	// copy the keystore file to the canopy directory
 	src = fullFilePath(configPath, indexedFileName(keystoreFile, nodeKey.ChainID), configFileExt)
 	dst = fullFilePath(canopyPath, keystoreFile, configFileExt)
-	err = Copy(src, dst)
+	err = copy(src, dst)
 	if err != nil {
 		log.Error("failed to copy keystore file",
 			slog.String("err", err.Error()),
@@ -168,8 +177,8 @@ func indexedFileName(name string, id int) string {
 	return fmt.Sprintf("%s_%d", name, id)
 }
 
-// Copy copies the file from src to dst
-func Copy(src, dst string) error {
+// copy copies the file from src to dst
+func copy(src, dst string) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return err
