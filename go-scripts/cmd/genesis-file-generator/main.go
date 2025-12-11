@@ -87,7 +87,7 @@ type AppConfig struct {
 
 // NodeIdentity represents a node's identity for ids.json
 type NodeIdentity struct {
-	Idx             int    `json:"idx"`
+	ID              int    `json:"id"`
 	ChainID         int    `json:"chainId"`
 	RootChainID     int    `json:"rootChainId"`
 	Address         string `json:"address"`
@@ -95,6 +95,11 @@ type NodeIdentity struct {
 	PrivateKey      string `json:"privateKey"`
 	NodeType        string `json:"nodeType"`
 	PrivateKeyBytes []byte `json:"-"` // Not exported to JSON, used for keystore
+}
+
+// IdsFile represents the structure of ids.json
+type IdsFile struct {
+	Keys map[string]NodeIdentity `json:"keys"`
 }
 
 const configFile = "configs.yaml"
@@ -244,7 +249,7 @@ func addFullNodes(count int, amount uint64, startIdx int, chainID int, rootChain
 			}
 
 			identity := NodeIdentity{
-				Idx:             startIdx + i,
+				ID:              startIdx + i,
 				ChainID:         chainID,
 				RootChainID:     rootChainID,
 				Address:         hex.EncodeToString(pk.PublicKey().Address().Bytes()),
@@ -299,7 +304,7 @@ func addValidators(count int, isDelegate bool, startIdx int, stakedAmount uint64
 			}
 
 			identity := NodeIdentity{
-				Idx:             startIdx + i,
+				ID:              startIdx + i,
 				ChainID:         chainID,
 				RootChainID:     rootChainID,
 				Address:         hex.EncodeToString(pk.PublicKey().Address().Bytes()),
@@ -619,7 +624,7 @@ func processChain(chainName string, chainCfg *ChainConfig, startIdx int, passwor
 
 	// Sort chain identities by idx
 	sort.Slice(chainIdentities, func(i, j int) bool {
-		return chainIdentities[i].Idx < chainIdentities[j].Idx
+		return chainIdentities[i].ID < chainIdentities[j].ID
 	})
 
 	// Write config.json for this chain
@@ -632,7 +637,7 @@ func processChain(chainName string, chainCfg *ChainConfig, startIdx int, passwor
 		NicknameMap: make(map[string]string, len(chainIdentities)),
 	}
 	for _, identity := range chainIdentities {
-		nickname := fmt.Sprintf("node-%d", identity.Idx)
+		nickname := fmt.Sprintf("node-%d", identity.ID)
 		_, err := keystore.ImportRaw(identity.PrivateKeyBytes, password, crypto.ImportRawOpts{
 			Nickname: nickname,
 		})
@@ -715,12 +720,21 @@ func main() {
 
 	// Sort all identities by idx for consistent output
 	sort.Slice(allIdentities, func(i, j int) bool {
-		return allIdentities[i].Idx < allIdentities[j].Idx
+		return allIdentities[i].ID < allIdentities[j].ID
 	})
+
+	// Build ids.json with keys map structure
+	idsFile := IdsFile{
+		Keys: make(map[string]NodeIdentity, len(allIdentities)),
+	}
+	for _, identity := range allIdentities {
+		key := fmt.Sprintf("node-%d", identity.ID)
+		idsFile.Keys[key] = identity
+	}
 
 	// Write global ids.json with ALL nodes from ALL chains
 	fmt.Println("Writing global ids.json...")
-	mustSaveAsJSON(".config/ids.json", allIdentities)
+	mustSaveAsJSON(".config/ids.json", idsFile)
 
 	fmt.Println("Done!")
 	fmt.Printf("Total nodes across all chains: %d\n", len(allIdentities))
