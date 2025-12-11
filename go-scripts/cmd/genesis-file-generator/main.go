@@ -34,6 +34,7 @@ type GeneralConfig struct {
 	Password         string `yaml:"password"`
 	Buffer           int    `yaml:"buffer"`
 	NetAddressSuffix string `yaml:"netAddressSuffix"`
+	JsonBeautify     bool   `yaml:"jsonBeautify"`
 }
 
 // NodesConfig holds the total node count
@@ -575,7 +576,7 @@ func createTemplateConfig(chainID int, rootChainID int) *lib.Config {
 	}
 }
 
-func processChain(chainName string, chainCfg *ChainConfig, startIdx int, password string, buffer int, netAddressSuffix string,
+func processChain(chainName string, chainCfg *ChainConfig, startIdx int, password string, buffer int, netAddressSuffix string, jsonBeautify bool,
 	semaphoreChan chan struct{}, allIdentities *[]NodeIdentity, globalSync *sync.Mutex, chainWG *sync.WaitGroup) {
 	defer chainWG.Done()
 
@@ -617,6 +618,26 @@ func processChain(chainName string, chainCfg *ChainConfig, startIdx int, passwor
 
 	wg.Wait()
 	genesisWG.Wait()
+
+	// Beautify genesis.json if configured
+	if jsonBeautify {
+		genesisPath := filepath.Join(chainDir, "genesis.json")
+		rawData, err := os.ReadFile(genesisPath)
+		if err != nil {
+			panic(err)
+		}
+		var parsed interface{}
+		if err := json.Unmarshal(rawData, &parsed); err != nil {
+			panic(err)
+		}
+		beautified, err := json.MarshalIndent(parsed, "", "  ")
+		if err != nil {
+			panic(err)
+		}
+		if err := os.WriteFile(genesisPath, beautified, 0644); err != nil {
+			panic(err)
+		}
+	}
 
 	// Delete accounts.json as it was only needed for genesis.json
 	if err := os.Remove(filepath.Join(chainDir, "accounts.json")); err != nil {
@@ -715,7 +736,7 @@ func main() {
 	var chainWG sync.WaitGroup
 	for _, chainName := range chainNames {
 		chainWG.Add(1)
-		go processChain(chainName, cfg.Chains[chainName], chainStartIndices[chainName], cfg.General.Password, cfg.General.Buffer, cfg.General.NetAddressSuffix, semaphoreChan, &allIdentities, &globalSync, &chainWG)
+		go processChain(chainName, cfg.Chains[chainName], chainStartIndices[chainName], cfg.General.Password, cfg.General.Buffer, cfg.General.NetAddressSuffix, cfg.General.JsonBeautify, semaphoreChan, &allIdentities, &globalSync, &chainWG)
 	}
 	chainWG.Wait()
 

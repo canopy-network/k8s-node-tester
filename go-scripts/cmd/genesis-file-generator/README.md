@@ -25,6 +25,7 @@ default:
     password: "pablito"       # Password for keystore encryption
     buffer: 1000              # Buffer size for internal channels
     netAddressSuffix: ".p2p"  # Suffix appended to netAddress in genesis.json
+    jsonBeautify: true        # If true, beautifies json files with indentation
   # Total amount of nodes (validators + delegators + full nodes across all chains)
   nodes:
     count: 3
@@ -198,6 +199,7 @@ my_custom:
     password: "mypassword"
     buffer: 1000
     netAddressSuffix: ".p2p"
+    jsonBeautify: false       # Set to true to beautify genesis.json output
   nodes:
     count: 10
   chains:

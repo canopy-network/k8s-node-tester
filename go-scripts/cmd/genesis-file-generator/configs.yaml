@@ -4,6 +4,7 @@ default:
     password: "pablito"
     buffer: 1000
     netAddressSuffix: ".p2p"
+    jsonBeautify: true
   nodes:
     count: 3
   chains:
