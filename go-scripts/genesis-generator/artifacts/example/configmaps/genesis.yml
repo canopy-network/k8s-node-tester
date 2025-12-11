@@ -90,12 +90,12 @@ data:
       "nonSigners": null,
       "validators": [
         {
-          "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
-          "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba6994739f9160181a609f516eb702936a0cbf4c1f2e7e6be5b8272f2",
+          "address": "6f94783856d5ce46d24dd5946215086211d70776",
+          "publicKey": "abda38eb50fbe53db9e9c3b141c6a1ec54ad40a4840e34784c975da4ee175eb4c5dd10b6d759ae8fdf8bc22511bbd97b",
           "committees": [2],
-          "netAddress": "tcp://node-2.p2p",
+          "netAddress": "tcp://node-4.p2p",
           "stakedAmount": 1000000000,
-          "output": "851e90eaef1fa27debaee2c2591503bdeec1d123"
+          "output": "6f94783856d5ce46d24dd5946215086211d70776"
         }
       ],
       "params": {
