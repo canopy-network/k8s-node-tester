@@ -26,9 +26,9 @@ default:
     buffer: 1000              # Buffer size for internal channels
     netAddressSuffix: ".p2p"  # Suffix appended to netAddress in genesis.json
     jsonBeautify: true        # If true, beautifies json files with indentation
-  # Total amount of nodes (validators + delegators + full nodes across all chains)
+  # Total physical nodes (validators + full nodes, NOT delegators)
   nodes:
-    count: 3
+    count: 3  # Delegators don't count as physical nodes
   # Individual chain configuration
   chains:
     chain_1:
@@ -103,8 +103,17 @@ This means:
 ### Validation
 
 The script validates:
-1. The sum of all validators, delegators, and full nodes equals `nodes.count`
-2. Committee assignment counts don't exceed available validators/delegators
+1. The sum of all validators and full nodes equals `nodes.count` (delegators don't count as physical nodes)
+2. At least one root chain has validators (for rootChainNode assignment)
+3. Committee assignment counts don't exceed available validators/delegators
+4. Committee IDs reference valid chain IDs
+
+### Delegators
+
+Delegators are staked entities that delegate to validators but are **not physical servers**:
+- They do **not** count towards `nodes.count`
+- They do **not** have `netAddress` in genesis.json
+- They do **not** have `rootChainNode` in ids.json
 
 ### Chain Types
 
@@ -186,10 +195,10 @@ Contains all node identities in a map structure. Multi-committee validators appe
 
 **Node Types:** `validator`, `delegator`, `fullnode`
 
-**rootChainNode Logic:**
-- **Root chain node**: `rootChainNode` = its own ID
-- **Nested chain node (same identity on root chain)**: `rootChainNode` = the ID of its root chain entry
-- **Nested chain node (no root chain identity)**: `rootChainNode` = a root chain node ID (distributed evenly)
+**rootChainNode Logic** (validators and full nodes only, delegators don't have this field):
+- **Root chain validator**: `rootChainNode` = its own ID
+- **Nested chain validator (same identity on root chain)**: `rootChainNode` = the ID of its root chain entry
+- **Nested chain validator (no root chain identity)**: `rootChainNode` = a root chain validator ID (distributed evenly)
 
 ### config.json
 

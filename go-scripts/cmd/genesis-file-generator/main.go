@@ -98,7 +98,7 @@ type NodeIdentity struct {
 	ID              int      `json:"id"`
 	ChainID         int      `json:"chainId"`
 	RootChainID     int      `json:"rootChainId"`
-	RootChainNode   int      `json:"rootChainNode"`
+	RootChainNode   *int     `json:"rootChainNode,omitempty"` // nil for delegators (they're not physical nodes)
 	Address         string   `json:"address"`
 	PublicKey       string   `json:"publicKey"`
 	PrivateKey      string   `json:"privateKey"`
@@ -165,14 +165,15 @@ func listAvailableConfigs() []string {
 func validateConfig(cfg *AppConfig) error {
 	totalNodes := 0
 	for chainName, chainCfg := range cfg.Chains {
-		chainNodes := chainCfg.Validators.Count + chainCfg.Delegators.Count + chainCfg.FullNodes.Count
+		// Delegators don't count as physical nodes
+		chainNodes := chainCfg.Validators.Count + chainCfg.FullNodes.Count
 		totalNodes += chainNodes
-		fmt.Printf("  Chain %s: %d validators + %d delegators + %d full nodes = %d nodes\n",
-			chainName, chainCfg.Validators.Count, chainCfg.Delegators.Count, chainCfg.FullNodes.Count, chainNodes)
+		fmt.Printf("  Chain %s: %d validators + %d full nodes = %d nodes (+ %d delegators)\n",
+			chainName, chainCfg.Validators.Count, chainCfg.FullNodes.Count, chainNodes, chainCfg.Delegators.Count)
 	}
 
 	if totalNodes != cfg.Nodes.Count {
-		return fmt.Errorf("node count mismatch: sum of all validators, delegators, and full nodes (%d) does not equal nodes.count (%d)",
+		return fmt.Errorf("node count mismatch: sum of all validators and full nodes (%d) does not equal nodes.count (%d)",
 			totalNodes, cfg.Nodes.Count)
 	}
 
@@ -189,18 +190,18 @@ func validateCommitteeAssignments(cfg *AppConfig) error {
 		validChainIDs[chainCfg.ID] = chainName
 	}
 
-	// Validate that at least one root chain has validators or delegators
+	// Validate that at least one root chain has validators (delegators don't count as physical nodes)
 	rootChainValidatorCount := 0
 	for _, chainCfg := range cfg.Chains {
 		if chainCfg.ID == chainCfg.RootChain {
-			// This is a root chain
-			rootChainValidatorCount += chainCfg.Validators.Count + chainCfg.Delegators.Count
+			// This is a root chain - only count validators
+			rootChainValidatorCount += chainCfg.Validators.Count
 		}
 	}
 	if rootChainValidatorCount == 0 {
-		return fmt.Errorf("no validators or delegators found on any root chain; at least one root chain must have validators or delegators for rootChainNode assignment")
+		return fmt.Errorf("no validators found on any root chain; at least one root chain must have validators for rootChainNode assignment")
 	}
-	fmt.Printf("  Root chain validators/delegators: %d ✓\n", rootChainValidatorCount)
+	fmt.Printf("  Root chain validators: %d ✓\n", rootChainValidatorCount)
 
 	for chainName, chainCfg := range cfg.Chains {
 		for _, ca := range chainCfg.Committees {
@@ -504,7 +505,10 @@ func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, v
 			writer.Int(int(committee))
 		}
 		cArr.End()
-		validatorObj.Name("netAddress").String(v.NetAddress)
+		// Delegators don't have netAddress (they're not physical servers)
+		if !v.IsDelegate {
+			validatorObj.Name("netAddress").String(v.NetAddress)
+		}
 		validatorObj.Name("stakedAmount").Int(int(v.StakedAmount))
 		validatorObj.Name("output").String(hex.EncodeToString(addressBytes))
 		validatorObj.Name("delegate").Bool(v.IsDelegate)
@@ -1006,10 +1010,10 @@ func main() {
 		}
 	}
 
-	// Collect root chain node IDs for distribution
+	// Collect root chain node IDs for distribution (only validators, not delegators or fullnodes)
 	var rootChainNodeIDs []int
 	for _, entry := range expandedEntries {
-		if entry.isRootChain && entry.identity.NodeType != "fullnode" {
+		if entry.isRootChain && entry.identity.NodeType == "validator" {
 			rootChainNodeIDs = append(rootChainNodeIDs, entry.identity.ID)
 		}
 	}
@@ -1023,21 +1027,28 @@ func main() {
 	}
 
 	// Count existing assignments to each root chain node
-	// (root chain nodes count themselves, multi-committee nested nodes count their root chain entry)
+	// (root chain validators count themselves, multi-committee nested validators count their root chain entry)
+	// Delegators are skipped as they don't get rootChainNode assignments
 	rootChainNodeAssignments := make(map[int]int)
 	for _, id := range rootChainNodeIDs {
 		rootChainNodeAssignments[id] = 0
 	}
 
-	// First, count assignments from root chain nodes (they reference themselves)
-	// and from multi-committee nested chain nodes (they reference their root chain entry)
+	// First, count assignments from root chain validators (they reference themselves)
+	// and from multi-committee nested chain validators (they reference their root chain entry)
 	for _, entry := range expandedEntries {
-		if entry.isRootChain {
-			// Root chain node references itself
+		// Skip delegators - they don't get rootChainNode
+		if entry.identity.IsDelegate {
+			continue
+		}
+		if entry.isRootChain && entry.identity.NodeType == "validator" {
+			// Root chain validator references itself
 			rootChainNodeAssignments[entry.identity.ID]++
 		} else if rootID, exists := addressToRootChainID[entry.originalAddr]; exists {
-			// Multi-committee nested chain node references its root chain entry
-			rootChainNodeAssignments[rootID]++
+			// Multi-committee nested chain validator references its root chain entry
+			if entry.identity.NodeType == "validator" {
+				rootChainNodeAssignments[rootID]++
+			}
 		}
 	}
 
@@ -1062,17 +1073,25 @@ func main() {
 	for _, entry := range expandedEntries {
 		identity := entry.identity
 
+		// Delegators don't get rootChainNode (they're not physical servers)
+		if identity.IsDelegate {
+			// Leave RootChainNode as nil for delegators
+			key := fmt.Sprintf("node-%d", identity.ID)
+			idsFile.Keys[key] = identity
+			continue
+		}
+
 		if entry.isRootChain {
 			// Root chain node: rootChainNode is itself
-			identity.RootChainNode = identity.ID
+			identity.RootChainNode = &identity.ID
 		} else if rootID, exists := addressToRootChainID[entry.originalAddr]; exists {
 			// Nested chain node with same identity on root chain: use the root chain entry's ID
-			identity.RootChainNode = rootID
+			identity.RootChainNode = &rootID
 		} else {
 			// Nested chain node without same identity: assign to least-used root chain node
 			// Note: rootChainNodeIDs is guaranteed to be non-empty due to config validation
 			leastUsed := findLeastAssignedRootNode()
-			identity.RootChainNode = leastUsed
+			identity.RootChainNode = &leastUsed
 			rootChainNodeAssignments[leastUsed]++
 		}
 
