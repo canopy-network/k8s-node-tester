@@ -139,6 +139,7 @@ Contains all node identities in a map structure. Multi-committee validators appe
       "id": 1,
       "chainId": 1,
       "rootChainId": 1,
+      "rootChainNode": 1,
       "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
       "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba...",
       "privateKey": "6c275055a4f6ae6bccf1e6552e172c7b8cc538a7...",
@@ -148,7 +149,18 @@ Contains all node identities in a map structure. Multi-committee validators appe
       "id": 2,
       "chainId": 1,
       "rootChainId": 1,
+      "rootChainNode": 2,
       "address": "...",
+      "publicKey": "...",
+      "privateKey": "...",
+      "nodeType": "validator"
+    },
+    "node-3": {
+      "id": 3,
+      "chainId": 2,
+      "rootChainId": 1,
+      "rootChainNode": 1,
+      "address": "f333c1a6af3cc044b192f0423e2f415451f97d1d",
       "publicKey": "...",
       "privateKey": "...",
       "nodeType": "validator"
@@ -157,6 +169,7 @@ Contains all node identities in a map structure. Multi-committee validators appe
       "id": 4,
       "chainId": 2,
       "rootChainId": 1,
+      "rootChainNode": 1,
       "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
       "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba...",
       "privateKey": "6c275055a4f6ae6bccf1e6552e172c7b8cc538a7...",
@@ -166,9 +179,17 @@ Contains all node identities in a map structure. Multi-committee validators appe
 }
 ```
 
-Note: `node-1` and `node-4` have the same keys but different IDs - this is a multi-committee validator appearing once for each committee.
+**Notes:**
+- `node-1` and `node-4` have the same keys but different IDs - this is a multi-committee validator appearing once for each committee
+- `node-4` has `rootChainNode: 1` because it's the same identity as `node-1` (multi-committee)
+- `node-3` has `rootChainNode: 1` because it's a native nested chain node assigned to a root chain node (round-robin distribution)
 
 **Node Types:** `validator`, `delegator`, `fullnode`
+
+**rootChainNode Logic:**
+- **Root chain node**: `rootChainNode` = its own ID
+- **Nested chain node (same identity on root chain)**: `rootChainNode` = the ID of its root chain entry
+- **Nested chain node (no root chain identity)**: `rootChainNode` = a root chain node ID (distributed evenly)
 
 ### config.json
 

@@ -98,6 +98,7 @@ type NodeIdentity struct {
 	ID              int      `json:"id"`
 	ChainID         int      `json:"chainId"`
 	RootChainID     int      `json:"rootChainId"`
+	RootChainNode   int      `json:"rootChainNode"`
 	Address         string   `json:"address"`
 	PublicKey       string   `json:"publicKey"`
 	PrivateKey      string   `json:"privateKey"`
@@ -187,6 +188,19 @@ func validateCommitteeAssignments(cfg *AppConfig) error {
 	for chainName, chainCfg := range cfg.Chains {
 		validChainIDs[chainCfg.ID] = chainName
 	}
+
+	// Validate that at least one root chain has validators or delegators
+	rootChainValidatorCount := 0
+	for _, chainCfg := range cfg.Chains {
+		if chainCfg.ID == chainCfg.RootChain {
+			// This is a root chain
+			rootChainValidatorCount += chainCfg.Validators.Count + chainCfg.Delegators.Count
+		}
+	}
+	if rootChainValidatorCount == 0 {
+		return fmt.Errorf("no validators or delegators found on any root chain; at least one root chain must have validators or delegators for rootChainNode assignment")
+	}
+	fmt.Printf("  Root chain validators/delegators: %d ✓\n", rootChainValidatorCount)
 
 	for chainName, chainCfg := range cfg.Chains {
 		for _, ca := range chainCfg.Committees {
@@ -926,23 +940,44 @@ func main() {
 	// Phase 3: Generate ids.json with multi-committee validators having multiple entries
 	fmt.Println("Phase 3: Writing ids.json...")
 
-	// Expand multi-committee validators into multiple entries
-	idsFile := IdsFile{
-		Keys: make(map[string]NodeIdentity),
+	// Build a map of chain ID to root chain ID
+	chainToRootChain := make(map[int]int)
+	for _, chainCfg := range cfg.Chains {
+		chainToRootChain[chainCfg.ID] = chainCfg.RootChain
 	}
 
-	// Track the next available ID for expanded entries
+	// First pass: Expand multi-committee validators into multiple entries
+	// and track root chain nodes and multi-committee mappings
+	type expandedEntry struct {
+		identity      NodeIdentity
+		originalID    int    // Original ID before expansion
+		originalAddr  string // Original address to match multi-committee entries
+		isRootChain   bool   // Whether this entry is for a root chain
+	}
+
+	var expandedEntries []expandedEntry
 	nextExpandedID := len(allIdentities) + 1
 
 	for _, identity := range allIdentities {
+		rootChainID := chainToRootChain[identity.ChainID]
+		isRootChain := identity.ChainID == rootChainID
+
 		if identity.NodeType == "fullnode" {
 			// Full nodes only appear once
-			key := fmt.Sprintf("node-%d", identity.ID)
-			idsFile.Keys[key] = identity
+			expandedEntries = append(expandedEntries, expandedEntry{
+				identity:     identity,
+				originalID:   identity.ID,
+				originalAddr: identity.Address,
+				isRootChain:  isRootChain,
+			})
 		} else if len(identity.Committees) == 1 {
 			// Single committee validator/delegator - appears once
-			key := fmt.Sprintf("node-%d", identity.ID)
-			idsFile.Keys[key] = identity
+			expandedEntries = append(expandedEntries, expandedEntry{
+				identity:     identity,
+				originalID:   identity.ID,
+				originalAddr: identity.Address,
+				isRootChain:  isRootChain,
+			})
 		} else {
 			// Multi-committee validator/delegator - appears once per committee
 			for i, committee := range identity.Committees {
@@ -958,10 +993,91 @@ func main() {
 				// Update chainId to match the committee
 				expandedIdentity.ChainID = int(committee)
 
-				key := fmt.Sprintf("node-%d", expandedIdentity.ID)
-				idsFile.Keys[key] = expandedIdentity
+				entryRootChainID := chainToRootChain[int(committee)]
+				entryIsRootChain := int(committee) == entryRootChainID
+
+				expandedEntries = append(expandedEntries, expandedEntry{
+					identity:     expandedIdentity,
+					originalID:   identity.ID,
+					originalAddr: identity.Address,
+					isRootChain:  entryIsRootChain,
+				})
 			}
 		}
+	}
+
+	// Collect root chain node IDs for distribution
+	var rootChainNodeIDs []int
+	for _, entry := range expandedEntries {
+		if entry.isRootChain && entry.identity.NodeType != "fullnode" {
+			rootChainNodeIDs = append(rootChainNodeIDs, entry.identity.ID)
+		}
+	}
+
+	// Build a map from address to root chain entry ID (for multi-committee validators)
+	addressToRootChainID := make(map[string]int)
+	for _, entry := range expandedEntries {
+		if entry.isRootChain {
+			addressToRootChainID[entry.identity.Address] = entry.identity.ID
+		}
+	}
+
+	// Count existing assignments to each root chain node
+	// (root chain nodes count themselves, multi-committee nested nodes count their root chain entry)
+	rootChainNodeAssignments := make(map[int]int)
+	for _, id := range rootChainNodeIDs {
+		rootChainNodeAssignments[id] = 0
+	}
+
+	// First, count assignments from root chain nodes (they reference themselves)
+	// and from multi-committee nested chain nodes (they reference their root chain entry)
+	for _, entry := range expandedEntries {
+		if entry.isRootChain {
+			// Root chain node references itself
+			rootChainNodeAssignments[entry.identity.ID]++
+		} else if rootID, exists := addressToRootChainID[entry.originalAddr]; exists {
+			// Multi-committee nested chain node references its root chain entry
+			rootChainNodeAssignments[rootID]++
+		}
+	}
+
+	// Helper function to find the root chain node with fewest assignments
+	findLeastAssignedRootNode := func() int {
+		minAssignments := -1
+		selectedNode := rootChainNodeIDs[0]
+		for _, id := range rootChainNodeIDs {
+			if minAssignments == -1 || rootChainNodeAssignments[id] < minAssignments {
+				minAssignments = rootChainNodeAssignments[id]
+				selectedNode = id
+			}
+		}
+		return selectedNode
+	}
+
+	// Second pass: Assign rootChainNode to each entry
+	idsFile := IdsFile{
+		Keys: make(map[string]NodeIdentity),
+	}
+
+	for _, entry := range expandedEntries {
+		identity := entry.identity
+
+		if entry.isRootChain {
+			// Root chain node: rootChainNode is itself
+			identity.RootChainNode = identity.ID
+		} else if rootID, exists := addressToRootChainID[entry.originalAddr]; exists {
+			// Nested chain node with same identity on root chain: use the root chain entry's ID
+			identity.RootChainNode = rootID
+		} else {
+			// Nested chain node without same identity: assign to least-used root chain node
+			// Note: rootChainNodeIDs is guaranteed to be non-empty due to config validation
+			leastUsed := findLeastAssignedRootNode()
+			identity.RootChainNode = leastUsed
+			rootChainNodeAssignments[leastUsed]++
+		}
+
+		key := fmt.Sprintf("node-%d", identity.ID)
+		idsFile.Keys[key] = identity
 	}
 
 	mustSaveAsJSON(".config/ids.json", idsFile)
