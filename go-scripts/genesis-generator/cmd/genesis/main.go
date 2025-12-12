@@ -510,7 +510,6 @@ func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, v
 		}
 
 		addressBytes, _ := hex.DecodeString(v.Address)
-		publicKeyBytes, _ := hex.DecodeString(v.PublicKey)
 
 		validatorObj := writer.Object()
 		validatorObj.Name("address").String(v.Address)
@@ -529,9 +528,6 @@ func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, v
 		validatorObj.Name("output").String(hex.EncodeToString(addressBytes))
 		validatorObj.Name("delegate").Bool(v.IsDelegate)
 		validatorObj.End()
-
-		// Suppress unused variable warning
-		_ = publicKeyBytes
 	}
 	arr.End()
 
