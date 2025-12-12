@@ -59,3 +59,18 @@ go-scripts/build:
 genesis/apply:
 	$(call check_vars, CONFIG)
 	./go-scripts/bin/genesis_apply --path ./go-scripts/genesis-generator/artifacts --config $(CONFIG)
+
+## ansible/requirements: installs the requirements for the ansible playbook, requires ansible
+.PHONY: ansible/requirements
+ansible/requirements:
+	ansible-galaxy install -r ansible/requirements.yml
+
+## ansible/site: creates/adds a new node to a k3s cluster, requires ansible and kubectl
+.PHONY: ansible/site
+ansible/site:
+	ansible-playbook k3s.orchestration.site -i ansible/inventory.yml
+
+## ansible/setup: setups the ansible package and runs the playbook to setup the cluster
+.PHONY: ansible/setup
+	$(MAKE) ansible/requirements
+	$(MAKE) ansible/site
