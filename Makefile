@@ -48,3 +48,9 @@ monitoring:
 	$(MAKE) monitoring/prometheus DOMAIN=$(DOMAIN)
 	$(MAKE) monitoring/loki
 	$(MAKE) monitoring/promtail
+
+## genesis/apply: applies the config files created by the generator into the cluster
+.PHONY: genesis/apply
+genesis/apply:
+	$(call check_vars, CONFIG)
+	./go-scripts/bin/genesis_apply --path ./go-scripts/genesis-generator/artifacts --config $(CONFIG)

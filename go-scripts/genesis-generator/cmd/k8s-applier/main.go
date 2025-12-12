@@ -1,5 +1,13 @@
 package main
 
+// k8s-applier is a command-line tool that reads canopy chain configuration files and applies them to kubernetes as configmaps.
+// it scans a directory structure containing chain-specific genesis, keystore, and config files, along with a shared ids file,
+// then creates or updates kubernetes configmaps for each file type (genesis, keystore, config, ids) in the specified namespace.
+// All of the files it looks for are created by the genesis-generator tool.
+// The tool validates chain folder naming (chain_<number>), reads and formats json files with proper indentation,
+// and uses the kubernetes client-go library to apply configmaps, creating them if they don't exist or updating them if they do.
+// configuration is controlled via flags
+
 import (
 	"context"
 	"encoding/json"
