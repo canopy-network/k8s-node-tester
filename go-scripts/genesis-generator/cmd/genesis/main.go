@@ -674,7 +674,7 @@ func createTemplateConfig(chainID int, rootChainID int) *lib.Config {
 			MaxInbound:      21,
 			MaxOutbound:     7,
 			TrustedPeerIDs:  nil,
-			DialPeers:       []string{"DIAL_PEER"},
+			DialPeers:       []string{},
 			BannedPeerIDs:   nil,
 			BannedIPs:       nil,
 		},

@@ -248,14 +248,13 @@ Node configuration with placeholders for dynamic values:
   ],
   "externalAddress": "NODE_ID",
   "listenAddress": "0.0.0.0:9001",
-  "dialPeers": ["DIAL_PEER"]
+  "dialPeers": []
 }
 ```
 
 **Placeholders:**
 - `NODE_ID` - Replace with the node's `id` from ids.json
 - `ROOT_NODE_ID` - Replace with a root chain node's `id`
-- `DIAL_PEER` - Replace with peer address to dial
 
 **Root vs Nested Chain Config:**
 
