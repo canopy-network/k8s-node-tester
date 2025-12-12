@@ -210,7 +210,7 @@ func copy(src, dst string) error {
 	return err
 }
 
-// modifyConfig modifies the configuration according to the prov
+// modifyConfig applies the config modifications for the specific node
 func modifyConfig(config *Config, nodePrefix string, node, rootNode, peerNode *NodeKey) {
 	// modify the node id for the root and nested chain
 	for idx := range config.RootChain {

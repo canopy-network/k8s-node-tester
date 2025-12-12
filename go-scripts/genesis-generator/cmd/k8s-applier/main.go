@@ -29,7 +29,6 @@ import (
 )
 
 const (
-	chainsPath    = "chains"   // path where the chain folders are located
 	configFileExt = ".json"    // extension of the config files
 	genesisFile   = "genesis"  // genesis file name
 	keystoreFile  = "keystore" // keystore file name
@@ -58,7 +57,7 @@ func main() {
 	defer cancel()
 	log.Info("building configs for chains")
 	// check if config exists and is a valid directory
-	configPath := filepath.Join(*path, *config, chainsPath)
+	configPath := filepath.Join(*path, *config)
 	stat, err := os.Stat(configPath)
 	if err != nil {
 		log.Error("failed to find config",
@@ -90,7 +89,7 @@ func main() {
 		os.Exit(1)
 	}
 	// build data maps, then configmaps
-	dataByType, err := buildDataMaps(filepath.Join(*path, *config), chainsPath, []string{genesisFile,
+	dataByType, err := buildDataMaps(filepath.Join(*path, *config), []string{genesisFile,
 		keystoreFile, configFile}, configFileExt, idsFile, folders)
 	if err != nil {
 		log.Error("failed to build data maps", slog.String("err", err.Error()))
@@ -113,8 +112,7 @@ func main() {
 
 // buildDataMaps reads JSON files and builds the per-file-type data maps:
 // dataByType[fileType][key] = contents
-func buildDataMaps(basePath, chainsPath string, fileTypes []string, ext string, idsFile string, folders []string) (
-	// func buildDataMaps(idsFile string, ext, basePath, chainsPath string, fileTypes []string, folders []string) (
+func buildDataMaps(basePath string, fileTypes []string, ext string, idsFile string, folders []string) (
 	map[string]map[string]string, error) {
 	dataByType := map[string]map[string]string{}
 	// initialize maps for each file type
@@ -130,7 +128,7 @@ func buildDataMaps(basePath, chainsPath string, fileTypes []string, ext string, 
 				return nil, fmt.Errorf("get chain ID: %w", err)
 			}
 			// retrieve the file
-			path := filepath.Join(basePath, chainsPath, chain, fileType+ext)
+			path := filepath.Join(basePath, chain, fileType+ext)
 			contents, err := readJSONFile(path)
 			if err != nil {
 				return nil, fmt.Errorf("read %s: %w", path, err)
