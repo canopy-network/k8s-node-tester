@@ -128,6 +128,7 @@ Delegators are staked entities that delegate to validators but are **not physica
 - They do **not** have `netAddress` in genesis.json
 - They do **not** appear in ids.json (only validators and full nodes are included)
 - They use **negative IDs** internally (-1, -2, -3, ...) to avoid gaps in the positive ID sequence used by validators and full nodes
+- Multi-committee delegators get unique expanded negative IDs (continuing from the lowest base delegator ID)
 - In keystore.json, delegators use nicknames like `delegator-1`, `delegator-2`, etc. (using the absolute value of their negative ID)
 
 ### Chain Types

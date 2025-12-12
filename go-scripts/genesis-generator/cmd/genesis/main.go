@@ -520,8 +520,10 @@ func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, v
 	arr := writer.Array()
 	for _, v := range validators {
 		// Determine which committees to include in this genesis
+		// Native validator: first committee matches this chain's ID - include all their committees
+		// Cross-chain validator: first committee is different - only include this chain's committee
 		var committeesForGenesis []uint64
-		if v.ChainID == chainID {
+		if len(v.Committees) > 0 && int(v.Committees[0]) == chainID {
 			// Native validator: include all their committees
 			committeesForGenesis = v.Committees
 		} else {
@@ -772,25 +774,15 @@ func generateChainIdentities(chainName string, chainCfg *ChainConfig, startIdx i
 }
 
 // writeChainFiles writes genesis.json, config.json, and keystore.json for a chain
-func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []NodeIdentity, allIdentities []NodeIdentity,
+// expandedValidators contains validators/delegators with correct IDs for this chain (including cross-chain)
+func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []NodeIdentity, expandedValidators []NodeIdentity,
 	accounts []*fsm.Account, password string, jsonBeautify bool, outputBaseDir string) {
 
 	chainDir := filepath.Join(outputBaseDir, chainName)
 	mustSetDirectory(chainDir)
 
-	// Find all validators/delegators that should be in this chain's genesis
-	// (those whose committees include this chain's ID)
-	var validatorsForGenesis []NodeIdentity
-	for _, identity := range allIdentities {
-		if identity.NodeType == "validator" || identity.NodeType == "delegator" {
-			for _, c := range identity.Committees {
-				if int(c) == chainCfg.ID {
-					validatorsForGenesis = append(validatorsForGenesis, identity)
-					break
-				}
-			}
-		}
-	}
+	// Use expanded validators directly - they already have correct IDs and netAddresses for this chain
+	validatorsForGenesis := expandedValidators
 
 	// Build a set of native account addresses for deduplication
 	nativeAddresses := make(map[string]bool)
@@ -798,16 +790,13 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 		nativeAddresses[hex.EncodeToString(account.Address)] = true
 	}
 
-	// Find cross-chain validators/delegators that need accounts in this chain
-	// (validators/delegators from other chains that participate in this chain's committee)
+	// Find validators/delegators that need accounts in this chain
+	// (those whose addresses are not already in native accounts)
 	var crossChainAccounts []NodeIdentity
 	for _, v := range validatorsForGenesis {
-		if v.ChainID != chainCfg.ID {
-			// This is a cross-chain validator/delegator - needs an account
-			if !nativeAddresses[v.Address] {
-				crossChainAccounts = append(crossChainAccounts, v)
-				nativeAddresses[v.Address] = true // Prevent duplicates
-			}
+		if !nativeAddresses[v.Address] {
+			crossChainAccounts = append(crossChainAccounts, v)
+			nativeAddresses[v.Address] = true // Prevent duplicates
 		}
 	}
 
@@ -894,7 +883,7 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 	for _, identity := range keystoreIdentities {
 		var nickname string
 		if identity.IsDelegate {
-			// Delegators use "delegator-{abs(id)}" to avoid double dash from negative IDs
+			// Delegators use "delegator-{abs(id)}" - IDs are unique negative numbers
 			nickname = fmt.Sprintf("delegator-%d", -identity.ID)
 		} else {
 			nickname = fmt.Sprintf("node-%d", identity.ID)
@@ -1009,32 +998,14 @@ func main() {
 		return allIdentities[i].ID < allIdentities[j].ID
 	})
 
-	// Phase 2: Write files for all chains
-	fmt.Println("Phase 2: Writing chain files...")
-	for _, chainName := range chainNames {
-		writeChainFiles(
-			chainName,
-			cfg.Chains[chainName],
-			chainIdentitiesMap[chainName],
-			allIdentities,
-			chainAccountsMap[chainName],
-			cfg.General.Password,
-			cfg.General.JsonBeautify,
-			outputBaseDir,
-		)
-	}
-
-	// Phase 3: Generate ids.json with multi-committee validators having multiple entries
-	fmt.Println("Phase 3: Writing ids.json...")
-
 	// Build a map of chain ID to root chain ID
 	chainToRootChain := make(map[int]int)
 	for _, chainCfg := range cfg.Chains {
 		chainToRootChain[chainCfg.ID] = chainCfg.RootChain
 	}
 
-	// First pass: Expand multi-committee validators into multiple entries
-	// and track root chain nodes and multi-committee mappings
+	// Expand multi-committee validators into multiple entries
+	// This is needed before Phase 2 so genesis.json and keystore use correct IDs
 	type expandedEntry struct {
 		identity     NodeIdentity
 		originalID   int    // Original ID before expansion
@@ -1053,12 +1024,17 @@ func main() {
 	}
 	nextExpandedID := baseNodeCount + 1
 
+	// Calculate nextExpandedDelegatorID - find the lowest (most negative) delegator ID
+	// and continue from there to avoid collisions
+	nextExpandedDelegatorID := 0
 	for _, identity := range allIdentities {
-		// Skip delegators entirely - they don't appear in ids.json
-		if identity.IsDelegate {
-			continue
+		if identity.IsDelegate && identity.ID < nextExpandedDelegatorID {
+			nextExpandedDelegatorID = identity.ID
 		}
+	}
+	nextExpandedDelegatorID-- // Start one below the lowest existing delegator ID
 
+	for _, identity := range allIdentities {
 		rootChainID := chainToRootChain[identity.ChainID]
 		isRootChain := identity.ChainID == rootChainID
 
@@ -1071,7 +1047,7 @@ func main() {
 				isRootChain:  isRootChain,
 			})
 		} else if len(identity.Committees) == 1 {
-			// Single committee validator - appears once
+			// Single committee validator/delegator - appears once
 			expandedEntries = append(expandedEntries, expandedEntry{
 				identity:     identity,
 				originalID:   identity.ID,
@@ -1079,19 +1055,27 @@ func main() {
 				isRootChain:  isRootChain,
 			})
 		} else {
-			// Multi-committee validator - appears once per committee
+			// Multi-committee validator/delegator - appears once per committee
 			for i, committee := range identity.Committees {
 				expandedIdentity := identity
 				if i == 0 {
 					// First entry keeps original ID
 					expandedIdentity.ID = identity.ID
 				} else {
-					// Additional entries get new IDs
-					expandedIdentity.ID = nextExpandedID
-					nextExpandedID++
+					// Additional entries get new unique IDs
+					if identity.IsDelegate {
+						// Delegators get unique negative IDs (counting down from lowest base delegator ID)
+						expandedIdentity.ID = nextExpandedDelegatorID
+						nextExpandedDelegatorID--
+					} else {
+						expandedIdentity.ID = nextExpandedID
+						nextExpandedID++
+					}
 				}
 				// Update chainId to match the committee
 				expandedIdentity.ChainID = int(committee)
+				// Update netAddress to use the correct ID for this expanded entry
+				expandedIdentity.NetAddress = fmt.Sprintf("tcp://node-%d%s", expandedIdentity.ID, cfg.General.NetAddressSuffix)
 
 				entryRootChainID := chainToRootChain[int(committee)]
 				entryIsRootChain := int(committee) == entryRootChainID
@@ -1105,6 +1089,35 @@ func main() {
 			}
 		}
 	}
+
+	// Build a map of chainID -> expanded validators/delegators for that chain
+	chainExpandedValidators := make(map[int][]NodeIdentity)
+	for _, entry := range expandedEntries {
+		if entry.identity.NodeType == "validator" || entry.identity.NodeType == "delegator" {
+			chainExpandedValidators[entry.identity.ChainID] = append(
+				chainExpandedValidators[entry.identity.ChainID],
+				entry.identity,
+			)
+		}
+	}
+
+	// Phase 2: Write files for all chains
+	fmt.Println("Phase 2: Writing chain files...")
+	for _, chainName := range chainNames {
+		writeChainFiles(
+			chainName,
+			cfg.Chains[chainName],
+			chainIdentitiesMap[chainName],
+			chainExpandedValidators[cfg.Chains[chainName].ID],
+			chainAccountsMap[chainName],
+			cfg.General.Password,
+			cfg.General.JsonBeautify,
+			outputBaseDir,
+		)
+	}
+
+	// Phase 3: Generate ids.json
+	fmt.Println("Phase 3: Writing ids.json...")
 
 	// Collect root chain node IDs for distribution (only validators, not delegators or fullnodes)
 	var rootChainNodeIDs []int
@@ -1240,6 +1253,11 @@ func main() {
 
 	for _, entry := range expandedEntries {
 		identity := entry.identity
+
+		// Skip delegators - they don't appear in ids.json
+		if identity.IsDelegate {
+			continue
+		}
 
 		// Assign rootChainNode
 		if entry.isRootChain {
