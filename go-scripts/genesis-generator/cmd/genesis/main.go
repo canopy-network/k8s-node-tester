@@ -932,7 +932,7 @@ func main() {
 	}
 
 	// Set up output directory (relative to genesis-generator directory)
-	outputBaseDir := filepath.Join("../../artifacts", configName, "chains")
+	outputBaseDir := filepath.Join("../../artifacts", configName)
 
 	fmt.Println("Deleting old files!")
 

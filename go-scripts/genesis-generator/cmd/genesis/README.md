@@ -138,21 +138,20 @@ Delegators are staked entities that delegate to validators but are **not physica
 
 ## Output Structure
 
-Output files are generated in `artifacts/{config-name}/chains/`:
+Output files are generated in `artifacts/{config-name}/`:
 
 ```
 artifacts/
 └── {config-name}/
-    └── chains/
-        ├── ids.json              # All node identities across ALL chains
-        ├── chain_1/
-        │   ├── config.json       # Chain-specific node configuration
-        │   ├── genesis.json      # Chain genesis file
-        │   └── keystore.json     # Chain-specific encrypted keys
-        └── chain_2/
-            ├── config.json
-            ├── genesis.json
-            └── keystore.json
+    ├── ids.json              # All node identities across ALL chains
+    ├── chain_1/
+    │   ├── config.json       # Chain-specific node configuration
+    │   ├── genesis.json      # Chain genesis file
+    │   └── keystore.json     # Chain-specific encrypted keys
+    └── chain_2/
+        ├── config.json
+        ├── genesis.json
+        └── keystore.json
 ```
 
 ## Output Files
