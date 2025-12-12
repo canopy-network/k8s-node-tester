@@ -611,7 +611,7 @@ func createTemplateConfig(chainID int, rootChainID int) *lib.Config {
 		rootChain = []lib.RootChain{
 			{
 				ChainId: uint64(chainID),
-				Url:     "http://node-|ROOT_NODE_ID|:50002",
+				Url:     "ROOT_NODE_ID",
 			},
 		}
 	} else {
@@ -619,11 +619,11 @@ func createTemplateConfig(chainID int, rootChainID int) *lib.Config {
 		rootChain = []lib.RootChain{
 			{
 				ChainId: uint64(chainID),
-				Url:     "http://node-|NODE_ID|:50002",
+				Url:     "NODE_ID",
 			},
 			{
 				ChainId: uint64(rootChainID),
-				Url:     "http://node-|ROOT_NODE_ID|:50002",
+				Url:     "ROOT_NODE_ID",
 			},
 		}
 	}
@@ -652,11 +652,11 @@ func createTemplateConfig(chainID int, rootChainID int) *lib.Config {
 		P2PConfig: lib.P2PConfig{
 			NetworkID:       1,
 			ListenAddress:   fmt.Sprintf("0.0.0.0:%d", 9000+chainID),
-			ExternalAddress: "node-|NODE_ID|",
+			ExternalAddress: "NODE_ID",
 			MaxInbound:      21,
 			MaxOutbound:     7,
 			TrustedPeerIDs:  nil,
-			DialPeers:       []string{"|DIAL_PEER|"},
+			DialPeers:       []string{"DIAL_PEER"},
 			BannedPeerIDs:   nil,
 			BannedIPs:       nil,
 		},

@@ -16,7 +16,7 @@ go run main.go default
 
 ## Configuration
 
-Configuration is defined in `configs.yaml`. Each named config (e.g., `max`, `medium`, `default`) contains:
+Configuration is defined in `configs.yaml` (located at `go-scripts/genesis-generator/configs.yaml`). Each named config (e.g., `max`, `medium`, `default`) contains:
 
 ```yaml
 default:
@@ -26,9 +26,9 @@ default:
     buffer: 1000              # Buffer size for internal channels
     netAddressSuffix: ".p2p"  # Suffix appended to netAddress in genesis.json
     jsonBeautify: true        # If true, beautifies json files with indentation
-  # Total physical nodes (validators + full nodes, NOT delegators)
+  # Total node entries including multi-committee validator expansions
   nodes:
-    count: 3  # Delegators don't count as physical nodes
+    count: 4  # Validators count once per committee they participate in
   # Individual chain configuration
   chains:
     chain_1:
@@ -73,6 +73,18 @@ default:
       committees: []          # No cross-chain assignments
 ```
 
+### Node Count Calculation
+
+The `nodes.count` field must equal the total number of entries in `ids.json`, which includes:
+- All validators (once per committee they participate in)
+- All full nodes
+- Delegators do NOT count (they're not physical nodes)
+
+**Example calculation for the default config:**
+- Chain_1: 2 validators + 0 full nodes + 1 cross-chain expansion = 3
+- Chain_2: 1 validator + 0 full nodes = 1
+- **Total: 4**
+
 ### Committee Assignments
 
 Validators and delegators are automatically assigned to their own chain's committee (using the chain's ID). The `committees` field allows assigning validators/delegators to **additional** committees on other chains.
@@ -103,7 +115,7 @@ This means:
 ### Validation
 
 The script validates:
-1. The sum of all validators and full nodes equals `nodes.count` (delegators don't count as physical nodes)
+1. The sum of validators + full nodes + cross-chain validator expansions equals `nodes.count`
 2. At least one root chain has validators (for rootChainNode assignment)
 3. Committee assignment counts don't exceed available validators/delegators
 4. Committee IDs reference valid chain IDs
@@ -122,17 +134,21 @@ Delegators are staked entities that delegate to validators but are **not physica
 
 ## Output Structure
 
+Output files are generated in `artifacts/{config-name}/chains/`:
+
 ```
-.config/
-├── ids.json              # All node identities across ALL chains
-├── chain_1/
-│   ├── config.json       # Chain-specific node configuration
-│   ├── genesis.json      # Chain genesis file
-│   └── keystore.json     # Chain-specific encrypted keys
-└── chain_2/
-    ├── config.json
-    ├── genesis.json
-    └── keystore.json
+artifacts/
+└── {config-name}/
+    └── chains/
+        ├── ids.json              # All node identities across ALL chains
+        ├── chain_1/
+        │   ├── config.json       # Chain-specific node configuration
+        │   ├── genesis.json      # Chain genesis file
+        │   └── keystore.json     # Chain-specific encrypted keys
+        └── chain_2/
+            ├── config.json
+            ├── genesis.json
+            └── keystore.json
 ```
 
 ## Output Files
@@ -202,7 +218,7 @@ Contains all node identities in a map structure. Multi-committee validators appe
 
 ### config.json
 
-Node configuration with wildcards for dynamic values:
+Node configuration with placeholders for dynamic values:
 
 ```json
 {
@@ -210,34 +226,34 @@ Node configuration with wildcards for dynamic values:
   "rootChain": [
     {
       "chainId": 1,
-      "url": "http://node-|ROOT_NODE_ID|:50002"
+      "url": "ROOT_NODE_ID"
     }
   ],
-  "externalAddress": "node-|NODE_ID|",
+  "externalAddress": "NODE_ID",
   "listenAddress": "0.0.0.0:9001",
-  "dialPeers": ["|DIAL_PEER|"]
+  "dialPeers": ["DIAL_PEER"]
 }
 ```
 
-**Wildcards:**
-- `|NODE_ID|` - Replace with the node's `id` from ids.json
-- `|ROOT_NODE_ID|` - Replace with a root chain node's `id`
-- `|DIAL_PEER|` - Replace with peer address to dial
+**Placeholders:**
+- `NODE_ID` - Replace with the node's `id` from ids.json
+- `ROOT_NODE_ID` - Replace with a root chain node's `id`
+- `DIAL_PEER` - Replace with peer address to dial
 
 **Root vs Nested Chain Config:**
 
 For **root chains** (chain is its own root):
 ```json
 "rootChain": [
-  { "chainId": 1, "url": "http://node-|ROOT_NODE_ID|:50002" }
+  { "chainId": 1, "url": "ROOT_NODE_ID" }
 ]
 ```
 
 For **nested chains** (different root chain):
 ```json
 "rootChain": [
-  { "chainId": 2, "url": "http://node-|NODE_ID|:50002" },
-  { "chainId": 1, "url": "http://node-|ROOT_NODE_ID|:50002" }
+  { "chainId": 2, "url": "NODE_ID" },
+  { "chainId": 1, "url": "ROOT_NODE_ID" }
 ]
 ```
 
@@ -257,11 +273,11 @@ Nicknames follow the pattern `node-{id}`.
 
 | Config | Description |
 |--------|-------------|
-| `max` | Large scale deployment (500 nodes) |
+| `max` | Large scale deployment (475 nodes) |
 | `medium` | Medium scale deployment (100 nodes) |
-| `default` | Standard deployment with 2 chains (3 nodes) |
+| `default` | Standard deployment with 2 chains (4 entries) |
 | `min` | Minimal single-chain setup (2 nodes) |
-| `mature` | Production-like setup (300 nodes) |
+| `mature` | Production-like setup (200 nodes) |
 
 ## Adding Custom Configs
 
@@ -298,7 +314,7 @@ my_custom:
       committees: []
 ```
 
-**Note:** Ensure `nodes.count` (10) equals the sum of validators (5) + delegators (2) + full nodes (3) = 10.
+**Note:** `nodes.count` must equal validators + full nodes + cross-chain expansions. Delegators don't count.
 
 Then run:
 ```bash
