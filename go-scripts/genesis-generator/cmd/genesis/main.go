@@ -421,7 +421,15 @@ func addValidators(count int, isDelegate bool, startIdx int, stakedAmount uint64
 				committees = append(committees, additionalCommittees...)
 			}
 
-			netAddress := fmt.Sprintf("tcp://node-%d%s", startIdx+i, netAddressSuffix)
+			// Calculate ID: validators use positive IDs (startIdx + i), delegators use negative IDs (startIdx - i)
+			var nodeID int
+			if isDelegate {
+				nodeID = startIdx - i // Delegators count down: -1, -2, -3, ...
+			} else {
+				nodeID = startIdx + i // Validators count up: 1, 2, 3, ...
+			}
+
+			netAddress := fmt.Sprintf("tcp://node-%d%s", nodeID, netAddressSuffix)
 
 			accountChan <- &fsm.Account{
 				Address: pk.PublicKey().Address().Bytes(),
@@ -429,7 +437,7 @@ func addValidators(count int, isDelegate bool, startIdx int, stakedAmount uint64
 			}
 
 			identity := NodeIdentity{
-				ID:              startIdx + i,
+				ID:              nodeID,
 				ChainID:         chainID,
 				RootChainID:     rootChainID,
 				Address:         hex.EncodeToString(pk.PublicKey().Address().Bytes()),
@@ -693,7 +701,8 @@ func createTemplateConfig(chainID int, rootChainID int) *lib.Config {
 
 // generateChainIdentities generates all identities for a chain (validators, delegators, fullnodes)
 // Returns the identities and accounts for this chain
-func generateChainIdentities(chainName string, chainCfg *ChainConfig, startIdx int, buffer int, netAddressSuffix string,
+// startIdx is for validators/fullnodes (positive IDs), delegatorStartIdx is for delegators (negative IDs)
+func generateChainIdentities(chainName string, chainCfg *ChainConfig, startIdx int, delegatorStartIdx int, buffer int, netAddressSuffix string,
 	semaphoreChan chan struct{}) ([]NodeIdentity, []*fsm.Account) {
 
 	fmt.Printf("Generating identities for chain: %s (ID: %d, RootChain: %d)\n", chainName, chainCfg.ID, chainCfg.RootChain)
@@ -732,9 +741,11 @@ func generateChainIdentities(chainName string, chainCfg *ChainConfig, startIdx i
 	}
 
 	// Assign unique idx within this chain
+	// Validators get positive IDs starting from startIdx
 	validatorStartIdx := startIdx
-	delegatorStartIdx := validatorStartIdx + chainCfg.Validators.Count
-	fullNodeStartIdx := delegatorStartIdx + chainCfg.Delegators.Count
+	// Full nodes get positive IDs right after validators (no gap)
+	fullNodeStartIdx := validatorStartIdx + chainCfg.Validators.Count
+	// Delegators get negative IDs (passed in from caller)
 
 	addValidators(chainCfg.Validators.Count, false, validatorStartIdx, chainCfg.Validators.StakedAmount, chainCfg.Validators.Amount,
 		chainCfg.ID, chainCfg.RootChain, validatorCommitteeAssignments, netAddressSuffix,
@@ -881,7 +892,13 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 		NicknameMap: make(map[string]string, len(keystoreIdentities)),
 	}
 	for _, identity := range keystoreIdentities {
-		nickname := fmt.Sprintf("node-%d", identity.ID)
+		var nickname string
+		if identity.IsDelegate {
+			// Delegators use "delegator-{abs(id)}" to avoid double dash from negative IDs
+			nickname = fmt.Sprintf("delegator-%d", -identity.ID)
+		} else {
+			nickname = fmt.Sprintf("node-%d", identity.ID)
+		}
 		_, err := keystore.ImportRaw(identity.PrivateKeyBytes, password, crypto.ImportRawOpts{
 			Nickname: nickname,
 		})
@@ -946,14 +963,24 @@ func main() {
 	}
 	sort.Strings(chainNames)
 
-	// Pre-calculate starting indices for each chain
+	// Pre-calculate starting indices for each chain (only validators and full nodes get positive IDs)
 	chainStartIndices := make(map[string]int)
 	currentIdx := 1
 	for _, chainName := range chainNames {
 		chainCfg := cfg.Chains[chainName]
 		chainStartIndices[chainName] = currentIdx
-		// Calculate total nodes for this chain
-		currentIdx += chainCfg.Validators.Count + chainCfg.Delegators.Count + chainCfg.FullNodes.Count
+		// Calculate total nodes for this chain (delegators use negative IDs, so not counted here)
+		currentIdx += chainCfg.Validators.Count + chainCfg.FullNodes.Count
+	}
+
+	// Pre-calculate delegator starting indices (negative IDs)
+	chainDelegatorStartIndices := make(map[string]int)
+	currentDelegatorIdx := -1
+	for _, chainName := range chainNames {
+		chainCfg := cfg.Chains[chainName]
+		chainDelegatorStartIndices[chainName] = currentDelegatorIdx
+		// Delegators get negative IDs counting down (-1, -2, -3, ...)
+		currentDelegatorIdx -= chainCfg.Delegators.Count
 	}
 
 	// Phase 1: Generate all identities for all chains
@@ -967,6 +994,7 @@ func main() {
 			chainName,
 			cfg.Chains[chainName],
 			chainStartIndices[chainName],
+			chainDelegatorStartIndices[chainName],
 			cfg.General.Buffer,
 			cfg.General.NetAddressSuffix,
 			semaphoreChan,
@@ -1015,9 +1043,22 @@ func main() {
 	}
 
 	var expandedEntries []expandedEntry
-	nextExpandedID := len(allIdentities) + 1
+
+	// Calculate nextExpandedID based only on validators and full nodes (not delegators)
+	baseNodeCount := 0
+	for _, identity := range allIdentities {
+		if !identity.IsDelegate {
+			baseNodeCount++
+		}
+	}
+	nextExpandedID := baseNodeCount + 1
 
 	for _, identity := range allIdentities {
+		// Skip delegators entirely - they don't appear in ids.json
+		if identity.IsDelegate {
+			continue
+		}
+
 		rootChainID := chainToRootChain[identity.ChainID]
 		isRootChain := identity.ChainID == rootChainID
 
@@ -1030,7 +1071,7 @@ func main() {
 				isRootChain:  isRootChain,
 			})
 		} else if len(identity.Committees) == 1 {
-			// Single committee validator/delegator - appears once
+			// Single committee validator - appears once
 			expandedEntries = append(expandedEntries, expandedEntry{
 				identity:     identity,
 				originalID:   identity.ID,
@@ -1038,7 +1079,7 @@ func main() {
 				isRootChain:  isRootChain,
 			})
 		} else {
-			// Multi-committee validator/delegator - appears once per committee
+			// Multi-committee validator - appears once per committee
 			for i, committee := range identity.Committees {
 				expandedIdentity := identity
 				if i == 0 {
@@ -1199,14 +1240,6 @@ func main() {
 
 	for _, entry := range expandedEntries {
 		identity := entry.identity
-
-		// Delegators don't get rootChainNode or peerNode (they're not physical servers)
-		if identity.IsDelegate {
-			// Leave RootChainNode and PeerNode as nil for delegators
-			key := fmt.Sprintf("node-%d", identity.ID)
-			idsFile.Keys[key] = identity
-			continue
-		}
 
 		// Assign rootChainNode
 		if entry.isRootChain {

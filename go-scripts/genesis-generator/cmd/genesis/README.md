@@ -126,7 +126,9 @@ The script validates:
 Delegators are staked entities that delegate to validators but are **not physical servers**:
 - They do **not** count towards `nodes.count`
 - They do **not** have `netAddress` in genesis.json
-- They do **not** have `rootChainNode` or `peerNode` in ids.json (these fields are for validators and full nodes only)
+- They do **not** appear in ids.json (only validators and full nodes are included)
+- They use **negative IDs** internally (-1, -2, -3, ...) to avoid gaps in the positive ID sequence used by validators and full nodes
+- In keystore.json, delegators use nicknames like `delegator-1`, `delegator-2`, etc. (using the absolute value of their negative ID)
 
 ### Chain Types
 
@@ -156,7 +158,7 @@ artifacts/
 
 ### ids.json
 
-Contains all node identities in a map structure. Multi-committee validators appear multiple times with different IDs:
+Contains all validator and full node identities in a map structure (delegators are not included). Multi-committee validators appear multiple times with different IDs:
 
 ```json
 {
@@ -216,7 +218,7 @@ Contains all node identities in a map structure. Multi-committee validators appe
 - `node-4` has `peerNode: 4` (itself) because it has a root chain identity
 - `node-3` has `peerNode: 4` because it's a nested chain node without root chain identity, assigned to a peer node that does have root chain identity
 
-**Node Types:** `validator`, `delegator`, `fullnode`
+**Node Types:** `validator`, `fullnode`
 
 **rootChainNode Logic** (validators and full nodes only, delegators don't have this field):
 - **Root chain validator**: `rootChainNode` = its own ID

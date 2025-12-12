@@ -22,13 +22,13 @@ default:
         count: 1
         amount: 1000000
       delegators:
-        count: 0
+        count: 10
         stakedAmount: 1000000000
         amount: 1000000
       committees:
         - id: 2
           validatorCount: 1
-          delegatorCount: 0
+          delegatorCount: 1
     chain_2:
       id: 2
       rootChain: 1
