@@ -12,7 +12,7 @@ data:
       "chainId": 1,
       "sleepUntil": 0,
       "rootChain":
-        [{ "chainId": 1, "url": "http://node-|ROOT_NODE_ID|:50002" }],
+        [{ "chainId": 1, "url": "ROOT_NODE_ID" }],
       "runVDF": false,
       "headless": false,
       "walletPort": "50000",
@@ -27,7 +27,7 @@ data:
       "inMemory": false,
       "networkID": 1,
       "listenAddress": "0.0.0.0:9001",
-      "externalAddress": "node-|NODE_ID|",
+      "externalAddress": "NODE_ID",
       "maxInbound": 21,
       "maxOutbound": 7,
       "trustedPeerIDs": null,
@@ -60,8 +60,8 @@ data:
       "sleepUntil": 0,
       "rootChain":
         [
-          { "chainId": 2, "url": "http://node-|NODE_ID|:50002" },
-          { "chainId": 1, "url": "http://node-|ROOT_NODE_ID|:50002" }
+          { "chainId": 2, "url": "NODE_ID" },
+          { "chainId": 1, "url": "ROOT_NODE_ID" }
         ],
       "runVDF": false,
       "headless": false,
@@ -77,11 +77,11 @@ data:
       "inMemory": false,
       "networkID": 1,
       "listenAddress": "0.0.0.0:9002",
-      "externalAddress": "node-|NODE_ID|",
+      "externalAddress": "NODE_ID",
       "maxInbound": 21,
       "maxOutbound": 7,
       "trustedPeerIDs": null,
-      "dialPeers": ["|ROOT_NODE_PUBLIC_KEY|@tcp://node-|ROOT_NODE_ID|"],
+      "dialPeers": [],
       "bannedPeerIDs": null,
       "bannedIPs": null,
       "minimumPeersToStart": 0,

@@ -180,6 +180,7 @@ func buildClientSet(kubeconfig string) (*kubernetes.Clientset, error) {
 	return clientset, nil
 }
 
+// buildConfigMapsFromData is an util to create config maps from the given data
 func buildConfigMapsFromData(namespace string, dataByType map[string]map[string]string) []*corev1.ConfigMap {
 	cms := make([]*corev1.ConfigMap, 0, len(dataByType))
 	for fileType, data := range dataByType {
