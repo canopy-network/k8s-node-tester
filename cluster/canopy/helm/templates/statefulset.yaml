@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+spec:
+  podManagementPolicy: {{ .Values.podManagementPolicy}}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: {{ .Values.persistentVolumeClaimRetentionPolicy.whenDeleted }}
+    whenScaled: {{ .Values.persistentVolumeClaimRetentionPolicy.whenScaled }}
+  serviceName: p2p
+  replicas: {{ .Values.replicaCount }}
+  ordinals:
+    start: 1
+  selector:
+    matchLabels:
+      app: node
+  template:
+    metadata:
+      labels:
+        app: node
+    spec:
+      {{- if .Values.topologySpreadConstraints.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: {{ .Values.topologySpreadConstraints.maxSkew }}
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: {{ .Values.topologySpreadConstraints.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              app: node
+      {{- end }}
+      initContainers:
+      - name: init-node
+        image: golang:1.25-alpine3.22
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          # fail the script if any command fails
+          set -euo pipefail
+          CGO_ENABLED=0 GO111MODULE=off go run /root/init-node/main.go
+        volumeMounts:
+        - name: data
+          mountPath: /root/.canopy
+        - name: configs
+          mountPath: /root/configs
+        - name: init-script
+          mountPath: /root/init-node
+      containers:
+      - name: canopy
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args: ["start"]
+        ports:
+        - containerPort: 50000
+          name: wallet
+        - containerPort: 50001
+          name: explorer
+        - containerPort: 50002
+          name: rpc
+        - containerPort: 50003
+          name: admin-rpc
+        - containerPort: 9090
+          name: metrics
+        {{- range untilStep (int .Values.ports.p2p.start) (int .Values.ports.p2p.end) 1 }}
+        - containerPort: {{ . }}
+          name: p2p-{{ . }}
+        {{- end }}
+        resources:
+          {{ toYaml .Values.resources | nindent 10 }}
+        volumeMounts:
+        - name: data
+          mountPath: /root/.canopy
+      volumes:
+      - name: configs
+        projected:
+          sources:
+          - configMap:
+              name: {{ .Values.volumes.configMaps.genesis }}
+          - configMap:
+              name: {{ .Values.volumes.configMaps.config }}
+          - configMap:
+              name: {{ .Values.volumes.configMaps.keystore }}
+          - configMap:
+              name: {{ .Values.volumes.configMaps.ids }}
+      - name: init-script
+        configMap:
+          name: init-node-script
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: {{ .Values.storage.storageClassName }}
+      resources:
+        requests:
+          storage: {{ .Values.storage.size }}

@@ -1,0 +1,60 @@
+# number of nodes to deploy
+replicaCount: 4
+
+# launch behavior of statefulset
+# default: launch all pods in parallel
+podManagementPolicy: Parallel
+
+# persistent volume claim retention policy
+# default: delete pvc when pod is deleted,
+# retain pvc when pod is scaled
+persistentVolumeClaimRetentionPolicy:
+  whenDeleted: Delete
+  whenScaled: Retain
+
+# name of the statefulset
+name: node
+
+# namespace
+namespace: canopy
+
+# container image
+image:
+  repository: canopynetwork/canopy
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# container ports
+ports:
+  p2p:
+    start: 9001
+    # not inclusive
+    end: 9003
+
+# volume mounts
+volumes:
+  configMaps:
+    genesis: genesis
+    config: config
+    keystore: keystore
+    ids: ids
+
+# storage per pod
+storage:
+  size: 1Gi
+  storageClassName: local-path
+
+# resources per pod
+resources:
+  requests:
+    memory: "1Gi"
+    # cpu: "1000m"
+  limits:
+    memory: "1Gi"
+    # cpu: "1000m"
+
+# even distribution across servers
+topologySpreadConstraints:
+  enabled: true
+  maxSkew: 1
+  whenUnsatisfiable: DoNotSchedule

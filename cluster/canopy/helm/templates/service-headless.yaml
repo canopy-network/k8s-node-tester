@@ -1,0 +1,22 @@
+# Provides individual DNS entries for each pod in the StatefulSet,
+# used by nodes to find each other for P2P connections
+apiVersion: v1
+kind: Service
+metadata:
+  name: p2p
+  namespace: {{ .Values.namespace }}
+  labels:
+      app: canopy # Prometheus's ServiceMonitor
+spec:
+  clusterIP: None
+  selector:
+    app: node
+  ports:
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+  {{- range untilStep (int .Values.ports.p2p.start) (int .Values.ports.p2p.end) 1 }}
+  - name: p2p-{{ . }}
+    port: {{ . }}
+    targetPort: {{ . }}
+  {{- end }}

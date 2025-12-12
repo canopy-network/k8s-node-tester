@@ -33,3 +33,11 @@ go.work.sum
 
 # Environment variables
 *.env
+
+# Ignore all artifacts
+go-scripts/genesis-generator/artifacts/*
+# But keep the example directory
+!go-scripts/genesis-generator/artifacts/example/
+
+# Ignore built binaries
+go-scripts/bin/

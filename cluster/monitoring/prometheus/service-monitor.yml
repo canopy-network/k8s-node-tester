@@ -19,7 +19,7 @@ spec:
     - port: metrics
       interval: 15s
       path: /metrics
-      # drop the volatile labels from the scraped metrics (so pod/instance won't split series)
+      # drop the volatile labels from the scraped metrics (so instance won't split series)
       metricRelabelings:
         - action: labeldrop
-          regex: "pod|instance"
+          regex: "instance"
