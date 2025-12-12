@@ -131,12 +131,18 @@ func main() {
 		log.Error("failed to find peer node", slog.String("peerNodeKey", peerNodeKey))
 		os.Exit(1)
 	}
+	// a peer node should not connect to itself, also, as empty strings are not
+	// permitted, the full string is replaced with an empty value
+	dialPeer := fmt.Sprintf("\"%s@tcp://node-%s\"", peerNode.PublicKey,
+		strconv.Itoa(peerNode.Id)+serviceSuffix)
+	if rootNode.Id == peerNode.Id {
+		dialPeer = ""
+	}
 	// perform the substitutions
 	configFileContents = performSubstitution(configFileContents, map[string]string{
-		"|NODE_ID|":      strconv.Itoa(podId) + serviceSuffix,
-		"|ROOT_NODE_ID|": strconv.Itoa(rootNode.Id) + serviceSuffix,
-		"|DIAL_PEER|": fmt.Sprintf("%s@tcp://node-%s", peerNode.PublicKey,
-			strconv.Itoa(peerNode.Id)+serviceSuffix),
+		"|NODE_ID|":       strconv.Itoa(podId) + serviceSuffix,
+		"|ROOT_NODE_ID|":  strconv.Itoa(rootNode.Id) + serviceSuffix,
+		"\"|DIAL_PEER|\"": dialPeer,
 	})
 	// copy the config file to the canopy's directory
 	dst = fullFilePath(canopyPath, configFile, configFileExt)
