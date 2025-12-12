@@ -38,3 +38,6 @@ go.work.sum
 go-scripts/genesis-generator/artifacts/*
 # But keep the example directory
 !go-scripts/genesis-generator/artifacts/example/
+
+# Ignore built binaries
+go-scripts/bin/

@@ -49,6 +49,11 @@ monitoring:
 	$(MAKE) monitoring/loki
 	$(MAKE) monitoring/promtail
 
+## genesis/build-apply: builds the genesis apply binary
+.PHONY: genesis/build-apply
+genesis/build-apply:
+	cd ./go-scripts/genesis-generator && go build -o ../bin/genesis_apply ./cmd/k8s-applier/main.go
+
 ## genesis/apply: applies the config files created by the generator into the cluster
 .PHONY: genesis/apply
 genesis/apply:
