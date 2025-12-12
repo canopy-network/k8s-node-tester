@@ -99,6 +99,7 @@ type NodeIdentity struct {
 	ChainID         int      `json:"chainId"`
 	RootChainID     int      `json:"rootChainId"`
 	RootChainNode   *int     `json:"rootChainNode,omitempty"` // nil for delegators (they're not physical nodes)
+	PeerNode        *int     `json:"peerNode,omitempty"`      // nil for delegators (they're not physical nodes)
 	Address         string   `json:"address"`
 	PublicKey       string   `json:"publicKey"`
 	PrivateKey      string   `json:"privateKey"`
@@ -239,6 +240,43 @@ func validateCommitteeAssignments(cfg *AppConfig) error {
 				chainName, ca.ID, ca.ValidatorCount, ca.DelegatorCount)
 		}
 	}
+
+	// Validate that for each nested chain, its root chain has at least one validator in the nested chain's committee
+	for chainName, chainCfg := range cfg.Chains {
+		// Skip root chains (they are their own root)
+		if chainCfg.ID == chainCfg.RootChain {
+			continue
+		}
+
+		// This is a nested chain - find its root chain
+		var rootChainCfg *ChainConfig
+		for _, c := range cfg.Chains {
+			if c.ID == chainCfg.RootChain {
+				rootChainCfg = c
+				break
+			}
+		}
+
+		if rootChainCfg == nil {
+			return fmt.Errorf("chain %s: rootChain %d does not exist", chainName, chainCfg.RootChain)
+		}
+
+		// Check if the root chain has at least one validator assigned to this nested chain's committee
+		hasRootChainValidator := false
+		for _, ca := range rootChainCfg.Committees {
+			if ca.ID == chainCfg.ID && ca.ValidatorCount > 0 {
+				hasRootChainValidator = true
+				break
+			}
+		}
+
+		if !hasRootChainValidator {
+			return fmt.Errorf("chain %s (nested chain with ID %d): its root chain (ID %d) must have at least one validator assigned to committee %d for peerNode assignment",
+				chainName, chainCfg.ID, chainCfg.RootChain, chainCfg.ID)
+		}
+		fmt.Printf("  Nested chain %s: root chain has validators in committee %d ✓\n", chainName, chainCfg.ID)
+	}
+
 	return nil
 }
 
@@ -452,32 +490,6 @@ func mustSaveAsJSON(filename string, data any) {
 
 	err = encoder.Encode(data)
 	if err != nil {
-		panic(err)
-	}
-}
-
-func accountsWriter(chainDir string, accountLen int, wg *sync.WaitGroup, accountChan chan *fsm.Account) {
-	defer wg.Done()
-
-	accountsFile, err := os.Create(filepath.Join(chainDir, "accounts.json"))
-	if err != nil {
-		panic(err)
-	}
-	defer accountsFile.Close()
-
-	writer := jwriter.NewStreamingWriter(accountsFile, 1024)
-
-	arr := writer.Array()
-	for range accountLen {
-		account := <-accountChan
-		accountObj := writer.Object()
-		accountObj.Name("address").String(hex.EncodeToString(account.Address))
-		accountObj.Name("amount").Int(int(account.Amount))
-		accountObj.End()
-	}
-	arr.End()
-
-	if err := writer.Flush(); err != nil {
 		panic(err)
 	}
 }
@@ -1069,12 +1081,43 @@ func main() {
 		}
 	}
 
+	// For peerNode: Build a map of nested chain ID -> list of validator IDs that have root chain identity
+	// These are validators from the root chain that also participate in this nested chain
+	nestedChainPeerNodes := make(map[int][]int) // chainID -> []nodeID
+	for _, entry := range expandedEntries {
+		if entry.identity.NodeType != "validator" || entry.identity.IsDelegate {
+			continue
+		}
+		// Check if this is a nested chain entry AND the validator has a root chain identity
+		if !entry.isRootChain {
+			if _, hasRootIdentity := addressToRootChainID[entry.originalAddr]; hasRootIdentity {
+				// This validator has root chain identity and participates in this nested chain
+				nestedChainPeerNodes[entry.identity.ChainID] = append(
+					nestedChainPeerNodes[entry.identity.ChainID],
+					entry.identity.ID,
+				)
+			}
+		}
+	}
+
 	// Count existing assignments to each root chain node
 	// (root chain validators count themselves, multi-committee nested validators count their root chain entry)
 	// Delegators are skipped as they don't get rootChainNode assignments
 	rootChainNodeAssignments := make(map[int]int)
 	for _, id := range rootChainNodeIDs {
 		rootChainNodeAssignments[id] = 0
+	}
+
+	// Count existing assignments to each peer node (per nested chain)
+	peerNodeAssignments := make(map[int]int) // nodeID -> count
+	for _, peerIDs := range nestedChainPeerNodes {
+		for _, id := range peerIDs {
+			peerNodeAssignments[id] = 0
+		}
+	}
+	// Also track root chain validators for peerNode (used by root chain full nodes)
+	for _, id := range rootChainNodeIDs {
+		peerNodeAssignments[id] = 0
 	}
 
 	// First, count assignments from root chain validators (they reference themselves)
@@ -1095,6 +1138,20 @@ func main() {
 		}
 	}
 
+	// Count peerNode assignments for validators that reference themselves
+	for _, entry := range expandedEntries {
+		if entry.identity.IsDelegate || entry.identity.NodeType != "validator" {
+			continue
+		}
+		if entry.isRootChain {
+			// Root chain validators reference themselves for peerNode
+			peerNodeAssignments[entry.identity.ID]++
+		} else if _, hasRootIdentity := addressToRootChainID[entry.originalAddr]; hasRootIdentity {
+			// Nested chain validators with root chain identity reference themselves for peerNode
+			peerNodeAssignments[entry.identity.ID]++
+		}
+	}
+
 	// Helper function to find the root chain node with fewest assignments
 	findLeastAssignedRootNode := func() int {
 		minAssignments := -1
@@ -1108,7 +1165,34 @@ func main() {
 		return selectedNode
 	}
 
-	// Second pass: Assign rootChainNode to each entry
+	// Helper function to find the peer node with fewest assignments for a given nested chain
+	findLeastAssignedPeerNode := func(chainID int) int {
+		peerIDs := nestedChainPeerNodes[chainID]
+		minAssignments := -1
+		selectedNode := peerIDs[0]
+		for _, id := range peerIDs {
+			if minAssignments == -1 || peerNodeAssignments[id] < minAssignments {
+				minAssignments = peerNodeAssignments[id]
+				selectedNode = id
+			}
+		}
+		return selectedNode
+	}
+
+	// Helper function to find the root chain validator with fewest peerNode assignments
+	findLeastAssignedRootChainPeerNode := func() int {
+		minAssignments := -1
+		selectedNode := rootChainNodeIDs[0]
+		for _, id := range rootChainNodeIDs {
+			if minAssignments == -1 || peerNodeAssignments[id] < minAssignments {
+				minAssignments = peerNodeAssignments[id]
+				selectedNode = id
+			}
+		}
+		return selectedNode
+	}
+
+	// Second pass: Assign rootChainNode and peerNode to each entry
 	idsFile := IdsFile{
 		Keys: make(map[string]NodeIdentity),
 	}
@@ -1116,14 +1200,15 @@ func main() {
 	for _, entry := range expandedEntries {
 		identity := entry.identity
 
-		// Delegators don't get rootChainNode (they're not physical servers)
+		// Delegators don't get rootChainNode or peerNode (they're not physical servers)
 		if identity.IsDelegate {
-			// Leave RootChainNode as nil for delegators
+			// Leave RootChainNode and PeerNode as nil for delegators
 			key := fmt.Sprintf("node-%d", identity.ID)
 			idsFile.Keys[key] = identity
 			continue
 		}
 
+		// Assign rootChainNode
 		if entry.isRootChain {
 			// Root chain node: rootChainNode is itself
 			identity.RootChainNode = &identity.ID
@@ -1136,6 +1221,37 @@ func main() {
 			leastUsed := findLeastAssignedRootNode()
 			identity.RootChainNode = &leastUsed
 			rootChainNodeAssignments[leastUsed]++
+		}
+
+		// Assign peerNode (for validators and full nodes)
+		switch identity.NodeType {
+		case "validator":
+			if entry.isRootChain {
+				// Root chain validator: peerNode is itself
+				identity.PeerNode = &identity.ID
+			} else if _, hasRootIdentity := addressToRootChainID[entry.originalAddr]; hasRootIdentity {
+				// Nested chain validator with same identity on root chain: peerNode is itself
+				identity.PeerNode = &identity.ID
+			} else {
+				// Nested chain validator without root chain identity: assign to least-used peer node
+				// Note: nestedChainPeerNodes[chainID] is guaranteed to be non-empty due to config validation
+				leastUsed := findLeastAssignedPeerNode(identity.ChainID)
+				identity.PeerNode = &leastUsed
+				peerNodeAssignments[leastUsed]++
+			}
+		case "fullnode":
+			if entry.isRootChain {
+				// Root chain full node: peerNode is assigned to a root chain validator (distributed evenly)
+				leastUsed := findLeastAssignedRootChainPeerNode()
+				identity.PeerNode = &leastUsed
+				peerNodeAssignments[leastUsed]++
+			} else {
+				// Nested chain full node: assign to least-used peer node (like validators without root identity)
+				// Note: nestedChainPeerNodes[chainID] is guaranteed to be non-empty due to config validation
+				leastUsed := findLeastAssignedPeerNode(identity.ChainID)
+				identity.PeerNode = &leastUsed
+				peerNodeAssignments[leastUsed]++
+			}
 		}
 
 		key := fmt.Sprintf("node-%d", identity.ID)

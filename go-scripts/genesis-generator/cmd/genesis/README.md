@@ -119,13 +119,14 @@ The script validates:
 2. At least one root chain has validators (for rootChainNode assignment)
 3. Committee assignment counts don't exceed available validators/delegators
 4. Committee IDs reference valid chain IDs
+5. For each nested chain, its root chain must have at least one validator assigned to the nested chain's committee (for peerNode assignment)
 
 ### Delegators
 
 Delegators are staked entities that delegate to validators but are **not physical servers**:
 - They do **not** count towards `nodes.count`
 - They do **not** have `netAddress` in genesis.json
-- They do **not** have `rootChainNode` in ids.json
+- They do **not** have `rootChainNode` or `peerNode` in ids.json (these fields are for validators and full nodes only)
 
 ### Chain Types
 
@@ -165,6 +166,7 @@ Contains all node identities in a map structure. Multi-committee validators appe
       "chainId": 1,
       "rootChainId": 1,
       "rootChainNode": 1,
+      "peerNode": 1,
       "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
       "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba...",
       "privateKey": "6c275055a4f6ae6bccf1e6552e172c7b8cc538a7...",
@@ -175,6 +177,7 @@ Contains all node identities in a map structure. Multi-committee validators appe
       "chainId": 1,
       "rootChainId": 1,
       "rootChainNode": 2,
+      "peerNode": 2,
       "address": "...",
       "publicKey": "...",
       "privateKey": "...",
@@ -185,6 +188,7 @@ Contains all node identities in a map structure. Multi-committee validators appe
       "chainId": 2,
       "rootChainId": 1,
       "rootChainNode": 1,
+      "peerNode": 4,
       "address": "f333c1a6af3cc044b192f0423e2f415451f97d1d",
       "publicKey": "...",
       "privateKey": "...",
@@ -195,6 +199,7 @@ Contains all node identities in a map structure. Multi-committee validators appe
       "chainId": 2,
       "rootChainId": 1,
       "rootChainNode": 1,
+      "peerNode": 4,
       "address": "851e90eaef1fa27debaee2c2591503bdeec1d123",
       "publicKey": "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba...",
       "privateKey": "6c275055a4f6ae6bccf1e6552e172c7b8cc538a7...",
@@ -208,6 +213,8 @@ Contains all node identities in a map structure. Multi-committee validators appe
 - `node-1` and `node-4` have the same keys but different IDs - this is a multi-committee validator appearing once for each committee
 - `node-4` has `rootChainNode: 1` because it's the same identity as `node-1` (multi-committee)
 - `node-3` has `rootChainNode: 1` because it's a native nested chain node assigned to a root chain node (round-robin distribution)
+- `node-4` has `peerNode: 4` (itself) because it has a root chain identity
+- `node-3` has `peerNode: 4` because it's a nested chain node without root chain identity, assigned to a peer node that does have root chain identity
 
 **Node Types:** `validator`, `delegator`, `fullnode`
 
@@ -215,6 +222,13 @@ Contains all node identities in a map structure. Multi-committee validators appe
 - **Root chain validator**: `rootChainNode` = its own ID
 - **Nested chain validator (same identity on root chain)**: `rootChainNode` = the ID of its root chain entry
 - **Nested chain validator (no root chain identity)**: `rootChainNode` = a root chain validator ID (distributed evenly)
+
+**peerNode Logic** (validators and full nodes only, delegators don't have this field):
+- **Root chain validator**: `peerNode` = its own ID
+- **Nested chain validator (same identity on root chain)**: `peerNode` = its own ID
+- **Nested chain validator (no root chain identity)**: `peerNode` = ID of a nested chain validator that has root chain identity (distributed evenly)
+- **Root chain full node**: `peerNode` = ID of a root chain validator (distributed evenly)
+- **Nested chain full node**: `peerNode` = ID of a nested chain validator that has root chain identity (distributed evenly)
 
 ### config.json
 
