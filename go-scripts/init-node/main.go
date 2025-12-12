@@ -8,7 +8,6 @@ package main
 // all configuration files are written to /root/.canopy for the main canopy container to use.
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -77,19 +76,19 @@ func main() {
 		os.Exit(1)
 	}
 	// get the node key for the pod index
-	nodeKey, ok := keys.Keys[hostname]
+	node, ok := keys.Keys[hostname]
 	if !ok {
 		log.Error("node key not found for hostname", slog.String("hostname", hostname))
 		os.Exit(1)
 	}
 	// sanity check the pod index
-	if podId != nodeKey.Id {
+	if podId != node.Id {
 		log.Error("pod index does not match node key index",
-			slog.Int("podIndex", podId), slog.Int("nodeKeyId", nodeKey.Id))
+			slog.Int("podIndex", podId), slog.Int("nodeKeyId", node.Id))
 		os.Exit(1)
 	}
 	// copy the genesis file to the canopy directory
-	src := fullFilePath(configPath, indexedFileName(genesisFile, nodeKey.ChainID), configFileExt)
+	src := fullFilePath(configPath, indexedFileName(genesisFile, node.ChainID), configFileExt)
 	dst := fullFilePath(canopyPath, genesisFile, configFileExt)
 	err = copy(src, dst)
 	if err != nil {
@@ -100,7 +99,7 @@ func main() {
 		os.Exit(1)
 	}
 	// copy the keystore file to the canopy directory
-	src = fullFilePath(configPath, indexedFileName(keystoreFile, nodeKey.ChainID), configFileExt)
+	src = fullFilePath(configPath, indexedFileName(keystoreFile, node.ChainID), configFileExt)
 	dst = fullFilePath(canopyPath, keystoreFile, configFileExt)
 	err = copy(src, dst)
 	if err != nil {
@@ -110,49 +109,50 @@ func main() {
 			slog.String("dst", dst))
 		os.Exit(1)
 	}
-	// open the config file to perform substitutions
-	src = fullFilePath(configPath, indexedFileName(configFile, nodeKey.ChainID), configFileExt)
-	configFileContents, err := os.ReadFile(src)
+	// open the config file and parse it to perform substitutions
+	src = fullFilePath(configPath, indexedFileName(configFile, node.ChainID), configFileExt)
+	rawConfig, err := os.ReadFile(src)
 	if err != nil {
 		log.Error("failed to read config file", slog.String("err", err.Error()), slog.String("src", src))
 		os.Exit(1)
 	}
+	var config Config
+	err = json.Unmarshal(rawConfig, &config)
+	if err != nil {
+		log.Error("failed to unmarshal config file", slog.String("err", err.Error()), slog.String("src", src))
+		os.Exit(1)
+	}
 	// obtain the root node full key by splitting the hostname by "-" and obtaining the identifier
-	rootNodeKey := fmt.Sprintf("%s%d", podPrefix, nodeKey.RootChainNode)
+	rootNodeKey := fmt.Sprintf("%s%d", podPrefix, node.RootChainNode)
 	rootNode, ok := keys.Keys[rootNodeKey]
 	if !ok {
 		log.Error("failed to find root node", slog.String("rootNodeKey", rootNodeKey))
 		os.Exit(1)
 	}
 	// do the same for the peer node
-	peerNodeKey := fmt.Sprintf("%s%d", podPrefix, nodeKey.PeerNode)
+	peerNodeKey := fmt.Sprintf("%s%d", podPrefix, node.PeerNode)
 	peerNode, ok := keys.Keys[peerNodeKey]
 	if !ok {
 		log.Error("failed to find peer node", slog.String("peerNodeKey", peerNodeKey))
 		os.Exit(1)
 	}
-	// a peer node should not connect to itself, also, as empty strings are not
-	// permitted, the full string is replaced with an empty value
-	dialPeer := fmt.Sprintf("\"%s@tcp://node-%s\"", peerNode.PublicKey,
-		strconv.Itoa(peerNode.Id)+serviceSuffix)
-	if rootNode.Id == peerNode.Id {
-		dialPeer = ""
-	}
 	// perform the substitutions
-	configFileContents = performSubstitution(configFileContents, map[string]string{
-		"|NODE_ID|":       strconv.Itoa(podId) + serviceSuffix,
-		"|ROOT_NODE_ID|":  strconv.Itoa(rootNode.Id) + serviceSuffix,
-		"\"|DIAL_PEER|\"": dialPeer,
-	})
+	modifyConfig(&config, podPrefix, &node, &rootNode, &peerNode)
+	// encode to save it as a file
+	rawConfig, err = json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		log.Error("failed to encode config", slog.String("err", err.Error()))
+		os.Exit(1)
+	}
 	// copy the config file to the canopy's directory
 	dst = fullFilePath(canopyPath, configFile, configFileExt)
 	if err := os.WriteFile(dst,
-		configFileContents, configFilePerms); err != nil {
+		rawConfig, configFilePerms); err != nil {
 		log.Error("failed to copy config file", slog.String("err", err.Error()), slog.String("dst", dst))
 		os.Exit(1)
 	}
 	// write the validator key file to the canopy's directory
-	validatorKeyFile := fmt.Sprintf("\"%s\"", nodeKey.PrivateKey)
+	validatorKeyFile := fmt.Sprintf("\"%s\"", node.PrivateKey)
 	dst = fullFilePath(canopyPath, validatorFile, configFileExt)
 	if err := os.WriteFile(dst,
 		[]byte(validatorKeyFile), configFilePerms); err != nil {
@@ -210,10 +210,83 @@ func copy(src, dst string) error {
 	return err
 }
 
-// performSubstitution replaces all occurrences of keys in the data with their corresponding values
-func performSubstitution(data []byte, subs map[string]string) []byte {
-	for key, value := range subs {
-		data = bytes.ReplaceAll(data, []byte(key), []byte(value))
+// modifyConfig modifies the configuration according to the prov
+func modifyConfig(config *Config, nodePrefix string, node, rootNode, peerNode *NodeKey) {
+	// modify the node id for the root and nested chain
+	for idx := range config.RootChain {
+		chain := &config.RootChain[idx]
+		// default for "NODE_ID"
+		chainNode := node
+		if chain.URL == "ROOT_NODE_ID" {
+			chainNode = rootNode
+		}
+		chain.URL = buildNodeAddress(true, nodePrefix, chainNode, ":50002")
 	}
-	return data
+	// change the external address to itself so it can be discovered by the network
+	config.ExternalAddress = buildNodeAddress(false, nodePrefix, node, "")
+	// a node should not connect to itself
+	if peerNode.Id != node.Id {
+		// update the peer address to the peer node
+		peer := fmt.Sprintf("%s@tcp://%s%d%s", peerNode.PublicKey, nodePrefix, peerNode.Id, serviceSuffix)
+		config.DialPeers = append(config.DialPeers, peer)
+	}
+}
+
+func buildNodeAddress(http bool, nodePrefix string, node *NodeKey, port string) string {
+	httpPrefix := "http://"
+	if !http {
+		httpPrefix = ""
+	}
+	return fmt.Sprintf("%s%s%d%s%s", httpPrefix, nodePrefix, node.Id, serviceSuffix, port)
+}
+
+// Config is an excerpt of the config file with all the required fields
+type Config struct {
+	AutoUpdate              bool        `json:"autoUpdate"`
+	LogLevel                string      `json:"logLevel"`
+	ChainID                 int         `json:"chainId"`
+	SleepUntil              int         `json:"sleepUntil"`
+	RootChain               []RootChain `json:"rootChain"`
+	RunVDF                  bool        `json:"runVDF"`
+	Headless                bool        `json:"headless"`
+	WalletPort              string      `json:"walletPort"`
+	ExplorerPort            string      `json:"explorerPort"`
+	RPCPort                 string      `json:"rpcPort"`
+	AdminPort               string      `json:"adminPort"`
+	RPCURL                  string      `json:"rpcURL"`
+	AdminRPCURL             string      `json:"adminRPCUrl"`
+	TimeoutS                int         `json:"timeoutS"`
+	DataDirPath             string      `json:"dataDirPath"`
+	DbName                  string      `json:"dbName"`
+	InMemory                bool        `json:"inMemory"`
+	NetworkID               int         `json:"networkID"`
+	ListenAddress           string      `json:"listenAddress"`
+	ExternalAddress         string      `json:"externalAddress"`
+	MaxInbound              int         `json:"maxInbound"`
+	MaxOutbound             int         `json:"maxOutbound"`
+	TrustedPeerIDs          any         `json:"trustedPeerIDs"`
+	DialPeers               []string    `json:"dialPeers"`
+	BannedPeerIDs           any         `json:"bannedPeerIDs"`
+	BannedIPs               any         `json:"bannedIPs"`
+	MinimumPeersToStart     int         `json:"minimumPeersToStart"`
+	NewHeightTimeoutMS      int         `json:"newHeightTimeoutMS"`
+	ElectionTimeoutMS       int         `json:"electionTimeoutMS"`
+	ElectionVoteTimeoutMS   int         `json:"electionVoteTimeoutMS"`
+	ProposeTimeoutMS        int         `json:"proposeTimeoutMS"`
+	ProposeVoteTimeoutMS    int         `json:"proposeVoteTimeoutMS"`
+	PrecommitTimeoutMS      int         `json:"precommitTimeoutMS"`
+	PrecommitVoteTimeoutMS  int         `json:"precommitVoteTimeoutMS"`
+	CommitTimeoutMS         int         `json:"commitTimeoutMS"`
+	RoundInterruptTimeoutMS int         `json:"roundInterruptTimeoutMS"`
+	MaxTotalBytes           int         `json:"maxTotalBytes"`
+	MaxTransactionCount     int         `json:"maxTransactionCount"`
+	IndividualMaxTxSize     int         `json:"individualMaxTxSize"`
+	DropPercentage          int         `json:"dropPercentage"`
+	MetricsEnabled          bool        `json:"metricsEnabled"`
+	PrometheusAddress       string      `json:"prometheusAddress"`
+}
+
+type RootChain struct {
+	ChainID int    `json:"chainId"`
+	URL     string `json:"url"`
 }

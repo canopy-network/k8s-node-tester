@@ -27,7 +27,7 @@
   "maxInbound": 21,
   "maxOutbound": 7,
   "trustedPeerIDs": null,
-  "dialPeers": ["|DIAL_PEER|"],
+  "dialPeers": [],
   "bannedPeerIDs": null,
   "bannedIPs": null,
   "minimumPeersToStart": 0,

@@ -6,11 +6,11 @@
   "rootChain": [
     {
       "chainId": 2,
-      "url": "http://node-|NODE_ID|:50002"
+      "url": "NODE_ID"
     },
     {
       "chainId": 1,
-      "url": "http://node-|ROOT_NODE_ID|:50002"
+      "url": "ROOT_NODE_ID"
     }
   ],
   "runVDF": false,
@@ -27,11 +27,11 @@
   "inMemory": false,
   "networkID": 1,
   "listenAddress": "0.0.0.0:9002",
-  "externalAddress": "node-|NODE_ID|",
+  "externalAddress": "NODE_ID",
   "maxInbound": 21,
   "maxOutbound": 7,
   "trustedPeerIDs": null,
-  "dialPeers": ["|DIAL_PEER|"],
+  "dialPeers": [],
   "bannedPeerIDs": null,
   "bannedIPs": null,
   "minimumPeersToStart": 0,
