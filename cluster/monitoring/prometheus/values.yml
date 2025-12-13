@@ -22,6 +22,7 @@ grafana:
   sidecar:
     datasources:
       enabled: true
+      defaultDatasourceEnabled: false
     dashboards:
       enabled: true
       defaultFolderName: null
