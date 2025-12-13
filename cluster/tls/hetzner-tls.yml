@@ -7,7 +7,7 @@ metadata:
   name: hetzner
   namespace: cert-manager
 stringData:
-  token: "{{HETZNER_API_TOKEN}}"
+  token: "{{ HETZNER_API_TOKEN }}"
 ---
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -16,7 +16,7 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: "{{EMAIL}}"
+    email: "{{ EMAIL }}"
     privateKeySecretRef:
       name: letsencrypt-account-key
     solvers:
@@ -37,8 +37,8 @@ metadata:
 spec:
   secretName: wildcard-secret
   dnsNames:
-    - "*.{{DOMAIN}}"
-    - "{{DOMAIN}}"
+    - "*.{{ DOMAIN }}"
+    - "{{ DOMAIN }}"
   issuerRef:
     name: letsencrypt-cluster-issuer
     kind: ClusterIssuer

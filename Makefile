@@ -63,7 +63,7 @@ genesis/apply:
 ## ansible/requirements: installs the requirements for the ansible playbook, requires ansible
 .PHONY: ansible/requirements
 ansible/requirements:
-	ansible-galaxy install -r ansible/requirements.yml
+	ansible-galaxy install -r ansible/collections/requirements.yml
 
 ## ansible/site: creates/adds a new node to a k3s cluster, requires ansible and kubectl
 .PHONY: ansible/site
