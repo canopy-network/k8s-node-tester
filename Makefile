@@ -8,6 +8,34 @@ help:
 	@echo 'Usage:'
 	@sed -n 's/^##//p' ${MAKEFILE_LIST} | column -t -s ':' |  sed -e 's/^/ /'
 
+## --- main workflow ---
+# ==================================================================================== #
+# MAIN WORKFLOW
+# ==================================================================================== #
+
+## test/prepare: prepares the genesis config files for the cluster, requires kubectl to have access to the cluster
+.PHONY: test/prepare
+test/prepare:
+	$(MAKE) genesis/generate
+	$(MAKE) genesis/apply
+
+## test/start: starts the cluster with the prepared config files
+.PHONY: test/start
+test/start:
+	$(call check_vars, NODES)
+	helm upgrade --install canopy ./cluster/canopy/helm -n canopy --create-namespace --set replicaCount=$(NODES)
+
+## test/destroy: destroy the load-test-related resources in the canopy namespace
+.PHONY: test/destroy
+test/destroy:
+	helm uninstall canopy -n canopy
+	kubectl delete configmap config genesis ids keystore -n canopy
+
+## --- manual setup ---
+# ==================================================================================== #
+# MANUAL SETUP
+# ==================================================================================== #
+
 ## infra/k3s-server: sets up a K3s server on the local machine
 .PHONY: infra/k3s-server
 infra/k3s-server:
@@ -49,6 +77,11 @@ monitoring:
 	$(MAKE) monitoring/loki
 	$(MAKE) monitoring/promtail
 
+## --- scripts ---
+# ==================================================================================== #
+# GO SCRIPTS
+# ==================================================================================== #
+
 ## go-scripts/build: builds the go scripts for further usage, requires golang to be installed
 .PHONY: go-scripts/build
 go-scripts/build:
@@ -68,6 +101,11 @@ genesis/apply:
 	$(call check_vars, CONFIG)
 	./go-scripts/bin/genesis_apply --path ./go-scripts/genesis-generator/artifacts --config $(CONFIG)
 
+## --- ansible ---
+# ==================================================================================== #
+# ANSIBLE
+# ==================================================================================== #
+
 ## ansible/requirements: installs the requirements for the ansible playbook, requires ansible
 .PHONY: ansible/requirements
 ansible/requirements:
@@ -77,6 +115,11 @@ ansible/requirements:
 .PHONY: ansible/site
 ansible/site:
 	ansible-playbook k3s.orchestration.site -e @./ansible/secrets.yml
+
+## ansible/teardown: removes the cluster and all nodes, requires ansible and kubectl
+.PHONY: ansible/teardown
+ansible/teardown:
+	ansible-playbook k3s.orchestration.reset
 
 ## ansible/setup: setups the ansible package and runs the playbook to setup the cluster
 .PHONY: ansible/setup
@@ -94,25 +137,16 @@ ansible/cluster-setup:
 	ansible-playbook -i ansible/inventory.yml ansible/playbooks/4-monitoring.yml \
 	  -e @./ansible/secrets.yml
 
-## ansible/teardown: removes the cluster and all nodes, requires ansible and kubectl
-.PHONY: ansible/teardown
-ansible/teardown:
-	ansible-playbook k3s.orchestration.reset
+## --- helpers ---
+# ==================================================================================== #
+# HELPERS
+# ==================================================================================== #
 
-## test/prepare: prepares the genesis config files for the cluster, requires kubectl to have access to the cluster
-.PHONY: test/prepare
-test/prepare:
-	$(MAKE) genesis/generate
-	$(MAKE) genesis/apply
-
-## test/start: starts the cluster with the prepared config files
-.PHONY: test/start
-test/start:
-	$(call check_vars, NODES)
-	helm upgrade --install canopy ./cluster/canopy/helm -n canopy --create-namespace --set replicaCount=$(NODES)
-
-## test/destroy: destroy the load-test-related resources in the canopy namespace
-.PHONY: test/destroy
-test/destroy:
-	helm uninstall canopy -n canopy
-	kubectl delete configmap config genesis ids keystore -n canopy
+## helpers/macos-k8s-cli: installs kubectl and helm with brew
+.PHONY: helpers/brew-k8s-cli
+helpers/brew-k8s-cli:
+	@command -v brew >/dev/null 2>&1 || { echo "Homebrew not found. Install from https://brew.sh and re-run."; exit 1; }
+	@brew list kubernetes-cli >/dev/null 2>&1 || brew install kubernetes-cli
+	@brew list helm >/dev/null 2>&1 || brew install helm
+	@echo "kubectl: $$(kubectl version --client 2>/dev/null | grep 'Client Version' | awk '{print $$3}' || echo not installed)"
+	@echo "helm:    $$(helm version --short 2>/dev/null || echo not installed)"
