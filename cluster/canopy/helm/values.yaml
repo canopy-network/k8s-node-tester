@@ -2,7 +2,8 @@
 replicaCount: 4
 
 # launch behavior of statefulset
-# default: launch all pods in parallel
+# Parallel: launch all pods in parallel
+# OrderedReady: launch pods in order, wait for each to be ready before launching the next
 podManagementPolicy: Parallel
 
 # persistent volume claim retention policy

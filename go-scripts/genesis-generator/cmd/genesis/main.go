@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -117,9 +118,10 @@ type IdsFile struct {
 	Keys map[string]NodeIdentity `json:"keys"`
 }
 
-const configFile = "../../configs.yaml"
+var configFile = "configs.yaml"
 
 func loadConfigs() (map[string]*AppConfig, error) {
+	configFile = filepath.Join(*configPath, configFile)
 	data, err := os.ReadFile(configFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file '%s': %w", configFile, err)
@@ -900,22 +902,32 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 	fmt.Printf("Written files for chain %s\n", chainName)
 }
 
-func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run main.go <config-name>")
-		fmt.Printf("Available configs: %s\n", strings.Join(listAvailableConfigs(), ", "))
-		fmt.Println("Example: go run main.go max")
-		os.Exit(1)
-	}
+var (
+	configPath = flag.String("path", "../../configs.yaml", "path to the folder containing the config file")
+	configName = flag.String("config", "default", "name of the config to use")
+	outputDir  = flag.String("output", "../../artifacts", "path to the folder where the output files will be saved")
+)
 
-	configName := os.Args[1]
-	cfg, err := getConfig(configName)
+func init() {
+	// Customize the usage output
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage:\n  genesis -config <name>\n\n")
+		fmt.Fprintf(os.Stderr, "Available configs: %s\n", strings.Join(listAvailableConfigs(), ", "))
+		fmt.Fprintf(os.Stderr, "Example:\n  genesis -config max\n")
+		flag.PrintDefaults()
+	}
+}
+
+func main() {
+	flag.Parse()
+
+	cfg, err := getConfig(*configName)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Using config: %s\n", configName)
+	fmt.Printf("Using config: %s\n", *configName)
 
 	// Validate node count
 	fmt.Println("Validating configuration...")
@@ -932,7 +944,7 @@ func main() {
 	}
 
 	// Set up output directory (relative to genesis-generator directory)
-	outputBaseDir := filepath.Join("../../artifacts", configName)
+	outputBaseDir := filepath.Join(*outputDir, *configName)
 
 	fmt.Println("Deleting old files!")
 

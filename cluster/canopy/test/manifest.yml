@@ -1,4 +1,4 @@
-# TODO: Possibly remove once the automatic node provisioning using helm is completed
+# Example manifest for Canopy network node
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -225,42 +225,42 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host("node-1-wallet-1.canopy-knight.site")
+    - match: Host("node-1-wallet-1.{{ DOMAIN }}")
       kind: Rule
       services:
         - name: node-1
           port: 50000
-    - match: Host("node-1-explorer-1.canopy-knight.site")
+    - match: Host("node-1-explorer-1.{{ DOMAIN }}")
       kind: Rule
       services:
         - name: node-1
           port: 50001
-    - match: Host("rpc-node-1.canopy-knight.site")
+    - match: Host("rpc-node-1.{{ DOMAIN }}")
       kind: Rule
       services:
         - name: node-1
           port: 50002
-    - match: Host("admin-rpc-node-1.canopy-knight.site")
+    - match: Host("admin-rpc-node-1.{{ DOMAIN }}")
       kind: Rule
       services:
         - name: node-1
           port: 50003
-    - match: Host("node-2-wallet-2.canopy-knight.site")
+    - match: Host("node-2-wallet-2.{{ DOMAIN }}")
       kind: Rule
       services:
         - name: node-2
           port: 40000
-    - match: Host("node-2-explorer-2.canopy-knight.site")
+    - match: Host("node-2-explorer-2.{{ DOMAIN }}")
       kind: Rule
       services:
         - name: node-2
           port: 40001
-    - match: Host("rpc-node-2.canopy-knight.site")
+    - match: Host("rpc-node-2.{{ DOMAIN }}")
       kind: Rule
       services:
         - name: node-2
           port: 40002
-    - match: Host("admin-rpc-node-2.canopy-knight.site")
+    - match: Host("admin-rpc-node-2.{{ DOMAIN }}")
       kind: Rule
       services:
         - name: node-2

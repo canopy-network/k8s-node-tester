@@ -1,0 +1,146 @@
+# Monitoring Stack Setup Playbook
+# This playbook installs Loki, Promtail, and Prometheus/Grafana stack
+- name: setup monitoring stack
+  hosts: server[0]
+  gather_facts: false
+  vars:
+    # these should be defined in inventory or passed via --extra-vars
+    domain: "{{ tls.domain }}"
+
+  tasks:
+    - name: create monitoring namespace
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: monitoring
+        state: present
+
+    - name: add grafana helm repository
+      kubernetes.core.helm_repository:
+        name: grafana
+        repo_url: https://grafana.github.io/helm-charts
+        state: present
+
+    - name: add prometheus-community helm repository
+      kubernetes.core.helm_repository:
+        name: prometheus-community
+        repo_url: https://prometheus-community.github.io/helm-charts
+        state: present
+
+    - name: copy loki values file to remote
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../cluster/monitoring/loki/values.yml"
+        dest: /tmp/loki-values.yml
+        mode: "0644"
+
+    - name: install loki
+      kubernetes.core.helm:
+        name: loki
+        chart_ref: grafana/loki
+        chart_version: 3.6.3
+        release_namespace: monitoring
+        values_files:
+          - /tmp/loki-values.yml
+        state: present
+        release_state: deployed
+
+    - name: copy promtail values file to remote
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../cluster/monitoring/promtail/values.yml"
+        dest: /tmp/promtail-values.yml
+        mode: "0644"
+
+    - name: install promtail
+      kubernetes.core.helm:
+        name: promtail
+        chart_ref: grafana/promtail
+        chart_version: v0.87.1
+        release_namespace: monitoring
+        values_files:
+          - /tmp/promtail-values.yml
+        state: present
+        release_state: deployed
+
+    - name: copy prometheus values file to remote
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../cluster/monitoring/prometheus/values.yml"
+        dest: /tmp/prometheus-values.yml
+        mode: "0644"
+
+    - name: create canopy dashboard configmap
+      kubernetes.core.k8s:
+        state: present
+        namespace: monitoring
+        definition: "{{ lookup('file', playbook_dir ~ '/../../cluster/monitoring/prometheus/dashboards/canopy-dashboard.yml') | from_yaml }}"
+
+    - name: install prometheus-stack
+      kubernetes.core.helm:
+        name: prometheus
+        chart_ref: prometheus-community/kube-prometheus-stack
+        chart_version: 3.5.1
+        release_namespace: monitoring
+        values_files:
+          - /tmp/prometheus-values.yml
+        state: present
+
+    - name: wait for prometheus operator to be ready
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: monitoring
+        label_selectors:
+          - app.kubernetes.io/name=prometheus
+      register: prometheus_operator_pods
+      until: prometheus_operator_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length > 0
+      retries: 30
+      delay: 5
+
+    - name: create canopy namespace
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: canopy
+        state: present
+
+    - name: create canopy service monitor
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('template', playbook_dir ~ '/../../cluster/monitoring/prometheus/service-monitor.yml') | from_yaml_all }}"
+
+    - name: create ingress routes for prometheus and grafana
+      vars:
+        DOMAIN: "{{ domain }}"
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('template', playbook_dir ~ '/../../cluster/monitoring/prometheus/ingress-routes.yml') | from_yaml_all }}"
+
+    - name: cleanup temporary files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/loki-values.yml
+        - /tmp/promtail-values.yml
+        - /tmp/prometheus-values.yml
+
+    - name: retrieve grafana admin password
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Secret
+        namespace: monitoring
+        label_selectors:
+          - app.kubernetes.io/component=admin-secret
+      register: grafana_secret
+
+    - name: decode grafana password
+      ansible.builtin.set_fact:
+        grafana_password: "{{ grafana_secret.resources[0].data['admin-password'] | b64decode }}"
+      when: grafana_secret.resources | length > 0
+
+    - name: display monitoring stack info
+      ansible.builtin.debug:
+        msg:
+          - "Monitoring stack setup complete"
+          - "Access Prometheus at: https://prometheus.{{ domain }}"
+          - "Access Grafana at: https://grafana.{{ domain }}"
+          - "Grafana credentials: admin/{{ grafana_password }}"
