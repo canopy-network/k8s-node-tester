@@ -29,7 +29,7 @@
 
     - name: copy loki values file to remote
       ansible.builtin.copy:
-        src: ../../cluster/monitoring/loki/values.yml
+        src: "{{ playbook_dir }}/../../cluster/monitoring/loki/values.yml"
         dest: /tmp/loki-values.yml
         mode: "0644"
 
@@ -45,7 +45,7 @@
 
     - name: copy promtail values file to remote
       ansible.builtin.copy:
-        src: ../../cluster/monitoring/promtail/values.yml
+        src: "{{ playbook_dir }}/../../cluster/monitoring/promtail/values.yml"
         dest: /tmp/promtail-values.yml
         mode: "0644"
 
@@ -61,7 +61,7 @@
 
     - name: copy prometheus values file to remote
       ansible.builtin.copy:
-        src: ../../cluster/monitoring/prometheus/values.yml
+        src: "{{ playbook_dir }}/../../cluster/monitoring/prometheus/values.yml"
         dest: /tmp/prometheus-values.yml
         mode: "0644"
 
@@ -69,7 +69,7 @@
       kubernetes.core.k8s:
         state: present
         namespace: monitoring
-        definition: "{{ lookup('file', '../../cluster/monitoring/prometheus/dashboards/canopy-dashboard.yml') | from_yaml }}"
+        definition: "{{ lookup('file', playbook_dir ~ '/../../cluster/monitoring/prometheus/dashboards/canopy-dashboard.yml') | from_yaml }}"
 
     - name: install prometheus-stack
       kubernetes.core.helm:
@@ -102,14 +102,14 @@
     - name: create canopy service monitor
       kubernetes.core.k8s:
         state: present
-        definition: "{{ lookup('file', '../../cluster/monitoring/prometheus/service-monitor.yml') | from_yaml_all }}"
+        definition: "{{ lookup('template', playbook_dir ~ '/../../cluster/monitoring/prometheus/service-monitor.yml') | from_yaml_all }}"
 
     - name: create ingress routes for prometheus and grafana
-      kubernetes.core.k8s:
-        state: present
-        definition: "{{ lookup('template', '../../cluster/monitoring/prometheus/ingress-routes.yml') | from_yaml_all }}"
       vars:
         DOMAIN: "{{ domain }}"
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('template', playbook_dir ~ '/../../cluster/monitoring/prometheus/ingress-routes.yml') | from_yaml_all }}"
 
     - name: cleanup temporary files
       ansible.builtin.file:

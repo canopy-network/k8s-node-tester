@@ -133,7 +133,8 @@ ansible/cluster-setup:
 	$(MAKE) ansible/setup
 	ansible-playbook -i ansible/inventory.yml ansible/playbooks/1-setup.yml
 	ansible-playbook -i ansible/inventory.yml ansible/playbooks/2-helm.yml
-	ansible-playbook -i ansible/inventory.yml ansible/playbooks/3-tls-hetzner.yml
+	ansible-playbook -i ansible/inventory.yml ansible/playbooks/3-tls-hetzner.yml \
+	  -e @./ansible/secrets.yml
 	ansible-playbook -i ansible/inventory.yml ansible/playbooks/4-monitoring.yml \
 	  -e @./ansible/secrets.yml
 

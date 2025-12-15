@@ -5,6 +5,7 @@
 ---
 - name: Install helm if not exists on main server
   hosts: server[0]
+  become: true
   tasks:
     - name: Download Helm command line tool
       ansible.builtin.uri:

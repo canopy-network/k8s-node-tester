@@ -54,8 +54,8 @@
     - name: apply TLS manifests from cluster/tls/hetzner-tls.yml
       kubernetes.core.k8s:
         state: present
-        definition: "{{ lookup('template', '../../cluster/tls/hetzner-tls.yml') | from_yaml_all }}"
-      vars:
+        definition: "{{ lookup('template', playbook_dir ~ '/../../cluster/tls/hetzner-tls.yml') | from_yaml_all }}"
+        vars:
         HETZNER_API_TOKEN: "{{ hetzner_api_token }}"
         EMAIL: "{{ email }}"
         DOMAIN: "{{ domain }}"
