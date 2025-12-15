@@ -49,7 +49,7 @@ monitoring:
 	$(MAKE) monitoring/loki
 	$(MAKE) monitoring/promtail
 
-## genesis/build-apply: builds the go scripts for further usage, requires golang to be installed
+## go-scripts/build: builds the go scripts for further usage, requires golang to be installed
 .PHONY: go-scripts/build
 go-scripts/build:
 	cd ./go-scripts/genesis-generator && go build -o ../bin/genesis_apply ./cmd/k8s-applier/main.go
@@ -63,14 +63,30 @@ genesis/apply:
 ## ansible/requirements: installs the requirements for the ansible playbook, requires ansible
 .PHONY: ansible/requirements
 ansible/requirements:
-	ansible-galaxy install -r ansible/collections/requirements.yml
+	ansible-galaxy install -r ./ansible/collections/requirements.yml
 
 ## ansible/site: creates/adds a new node to a k3s cluster, requires ansible and kubectl
 .PHONY: ansible/site
 ansible/site:
-	ansible-playbook k3s.orchestration.site -i ansible/inventory.yml
+	ansible-playbook k3s.orchestration.site -e @./ansible/secrets.yml
 
 ## ansible/setup: setups the ansible package and runs the playbook to setup the cluster
 .PHONY: ansible/setup
+ansible/setup:
 	$(MAKE) ansible/requirements
 	$(MAKE) ansible/site
+
+## ansible/cluster-setup: creates/adds a new node to a k3s cluster, updates it, and sets the tls/monitoring stack
+.PHONY: ansible/cluster-setup
+ansible/cluster-setup:
+	$(MAKE) ansible/setup
+	ansible-playbook -i ansible/inventory.yml ansible/playbooks/1-setup.yml
+	ansible-playbook -i ansible/inventory.yml ansible/playbooks/2-helm.yml
+	ansible-playbook -i ansible/inventory.yml ansible/playbooks/3-tls-hetzner.yml
+	ansible-playbook -i ansible/inventory.yml ansible/playbooks/4-monitoring.yml \
+	-e @./ansible/secrets.yml
+
+## ansible/teardown: removes the cluster and all nodes, requires ansible and kubectl
+.PHONY: ansible/teardown
+ansible/teardown:
+	ansible-playbook k3s.orchestration.reset

@@ -42,5 +42,6 @@ go-scripts/genesis-generator/artifacts/*
 # Ignore built binaries
 go-scripts/bin/
 
-# ansible inventory
+# ansible files
 ansible/inventory.yml
+ansible/secrets.yml

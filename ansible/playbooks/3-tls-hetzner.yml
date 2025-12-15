@@ -43,6 +43,14 @@
         state: present
         release_state: deployed
 
+    - name: install hetzner webhook
+      kubernetes.core.helm:
+        name: cert-manager-webhook-hetzner
+        chart_ref: hcloud/cert-manager-webhook-hetzner
+        release_namespace: cert-manager
+        state: present
+        release_state: deployed
+
     - name: apply TLS manifests from cluster/tls/hetzner-tls.yml
       kubernetes.core.k8s:
         state: present
@@ -51,14 +59,6 @@
         HETZNER_API_TOKEN: "{{ hetzner_api_token }}"
         EMAIL: "{{ email }}"
         DOMAIN: "{{ domain }}"
-
-    - name: install hetzner webhook
-      kubernetes.core.helm:
-        name: cert-manager-webhook-hetzner
-        chart_ref: hcloud/cert-manager-webhook-hetzner
-        release_namespace: cert-manager
-        state: present
-        release_state: deployed
 
     - name: wait for cert-manager pods to be ready
       kubernetes.core.k8s_info:
