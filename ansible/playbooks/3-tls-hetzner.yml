@@ -5,7 +5,6 @@
   hosts: server[0]
   gather_facts: false
   vars:
-    # these should be defined in inventory or passed via --extra-vars
     email: "{{ tls.email }}"
     domain: "{{ tls.domain }}"
     hetzner_api_token: "{{ tls.hetzner_api_token }}"
