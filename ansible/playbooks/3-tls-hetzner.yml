@@ -1,4 +1,3 @@
----
 # TLS/Cert-Manager Setup Playbook
 # This playbook installs cert-manager and configures Let's Encrypt certificates
 # using Hetzner DNS for DNS-01 challenge
@@ -76,7 +75,7 @@
     - name: display certificate status message
       ansible.builtin.debug:
         msg:
-          - "TLS setup complete ✅"
+          - "TLS setup complete"
           - "Note: Certificate validation may take several minutes"
           - "After validation, restart pods behind traefik's reverse proxy for the certificate to take effect"
           - "Check certificate status with: kubectl get certificate -n cert-manager"

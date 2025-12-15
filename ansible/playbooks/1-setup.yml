@@ -1,3 +1,8 @@
+# This playbook updates k3s cluster apt packages
+# And for the main server it installs python3 and pip
+# along with kubernetes python package system-wide
+# Note: It is recommended to run python code in a virtual
+# environment. It will be eventually updated to reflect that
 - name: Update k3s cluster packages
   hosts: k3s_cluster
   tasks:

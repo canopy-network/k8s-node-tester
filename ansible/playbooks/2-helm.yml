@@ -1,6 +1,7 @@
 # Source - https://stackoverflow.com/questions/75343804/better-way-to-install-helm-with-ansible
 # Posted by Sergey Kalikin, modified by community. See post 'Timeline' for change history
 # Retrieved 2025-12-13, License - CC BY-SA 4.0
+# This playbook installs Helm if it doesnt exists on main server
 ---
 - name: Install helm if not exists on main server
   hosts: server[0]
