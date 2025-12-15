@@ -53,6 +53,14 @@ monitoring:
 .PHONY: go-scripts/build
 go-scripts/build:
 	cd ./go-scripts/genesis-generator && go build -o ../bin/genesis_apply ./cmd/k8s-applier/main.go
+	cd ./go-scripts/genesis-generator && go build -o ../bin/genesis_generate ./cmd/genesis/main.go
+
+## genesis/generate: generates the genesis config files based on the given config
+.PHONY: genesis/generate
+genesis/generate:
+	$(call check_vars, CONFIG)
+	./go-scripts/bin/genesis_generate --path ./go-scripts/genesis-generator/ \
+	  --output ./go-scripts/genesis-generator/artifacts --config $(CONFIG)
 
 ## genesis/apply: applies the config files created by the generator into the cluster
 .PHONY: genesis/apply
@@ -84,9 +92,27 @@ ansible/cluster-setup:
 	ansible-playbook -i ansible/inventory.yml ansible/playbooks/2-helm.yml
 	ansible-playbook -i ansible/inventory.yml ansible/playbooks/3-tls-hetzner.yml
 	ansible-playbook -i ansible/inventory.yml ansible/playbooks/4-monitoring.yml \
-	-e @./ansible/secrets.yml
+	  -e @./ansible/secrets.yml
 
 ## ansible/teardown: removes the cluster and all nodes, requires ansible and kubectl
 .PHONY: ansible/teardown
 ansible/teardown:
 	ansible-playbook k3s.orchestration.reset
+
+## test/prepare: prepares the genesis config files for the cluster, requires kubectl to have access to the cluster
+.PHONY: test/prepare
+test/prepare:
+	$(MAKE) genesis/generate
+	$(MAKE) genesis/apply
+
+## test/start: starts the cluster with the prepared config files
+.PHONY: test/start
+test/start:
+	$(call check_vars, NODES)
+	helm upgrade --install canopy ./cluster/canopy/helm -n canopy --create-namespace --set replicaCount=$(NODES)
+
+## test/destroy: destroy the load-test-related resources in the canopy namespace
+.PHONY: test/destroy
+test/destroy:
+	helm uninstall canopy -n canopy
+	kubectl delete configmap config genesis ids keystore -n canopy
