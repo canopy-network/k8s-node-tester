@@ -31,7 +31,7 @@ can create/add nodes, update the cluster, and configure TLS/monitoring end-to-en
 ### Local/remote machine (controller)
 
 - Required packages: `make`, `kubectl`, `helm`, `ansible`, `go` (to build the tools)
-- With Homebrew installed, you can install the others via:
+- With Homebrew installed, the others can be installed via:
   - `make helpers/brew-install-requirements`
 - SSH access from this machine to all cluster servers
 
@@ -97,7 +97,7 @@ can create/add nodes, update the cluster, and configure TLS/monitoring end-to-en
    make go-scripts/build
    ```
 
-Note: You can skip Ansible and do manual provisioning if desired. See [Makefile](Makefile) targets
+Note: Manual provisioning instead of Ansible can be done if desired. See [Makefile](Makefile) targets
 in the `manual setup` section for manual workflows.
 
 ## Configuration profiles
@@ -117,7 +117,7 @@ Available profiles include `default`, `min`, `medium`, `max`, and `mature`. Chec
 
 ## Testing workflow
 
-1. Ensure `kubectl` is targeting your cluster:
+1. Ensure `kubectl` is targeting the cluster:
 
    ```bash
    kubectl config use-context k3s-ansible
