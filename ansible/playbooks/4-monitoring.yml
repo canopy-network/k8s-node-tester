@@ -37,6 +37,7 @@
       kubernetes.core.helm:
         name: loki
         chart_ref: grafana/loki
+        chart_version: 3.6.3
         release_namespace: monitoring
         values_files:
           - /tmp/loki-values.yml
@@ -53,6 +54,7 @@
       kubernetes.core.helm:
         name: promtail
         chart_ref: grafana/promtail
+        chart_version: v0.87.1
         release_namespace: monitoring
         values_files:
           - /tmp/promtail-values.yml
@@ -75,6 +77,7 @@
       kubernetes.core.helm:
         name: prometheus
         chart_ref: prometheus-community/kube-prometheus-stack
+        chart_version: 3.5.1
         release_namespace: monitoring
         values_files:
           - /tmp/prometheus-values.yml

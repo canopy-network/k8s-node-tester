@@ -143,11 +143,13 @@ ansible/cluster-setup:
 # HELPERS
 # ==================================================================================== #
 
-## helpers/macos-k8s-cli: installs kubectl and helm with brew
-.PHONY: helpers/brew-k8s-cli
-helpers/brew-k8s-cli:
+## helpers/brew-install-requirements: installs kubectl, ansible and helm with brew
+.PHONY: helpers/brew-install-requirements
+helpers/brew-install-requirements:
 	@command -v brew >/dev/null 2>&1 || { echo "Homebrew not found. Install from https://brew.sh and re-run."; exit 1; }
 	@brew list kubernetes-cli >/dev/null 2>&1 || brew install kubernetes-cli
 	@brew list helm >/dev/null 2>&1 || brew install helm
+	@brew list ansible >/dev/null 2>&1 || brew install ansible
 	@echo "kubectl: $$(kubectl version --client 2>/dev/null | grep 'Client Version' | awk '{print $$3}' || echo not installed)"
 	@echo "helm:    $$(helm version --short 2>/dev/null || echo not installed)"
+	@echo "ansible: $$(ansible --version 2>/dev/null | head -n1 | grep -o '\[core [^]]*\]' || echo not installed)"
