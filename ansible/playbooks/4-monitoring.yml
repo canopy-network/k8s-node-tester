@@ -6,6 +6,7 @@
   vars:
     # these should be defined in inventory or passed via --extra-vars
     domain: "{{ tls.domain }}"
+    discord_webhook_url: "{{ monitoring.webhooks.discord }}"
 
   tasks:
     - name: create monitoring namespace
@@ -81,6 +82,9 @@
         release_namespace: monitoring
         values_files:
           - /tmp/prometheus-values.yml
+        set_values:
+          - value: "grafana.alerting.contactpoints\\.yml.secret.contactPoints[0].receivers[0].settings.url={{ discord_webhook_url }}"
+            value_type: string
         state: present
 
     - name: wait for prometheus operator to be ready
