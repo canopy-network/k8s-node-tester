@@ -84,6 +84,8 @@ grafana:
               - uid: discord_alert
                 type: discord
                 settings:
+                  message: |
+                    {{ `{{ if eq .Status "firing" }}[FIRING:{{ len .Alerts.Firing }}]{{ else }}[RESOLVED]{{ end }} {{ .CommonLabels.alertname }} {{ .CommonLabels.canopy }} ({{ .CommonAnnotations.summary }})` }}
                   url: ""
                   use_discord_username: false
                 disableResolveMessage: false

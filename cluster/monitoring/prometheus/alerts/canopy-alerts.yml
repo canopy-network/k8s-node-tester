@@ -952,7 +952,7 @@ data:
                     uid: prometheus
                   disableTextWrap: false
                   editorMode: code
-                  expr: canopy_block_vdf_iterations{job="canopy", instance="node1:9090"}
+                  expr: canopy_block_vdf_iterations{job="canopy"}
                   fullMetaSearch: false
                   includeNullMetadata: true
                   instant: true
