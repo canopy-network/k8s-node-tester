@@ -13,6 +13,9 @@ kubectl create namespace monitoring || true
 # import Grafana dashboards (ConfigMaps labeled grafana_dashboard=1) from the dashboards directory
 kubectl apply -f "${SCRIPT_DIR}/dashboards"
 
+# import Grafana dashboards (ConfigMaps labeled grafana_alert=1) from the alerts directory
+kubectl apply -f "${SCRIPT_DIR}/alerts"
+
 # install prometheus-stack
 helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
   --namespace monitoring -f "${SCRIPT_DIR}/values.yml" \
