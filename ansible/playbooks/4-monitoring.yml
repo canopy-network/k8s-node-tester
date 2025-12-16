@@ -6,6 +6,7 @@
   vars:
     # these should be defined in inventory or passed via --extra-vars
     domain: "{{ tls.domain }}"
+    discord_webhook_url: "{{ monitoring.webhooks.discord }}"
 
   tasks:
     - name: create monitoring namespace
@@ -37,7 +38,7 @@
       kubernetes.core.helm:
         name: loki
         chart_ref: grafana/loki
-        chart_version: 3.6.3
+        chart_version: 6.49.0
         release_namespace: monitoring
         values_files:
           - /tmp/loki-values.yml
@@ -54,7 +55,7 @@
       kubernetes.core.helm:
         name: promtail
         chart_ref: grafana/promtail
-        chart_version: v0.87.1
+        chart_version: 6.17.1
         release_namespace: monitoring
         values_files:
           - /tmp/promtail-values.yml
@@ -73,14 +74,23 @@
         namespace: monitoring
         definition: "{{ lookup('file', playbook_dir ~ '/../../cluster/monitoring/prometheus/dashboards/canopy-dashboard.yml') | from_yaml }}"
 
+    - name: create canopy alerts configmap
+      kubernetes.core.k8s:
+        state: present
+        namespace: monitoring
+        definition: "{{ lookup('file', playbook_dir ~ '/../../cluster/monitoring/prometheus/alerts/canopy-alerts.yml') | from_yaml }}"
+
     - name: install prometheus-stack
       kubernetes.core.helm:
         name: prometheus
         chart_ref: prometheus-community/kube-prometheus-stack
-        chart_version: 3.5.1
+        chart_version: 80.4.1
         release_namespace: monitoring
         values_files:
           - /tmp/prometheus-values.yml
+        set_values:
+          - value: "grafana.alerting.contactpoints\\.yml.secret.contactPoints[0].receivers[0].settings.url={{ discord_webhook_url }}"
+            value_type: string
         state: present
 
     - name: wait for prometheus operator to be ready

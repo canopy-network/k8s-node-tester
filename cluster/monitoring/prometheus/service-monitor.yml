@@ -13,6 +13,11 @@ spec:
     - port: metrics
       interval: 15s
       path: /metrics
+      # force to have a stable job name
+      relabelings:
+        - action: replace
+          targetLabel: job
+          replacement: canopy
       # drop the volatile labels from the scraped metrics (so instance won't split series)
       metricRelabelings:
         - action: labeldrop

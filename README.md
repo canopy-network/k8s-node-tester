@@ -35,6 +35,9 @@ can create/add nodes, update the cluster, and configure TLS/monitoring end-to-en
   - `make helpers/brew-install-requirements`
 - SSH access from this machine to all cluster servers
 
+### Alerting  
+- [Discord webhook URL](https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks) (for Grafana alerts)
+
 ## Repository structure (key parts)
 
 - `Makefile` — primary entry point for workflows:

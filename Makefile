@@ -57,7 +57,7 @@ tls/hetzner:
 .PHONY: monitoring/prometheus
 monitoring/prometheus:
 	$(call check_vars, DOMAIN)
-	DOMAIN=$(DOMAIN) ./cluster/monitoring/prometheus/setup.sh
+	DOMAIN=$(DOMAIN) DISCORD_WEBHOOK_URL=$(DISCORD_WEBHOOK_URL) ./cluster/monitoring/prometheus/setup.sh
 
 ## monitoring/loki: sets up Loki on the cluster
 .PHONY: monitoring/loki
@@ -73,7 +73,7 @@ monitoring/promtail:
 .PHONY: monitoring
 monitoring:
 	$(call check_vars, DOMAIN)
-	$(MAKE) monitoring/prometheus DOMAIN=$(DOMAIN)
+	$(MAKE) monitoring/prometheus DOMAIN=$(DOMAIN) DISCORD_WEBHOOK_URL=$(DISCORD_WEBHOOK_URL)
 	$(MAKE) monitoring/loki
 	$(MAKE) monitoring/promtail
 

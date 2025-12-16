@@ -28,6 +28,10 @@ grafana:
       defaultFolderName: null
       provider:
         foldersFromFilesStructure: true
+    alerts:
+      enabled: true
+      label: grafana_alert
+      labelValue: "1"
   # follows the issue below in order to import the additional dashboards at installation
   # https://github.com/prometheus-community/helm-charts/issues/2477#issuecomment-1276224026
   dashboardProviders:
@@ -69,3 +73,21 @@ grafana:
           isDefault: false
           version: 1
           jsonData: {}
+  alerting:
+    contactpoints.yml:
+      secret:
+        apiVersion: 1
+        contactPoints:
+          - orgId: 1
+            name: discord
+            receivers:
+              - uid: discord_alert
+                type: discord
+                settings:
+                  message: |
+                    {{ `{{ if eq .Status "firing" }}[FIRING:{{ len .Alerts.Firing }}]{{ else }}[RESOLVED]{{ end }} {{ .CommonLabels.alertname }} {{ .CommonLabels.canopy }} ({{ .CommonAnnotations.summary }})` }}
+                  url: ""
+                  use_discord_username: false
+                disableResolveMessage: false
+alertmanager:
+  enabled: false

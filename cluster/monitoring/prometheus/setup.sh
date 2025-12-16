@@ -13,9 +13,14 @@ kubectl create namespace monitoring || true
 # import Grafana dashboards (ConfigMaps labeled grafana_dashboard=1) from the dashboards directory
 kubectl apply -f "${SCRIPT_DIR}/dashboards"
 
+# import Grafana dashboards (ConfigMaps labeled grafana_alert=1) from the alerts directory
+kubectl apply -f "${SCRIPT_DIR}/alerts"
+
 # install prometheus-stack
 helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
-  --namespace monitoring -f "${SCRIPT_DIR}/values.yml" --version 3.5.1
+  --namespace monitoring -f "${SCRIPT_DIR}/values.yml" \
+  --set 'grafana.alerting.contactpoints\.yml.secret.contactPoints[0].receivers[0].settings.url'="${DISCORD_WEBHOOK_URL}" \
+  --version 80.4.1
 
 # set up an ingress route to access prometheus and grafana
 sed -e "s;{{ DOMAIN }};${DOMAIN};g" "${SCRIPT_DIR}/ingress-routes.yml" | kubectl apply -f -
