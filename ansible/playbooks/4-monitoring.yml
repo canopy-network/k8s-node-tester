@@ -74,6 +74,12 @@
         namespace: monitoring
         definition: "{{ lookup('file', playbook_dir ~ '/../../cluster/monitoring/prometheus/dashboards/canopy-dashboard.yml') | from_yaml }}"
 
+    - name: create canopy alerts configmap
+      kubernetes.core.k8s:
+        state: present
+        namespace: monitoring
+        definition: "{{ lookup('file', playbook_dir ~ '/../../cluster/monitoring/prometheus/alerts/canopy-alerts.yml') | from_yaml }}"
+
     - name: install prometheus-stack
       kubernetes.core.helm:
         name: prometheus
