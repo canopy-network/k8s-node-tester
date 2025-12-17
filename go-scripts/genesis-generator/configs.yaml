@@ -6,13 +6,13 @@ default:
     netAddressSuffix: ".p2p"
     jsonBeautify: true
   nodes:
-    count: 4
+    count: 5
   chains:
     chain_1:
       id: 1
       rootChain: 1
       validators:
-        count: 2
+        count: 3
         stakedAmount: 1000000000
         amount: 1000000
       fullNodes:
@@ -23,8 +23,8 @@ default:
         amount: 1000000
       delegators:
         count: 10
-        stakedAmount: 1000000000
-        amount: 1000000
+        stakedAmount: 100
+        amount: 100
       committees:
         - id: 2
           validatorCount: 1
@@ -44,8 +44,8 @@ default:
         amount: 1000000
       delegators:
         count: 0
-        stakedAmount: 1000000000
-        amount: 1000000
+        stakedAmount: 100
+        amount: 100
       committees: []
 
 min:
