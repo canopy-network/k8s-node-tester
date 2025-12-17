@@ -174,10 +174,15 @@ artifacts/
 
 ### ids.json
 
-Contains all validator and full node identities in a map structure (delegators are not included). Multi-committee validators appear multiple times with different IDs:
+Contains all validator and full node identities in a map structure (delegators are not included), plus the main account. Multi-committee validators appear multiple times with different IDs:
 
 ```json
 {
+  "main-account": {
+    "address": "a1b2c3d4e5f6789012345678901234567890abcd",
+    "publicKey": "c99b7821e54cbf0a36e0b98f5bcf02de9a9a1deba...",
+    "privateKey": "7d385055a4f6ae6bccf1e6552e172c7b8cc538a7..."
+  },
   "keys": {
     "node-1": {
       "id": 1,
@@ -226,6 +231,15 @@ Contains all validator and full node identities in a map structure (delegators a
   }
 }
 ```
+
+### Main Account
+
+The `main-account` is a special account that:
+- Has the **same identity** (address, keys) across all chains
+- Is **not associated** with any validator, delegator, or full node
+- Appears in the **accounts** of each chain's genesis with that chain's configured account amount
+- Is included in the **keystore** of all chains with nickname `main-account`
+- Does **not** have chain-specific fields (`chainId`, `rootChainId`, `rootChainNode`, `peerNode`)
 
 **Notes:**
 - `node-1` and `node-4` have the same keys but different IDs - this is a multi-committee validator appearing once for each committee

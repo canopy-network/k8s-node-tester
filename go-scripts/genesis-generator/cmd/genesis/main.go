@@ -114,9 +114,18 @@ type NodeIdentity struct {
 	NetAddress      string   `json:"-"` // Not exported to JSON, used for genesis
 }
 
+// MainAccount represents the main account identity for ids.json
+type MainAccount struct {
+	Address         string `json:"address"`
+	PublicKey       string `json:"publicKey"`
+	PrivateKey      string `json:"privateKey"`
+	PrivateKeyBytes []byte `json:"-"` // Not exported to JSON, used for keystore
+}
+
 // IdsFile represents the structure of ids.json
 type IdsFile struct {
-	Keys map[string]NodeIdentity `json:"keys"`
+	MainAccount *MainAccount            `json:"main-account,omitempty"`
+	Keys        map[string]NodeIdentity `json:"keys"`
 }
 
 var configFile = "configs.yaml"
@@ -786,7 +795,7 @@ func generateChainIdentities(chainName string, chainCfg *ChainConfig, startIdx i
 // writeChainFiles writes genesis.json, config.json, and keystore.json for a chain
 // expandedValidators contains validators/delegators with correct IDs for this chain (including cross-chain)
 func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []NodeIdentity, expandedValidators []NodeIdentity,
-	accounts []*fsm.Account, password string, jsonBeautify bool, outputBaseDir string) {
+	accounts []*fsm.Account, mainAccount *MainAccount, password string, jsonBeautify bool, outputBaseDir string) {
 
 	chainDir := filepath.Join(outputBaseDir, chainName)
 	mustSetDirectory(chainDir)
@@ -833,6 +842,11 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 		accountObj.Name("amount").Int(int(v.Amount))
 		accountObj.End()
 	}
+	// Write main account (same identity across all chains, uses chain's account amount)
+	mainAccountObj := writer.Object()
+	mainAccountObj.Name("address").String(mainAccount.Address)
+	mainAccountObj.Name("amount").Int(int(chainCfg.Accounts.Amount))
+	mainAccountObj.End()
 	arr.End()
 	if err := writer.Flush(); err != nil {
 		panic(err)
@@ -887,8 +901,8 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 	}
 
 	keystore := &crypto.Keystore{
-		AddressMap:  make(map[string]*crypto.EncryptedPrivateKey, len(keystoreIdentities)),
-		NicknameMap: make(map[string]string, len(keystoreIdentities)),
+		AddressMap:  make(map[string]*crypto.EncryptedPrivateKey, len(keystoreIdentities)+1), // +1 for main account
+		NicknameMap: make(map[string]string, len(keystoreIdentities)+1),
 	}
 	for _, identity := range keystoreIdentities {
 		var nickname string
@@ -904,6 +918,13 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 		if err != nil {
 			panic(err)
 		}
+	}
+	// Add main account to keystore
+	_, err = keystore.ImportRaw(mainAccount.PrivateKeyBytes, password, crypto.ImportRawOpts{
+		Nickname: "main-account",
+	})
+	if err != nil {
+		panic(err)
 	}
 	mustSaveAsJSON(filepath.Join(chainDir, "keystore.json"), keystore)
 
@@ -990,6 +1011,16 @@ func main() {
 		chainDelegatorStartIndices[chainName] = currentDelegatorIdx
 		// Delegators get negative IDs counting down (-1, -2, -3, ...)
 		currentDelegatorIdx -= chainCfg.Delegators.Count
+	}
+
+	// Generate main account (same identity across all chains)
+	fmt.Println("Generating main account...")
+	mainAccountKey := mustCreateKey()
+	mainAccount := &MainAccount{
+		Address:         hex.EncodeToString(mainAccountKey.PublicKey().Address().Bytes()),
+		PublicKey:       hex.EncodeToString(mainAccountKey.PublicKey().Bytes()),
+		PrivateKey:      hex.EncodeToString(mainAccountKey.Bytes()),
+		PrivateKeyBytes: mainAccountKey.Bytes(),
 	}
 
 	// Phase 1: Generate all identities for all chains
@@ -1130,6 +1161,7 @@ func main() {
 			chainIdentitiesMap[chainName],
 			chainExpandedValidators[cfg.Chains[chainName].ID],
 			chainAccountsMap[chainName],
+			mainAccount,
 			cfg.General.Password,
 			cfg.General.JsonBeautify,
 			outputBaseDir,
@@ -1328,6 +1360,9 @@ func main() {
 		key := fmt.Sprintf("node-%d", identity.ID)
 		idsFile.Keys[key] = identity
 	}
+
+	// Add main account to ids.json
+	idsFile.MainAccount = mainAccount
 
 	mustSaveAsJSON(filepath.Join(outputBaseDir, "ids.json"), idsFile)
 

@@ -1,4 +1,9 @@
 {
+  "main-account": {
+    "address": "822ef26e63d08f5bb0bad43fe1f8322f65288241",
+    "publicKey": "91e660120646fb77893da0dfa32e87d0769e6929194c26e8cfa0d7a53000ce3c86e082d3ace455ff6c66cbabc713fe08",
+    "privateKey": "5f410a4ad26f275f4b063d8204cbae0215abef8a0b3804cee6cc9adef241887d"
+  },
   "keys": {
     "node-1": {
       "id": 1,
