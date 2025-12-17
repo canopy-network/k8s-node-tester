@@ -8,14 +8,21 @@ package main
 // all configuration files are written to /root/.canopy for the main canopy container to use.
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 const (
@@ -31,6 +38,7 @@ const (
 	serviceSuffix = ".p2p" // suffix for the service name in order for the node to be discoverable
 
 	configFilePerms = 0644 // writable file permissions [readable by everyone, writable by owner]
+	chainIDLabel    = "chainId"
 )
 
 // Keys is the map of node keys
@@ -54,6 +62,9 @@ type NodeKey struct {
 func main() {
 	// create a default logger
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	// cancellable context
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	// obtain the pod index from the hostname
 	hostname, podPrefix, podId, err := getPodId()
 	if err != nil {
@@ -160,6 +171,17 @@ func main() {
 			slog.String("dst", dst))
 		os.Exit(1)
 	}
+	// get the clientset for the current cluster
+	clientSet, err := getClientSet()
+	if err != nil {
+		log.Error("failed to get clientset", slog.String("err", err.Error()))
+		os.Exit(1)
+	}
+	// apply the chain label to the pod
+	if err := applyChainLabel(ctx, clientSet, hostname, node.ChainID); err != nil {
+		log.Error("failed to apply chain label", slog.String("err", err.Error()))
+		os.Exit(1)
+	}
 	log.Info("finished setting up the config for the node " + hostname)
 }
 
@@ -238,6 +260,45 @@ func buildNodeAddress(http bool, nodePrefix string, node *NodeKey, port string) 
 		httpPrefix = ""
 	}
 	return fmt.Sprintf("%s%s%d%s%s", httpPrefix, nodePrefix, node.Id, serviceSuffix, port)
+}
+
+// applyChainLabel applies a label to the pod to indicate the chain ID
+func applyChainLabel(ctx context.Context, clientset *kubernetes.Clientset, podName string, chainID int) error {
+	// get current namespace, requires to be supplied by the pod
+	namespace := os.Getenv("NAMESPACE")
+	if namespace == "" {
+		return fmt.Errorf("namespace not found")
+	}
+	// get the pod
+	pod, err := clientset.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		fmt.Printf("get pod: %v\n", err)
+		os.Exit(1)
+	}
+	// add label
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	pod.Labels[chainIDLabel] = strconv.Itoa(chainID)
+	// update pod
+	_, err = clientset.CoreV1().Pods(namespace).Update(ctx, pod, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("update pod: %v", err)
+	}
+	return nil
+}
+
+// getClientSet returns a Kubernetes clientset for the current cluster
+func getClientSet() (*kubernetes.Clientset, error) {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, err
+	}
+	clientConfig, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	return clientConfig, nil
 }
 
 // Config is an excerpt of the config file with all the required fields
