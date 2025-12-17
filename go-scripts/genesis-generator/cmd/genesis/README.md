@@ -6,13 +6,28 @@ A Go script that generates genesis files, config files, keystores, and node iden
 
 ```bash
 cd go-scripts/genesis-generator/cmd/genesis
-go run main.go <config-name>
+go run main.go -config <config-name>
 ```
 
-**Example:**
+**Examples:**
 ```bash
-go run main.go default
+# Use default config
+go run main.go
+
+# Use specific config
+go run main.go -config max
+
+# Use custom paths
+go run main.go -config default -path /path/to/configs -output /path/to/output
 ```
+
+### Command-Line Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-config` | `default` | Name of the config to use |
+| `-path` | `../../configs.yaml` | Path to the folder containing the config file |
+| `-output` | `../../artifacts` | Path to the folder where the output files will be saved |
 
 ## Configuration
 
@@ -338,5 +353,5 @@ my_custom:
 
 Then run:
 ```bash
-go run main.go my_custom
+go run main.go -config my_custom
 ```
