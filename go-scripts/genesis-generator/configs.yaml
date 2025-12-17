@@ -72,7 +72,7 @@ min:
         amount: 1000000
       delegators:
         count: 0
-        stakedAmount: 1000000000
+        stakedAmount: 100
         amount: 1000000
       committees: []
 
@@ -100,7 +100,7 @@ medium:
         amount: 1000000
       delegators:
         count: 10
-        stakedAmount: 1000000000
+        stakedAmount: 100
         amount: 1000000
       committees:
         - id: 2
@@ -121,7 +121,7 @@ medium:
         amount: 1000000
       delegators:
         count: 0
-        stakedAmount: 1000000000
+        stakedAmount: 100
         amount: 1000000
       committees: []
 
@@ -149,7 +149,7 @@ max:
         amount: 1000000
       delegators:
         count: 50
-        stakedAmount: 1000000000
+        stakedAmount: 100
         amount: 1000000
       committees:
         - id: 2
@@ -170,7 +170,7 @@ max:
         amount: 1000000
       delegators:
         count: 25
-        stakedAmount: 1000000000
+        stakedAmount: 100
         amount: 1000000
       committees: []
 
@@ -198,6 +198,6 @@ mature:
         amount: 1000000
       delegators:
         count: 100
-        stakedAmount: 1000000000
+        stakedAmount: 100
         amount: 1000000
       committees: []
