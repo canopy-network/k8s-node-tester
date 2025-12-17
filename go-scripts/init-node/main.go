@@ -37,8 +37,8 @@ const (
 
 	serviceSuffix = ".p2p" // suffix for the service name in order for the node to be discoverable
 
-	configFilePerms = 0644 // writable file permissions [readable by everyone, writable by owner]
-	chainIDLabel    = "chainId"
+	configFilePerms = 0644              // writable file permissions [readable by everyone, writable by owner]
+	chainIdLabel    = "canopy/chain-id" // pod label for the chain id, required to make chain ID service targets
 )
 
 // Keys is the map of node keys
@@ -279,7 +279,7 @@ func applyChainLabel(ctx context.Context, clientset *kubernetes.Clientset, podNa
 	if pod.Labels == nil {
 		pod.Labels = make(map[string]string)
 	}
-	pod.Labels[chainIDLabel] = strconv.Itoa(chainID)
+	pod.Labels[chainIdLabel] = strconv.Itoa(chainID)
 	// update pod
 	_, err = clientset.CoreV1().Pods(namespace).Update(ctx, pod, metav1.UpdateOptions{})
 	if err != nil {

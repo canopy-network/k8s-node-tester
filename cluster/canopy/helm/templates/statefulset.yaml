@@ -20,6 +20,7 @@ spec:
       labels:
         app: node
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       {{- if .Values.topologySpreadConstraints.enabled }}
       topologySpreadConstraints:
         - maxSkew: {{ .Values.topologySpreadConstraints.maxSkew }}
@@ -31,20 +32,18 @@ spec:
       {{- end }}
       initContainers:
       - name: init-node
-        image: golang:1.25-alpine3.22
-        command: ["/bin/sh", "-c"]
-        args:
-        - |
-          # fail the script if any command fails
-          set -euo pipefail
-          CGO_ENABLED=0 GO111MODULE=off go run /root/init-node/main.go
+        image: canopynetwork/loadtest-init-node:v1
+        # imagePullPolicy: Always
+        env:
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
         volumeMounts:
         - name: data
           mountPath: /root/.canopy
         - name: configs
           mountPath: /root/configs
-        - name: init-script
-          mountPath: /root/init-node
       containers:
       - name: canopy
         image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
@@ -82,9 +81,6 @@ spec:
               name: {{ .Values.volumes.configMaps.keystore }}
           - configMap:
               name: {{ .Values.volumes.configMaps.ids }}
-      - name: init-script
-        configMap:
-          name: init-node-script
   volumeClaimTemplates:
   - metadata:
       name: data

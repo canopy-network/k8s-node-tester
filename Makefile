@@ -138,14 +138,14 @@ ansible/cluster-setup:
 	ansible-playbook -i ansible/inventory.yml ansible/playbooks/4-monitoring.yml \
 	  -e @./ansible/secrets.yml
 
-## --- helpers ---
+## --- util ---
 # ==================================================================================== #
-# HELPERS
+# UTIL
 # ==================================================================================== #
 
-## helpers/brew-install-requirements: installs kubectl, ansible and helm with brew
-.PHONY: helpers/brew-install-requirements
-helpers/brew-install-requirements:
+## util/brew-install-requirements: installs kubectl, ansible and helm with brew
+.PHONY: util/brew-install-requirements
+util/brew-install-requirements:
 	@command -v brew >/dev/null 2>&1 || { echo "Homebrew not found. Install from https://brew.sh and re-run."; exit 1; }
 	@brew list kubernetes-cli >/dev/null 2>&1 || brew install kubernetes-cli
 	@brew list helm >/dev/null 2>&1 || brew install helm
@@ -153,3 +153,10 @@ helpers/brew-install-requirements:
 	@echo "kubectl: $$(kubectl version --client 2>/dev/null | grep 'Client Version' | awk '{print $$3}' || echo not installed)"
 	@echo "helm:    $$(helm version --short 2>/dev/null || echo not installed)"
 	@echo "ansible: $$(ansible --version 2>/dev/null | head -n1 | grep -o '\[core [^]]*\]' || echo not installed)"
+
+
+## util/build-deploy: builds and deploys the given script using the tag, requires docker buildx
+.PHONY: util/build-deploy
+util/build-deploy:
+	$(call check_vars, TAG)
+	docker buildx build --push --platform linux/amd64,linux/arm64 -t $(TAG) -f ./go-scripts/Dockerfile ./go-scripts/
