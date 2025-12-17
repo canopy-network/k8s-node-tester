@@ -34,6 +34,7 @@ default:
     chain_1:
       id: 1                   # Unique chain ID
       rootChain: 1            # Root chain ID (can be itself for root chains)
+      sleepUntil: 60          # Optional: seconds to add to current time for sleepUntil epoch
       validators:
         count: 2
         stakedAmount: 1000000000
@@ -247,13 +248,17 @@ Node configuration with placeholders for dynamic values:
   ],
   "externalAddress": "NODE_ID",
   "listenAddress": "0.0.0.0:9001",
-  "dialPeers": []
+  "dialPeers": [],
+  "sleepUntil": 1734567890
 }
 ```
 
 **Placeholders:**
 - `NODE_ID` - Replace with the node's `id` from ids.json
 - `ROOT_NODE_ID` - Replace with a root chain node's `id`
+
+**Optional Fields:**
+- `sleepUntil` - Unix epoch timestamp. If `sleepUntil` is set in the chain config (in seconds), this field will contain `time.Now() + sleepUntil` as an epoch. The node will sleep until this time before starting. Omitted if not configured.
 
 **Root vs Nested Chain Config:**
 

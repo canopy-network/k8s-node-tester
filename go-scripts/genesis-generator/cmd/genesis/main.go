@@ -85,6 +85,7 @@ type ChainConfig struct {
 	Accounts   AccountsConfig        `yaml:"accounts"`
 	Delegators DelegatorsConfig      `yaml:"delegators"`
 	Committees []CommitteeAssignment `yaml:"committees"`
+	SleepUntil int                   `yaml:"sleepUntil,omitempty"` // Optional: seconds to add to current time for sleepUntil epoch
 }
 
 // AppConfig represents the configuration structure
@@ -623,7 +624,7 @@ func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, v
 	}
 }
 
-func createTemplateConfig(chainID int, rootChainID int) *lib.Config {
+func createTemplateConfig(chainID int, rootChainID int, sleepUntilSeconds int) *lib.Config {
 	var rootChain []lib.RootChain
 
 	if chainID == rootChainID {
@@ -648,12 +649,19 @@ func createTemplateConfig(chainID int, rootChainID int) *lib.Config {
 		}
 	}
 
+	// Calculate sleepUntil epoch if configured
+	var sleepUntilEpoch uint64
+	if sleepUntilSeconds != 0 {
+		sleepUntilEpoch = uint64(time.Now().Unix() + int64(sleepUntilSeconds))
+	}
+
 	return &lib.Config{
 		MainConfig: lib.MainConfig{
-			LogLevel:  "debug",
-			ChainId:   uint64(chainID),
-			RootChain: rootChain,
-			RunVDF:    false,
+			LogLevel:   "debug",
+			ChainId:    uint64(chainID),
+			RootChain:  rootChain,
+			RunVDF:     false,
+			SleepUntil: sleepUntilEpoch,
 		},
 		RPCConfig: lib.RPCConfig{
 			WalletPort:   "50000",
@@ -860,7 +868,7 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 	}
 
 	// Write config.json for this chain
-	templateConfig := createTemplateConfig(chainCfg.ID, chainCfg.RootChain)
+	templateConfig := createTemplateConfig(chainCfg.ID, chainCfg.RootChain, chainCfg.SleepUntil)
 	mustSaveAsJSON(filepath.Join(chainDir, "config.json"), templateConfig)
 
 	// Create keystore.json for this chain

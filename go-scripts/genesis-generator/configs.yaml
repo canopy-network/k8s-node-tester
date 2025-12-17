@@ -11,6 +11,7 @@ default:
     chain_1:
       id: 1
       rootChain: 1
+      sleepUntil: 0
       validators:
         count: 3
         stakedAmount: 1000000000
