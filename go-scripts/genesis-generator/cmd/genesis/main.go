@@ -114,21 +114,27 @@ type NodeIdentity struct {
 	NetAddress      string   `json:"-"` // Not exported to JSON, used for genesis
 }
 
-// MainAccount represents the main account identity for ids.json
+// MainAccount represents a main account identity for ids.json
 type MainAccount struct {
-	Address         string `json:"address"`
-	PublicKey       string `json:"publicKey"`
-	PrivateKey      string `json:"privateKey"`
-	PrivateKeyBytes []byte `json:"-"` // Not exported to JSON, used for keystore
+	Address         string `json:"address" yaml:"address"`
+	PublicKey       string `json:"publicKey" yaml:"publicKey"`
+	PrivateKey      string `json:"privateKey" yaml:"privateKey"`
+	PrivateKeyBytes []byte `json:"-" yaml:"-"` // Not exported to JSON, used for keystore
+}
+
+// MainAccountsFile represents the structure of accounts.yml
+type MainAccountsFile struct {
+	Accounts map[string]*MainAccount `yaml:"accounts"`
 }
 
 // IdsFile represents the structure of ids.json
 type IdsFile struct {
-	MainAccount *MainAccount            `json:"main-account,omitempty"`
-	Keys        map[string]NodeIdentity `json:"keys"`
+	MainAccounts map[string]*MainAccount `json:"main-accounts,omitempty"`
+	Keys         map[string]NodeIdentity `json:"keys"`
 }
 
 var configFile = "configs.yaml"
+var accountsFile = "accounts.yml"
 
 func loadConfigs() (map[string]*AppConfig, error) {
 	configFile = filepath.Join(*configPath, configFile)
@@ -143,6 +149,34 @@ func loadConfigs() (map[string]*AppConfig, error) {
 	}
 
 	return configs, nil
+}
+
+func loadMainAccounts() (map[string]*MainAccount, error) {
+	accountsFilePath := filepath.Join(*configPath, accountsFile)
+	data, err := os.ReadFile(accountsFilePath)
+	if err != nil {
+		// Return empty map if file doesn't exist (main accounts are optional)
+		if os.IsNotExist(err) {
+			return make(map[string]*MainAccount), nil
+		}
+		return nil, fmt.Errorf("failed to read accounts file '%s': %w", accountsFilePath, err)
+	}
+
+	var accountsData MainAccountsFile
+	if err := yaml.Unmarshal(data, &accountsData); err != nil {
+		return nil, fmt.Errorf("failed to parse accounts file: %w", err)
+	}
+
+	// Decode private key bytes for each account
+	for name, account := range accountsData.Accounts {
+		privateKeyBytes, err := hex.DecodeString(account.PrivateKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode private key for account '%s': %w", name, err)
+		}
+		account.PrivateKeyBytes = privateKeyBytes
+	}
+
+	return accountsData.Accounts, nil
 }
 
 func getConfig(name string) (*AppConfig, error) {
@@ -795,7 +829,7 @@ func generateChainIdentities(chainName string, chainCfg *ChainConfig, startIdx i
 // writeChainFiles writes genesis.json, config.json, and keystore.json for a chain
 // expandedValidators contains validators/delegators with correct IDs for this chain (including cross-chain)
 func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []NodeIdentity, expandedValidators []NodeIdentity,
-	accounts []*fsm.Account, mainAccount *MainAccount, password string, jsonBeautify bool, outputBaseDir string) {
+	accounts []*fsm.Account, mainAccounts map[string]*MainAccount, password string, jsonBeautify bool, outputBaseDir string) {
 
 	chainDir := filepath.Join(outputBaseDir, chainName)
 	mustSetDirectory(chainDir)
@@ -842,11 +876,13 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 		accountObj.Name("amount").Int(int(v.Amount))
 		accountObj.End()
 	}
-	// Write main account (same identity across all chains, uses chain's account amount)
-	mainAccountObj := writer.Object()
-	mainAccountObj.Name("address").String(mainAccount.Address)
-	mainAccountObj.Name("amount").Int(int(chainCfg.Accounts.Amount))
-	mainAccountObj.End()
+	// Write main accounts (same identities across all chains, uses chain's account amount)
+	for _, mainAccount := range mainAccounts {
+		mainAccountObj := writer.Object()
+		mainAccountObj.Name("address").String(mainAccount.Address)
+		mainAccountObj.Name("amount").Int(int(chainCfg.Accounts.Amount))
+		mainAccountObj.End()
+	}
 	arr.End()
 	if err := writer.Flush(); err != nil {
 		panic(err)
@@ -901,8 +937,8 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 	}
 
 	keystore := &crypto.Keystore{
-		AddressMap:  make(map[string]*crypto.EncryptedPrivateKey, len(keystoreIdentities)+1), // +1 for main account
-		NicknameMap: make(map[string]string, len(keystoreIdentities)+1),
+		AddressMap:  make(map[string]*crypto.EncryptedPrivateKey, len(keystoreIdentities)+len(mainAccounts)),
+		NicknameMap: make(map[string]string, len(keystoreIdentities)+len(mainAccounts)),
 	}
 	for _, identity := range keystoreIdentities {
 		var nickname string
@@ -919,12 +955,14 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 			panic(err)
 		}
 	}
-	// Add main account to keystore
-	_, err = keystore.ImportRaw(mainAccount.PrivateKeyBytes, password, crypto.ImportRawOpts{
-		Nickname: "main-account",
-	})
-	if err != nil {
-		panic(err)
+	// Add main accounts to keystore
+	for name, mainAccount := range mainAccounts {
+		_, err = keystore.ImportRaw(mainAccount.PrivateKeyBytes, password, crypto.ImportRawOpts{
+			Nickname: name,
+		})
+		if err != nil {
+			panic(err)
+		}
 	}
 	mustSaveAsJSON(filepath.Join(chainDir, "keystore.json"), keystore)
 
@@ -1013,14 +1051,15 @@ func main() {
 		currentDelegatorIdx -= chainCfg.Delegators.Count
 	}
 
-	// Generate main account (same identity across all chains)
-	fmt.Println("Generating main account...")
-	mainAccountKey := mustCreateKey()
-	mainAccount := &MainAccount{
-		Address:         hex.EncodeToString(mainAccountKey.PublicKey().Address().Bytes()),
-		PublicKey:       hex.EncodeToString(mainAccountKey.PublicKey().Bytes()),
-		PrivateKey:      hex.EncodeToString(mainAccountKey.Bytes()),
-		PrivateKeyBytes: mainAccountKey.Bytes(),
+	// Load main accounts from accounts.yml (same identities across all chains)
+	fmt.Println("Loading main accounts...")
+	mainAccounts, err := loadMainAccounts()
+	if err != nil {
+		fmt.Printf("Error loading main accounts: %v\n", err)
+		os.Exit(1)
+	}
+	if len(mainAccounts) > 0 {
+		fmt.Printf("Loaded %d main accounts\n", len(mainAccounts))
 	}
 
 	// Phase 1: Generate all identities for all chains
@@ -1161,7 +1200,7 @@ func main() {
 			chainIdentitiesMap[chainName],
 			chainExpandedValidators[cfg.Chains[chainName].ID],
 			chainAccountsMap[chainName],
-			mainAccount,
+			mainAccounts,
 			cfg.General.Password,
 			cfg.General.JsonBeautify,
 			outputBaseDir,
@@ -1361,8 +1400,10 @@ func main() {
 		idsFile.Keys[key] = identity
 	}
 
-	// Add main account to ids.json
-	idsFile.MainAccount = mainAccount
+	// Add main accounts to ids.json
+	if len(mainAccounts) > 0 {
+		idsFile.MainAccounts = mainAccounts
+	}
 
 	mustSaveAsJSON(filepath.Join(outputBaseDir, "ids.json"), idsFile)
 
