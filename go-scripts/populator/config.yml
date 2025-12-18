@@ -1,0 +1,37 @@
+default:
+  general:
+    baseURL: "http://localhost:50000"
+    basePort: 50000
+    accounts: 3
+    fee: 10001
+    chains: [1, 2]
+  send:
+    chains: [1, 2]
+    count: 100 # per block
+    amount: 1000
+  transactions:
+    stake:
+      - account: 1
+        amount: 1000
+        committees: [1, 2]
+        delegate: false
+        height: 1
+    editStake:
+      - account: 1
+        amount: 1100
+        committees: [1]
+        height: 2
+    pause:
+      - account: 1
+        height: 3
+    unstake:
+      - account: 1
+        height: 4
+    changeParam:
+      - account: 1
+        paramSpace: "fee"
+        paramKey: "fee"
+        paramValue: 10001
+        height: 5
+        startBlock: 10
+        endBlock: 100
