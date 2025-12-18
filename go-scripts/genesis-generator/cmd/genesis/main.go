@@ -133,7 +133,7 @@ type IdsFile struct {
 	Keys         map[string]NodeIdentity `json:"keys"`
 }
 
-var configFile = "configs.yaml"
+var configFile = "configs.yml"
 var accountsFile = "accounts.yml"
 
 func loadConfigs() (map[string]*AppConfig, error) {
@@ -970,7 +970,7 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 }
 
 var (
-	configPath = flag.String("path", "../../configs.yaml", "path to the folder containing the config file")
+	configPath = flag.String("path", "../../", "path to the folder containing the config files")
 	configName = flag.String("config", "default", "name of the config to use")
 	outputDir  = flag.String("output", "../../artifacts", "path to the folder where the output files will be saved")
 )

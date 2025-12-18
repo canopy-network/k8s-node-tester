@@ -26,14 +26,14 @@ go run main.go -config default -path /path/to/configs -output /path/to/output
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-config` | `default` | Name of the config to use |
-| `-path` | `../../configs.yaml` | Path to the folder containing the config file |
+| `-path` | `../../` | Path to the folder containing the config files |
 | `-output` | `../../artifacts` | Path to the folder where the output files will be saved |
 
 ## Configuration
 
-### configs.yaml
+### configs.yml
 
-Configuration is defined in `configs.yaml` (located at `go-scripts/genesis-generator/configs.yaml`). Each named config (e.g., `max`, `medium`, `default`) contains:
+Configuration is defined in `configs.yml` (located at `go-scripts/genesis-generator/configs.yml`). Each named config (e.g., `max`, `medium`, `default`) contains:
 
 ```yaml
 default:
@@ -372,7 +372,7 @@ Nicknames follow the pattern `node-{id}`.
 
 ## Adding Custom Configs
 
-Add a new entry to `configs.yaml`:
+Add a new entry to `configs.yml`:
 
 ```yaml
 my_custom:
