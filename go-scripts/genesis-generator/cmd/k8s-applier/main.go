@@ -135,12 +135,15 @@ func main() {
 	// get the chains
 	chains := getChains(&keys)
 	// create the service
-	if err := createServices(ctx, *namespace, *startPort, clientset, chains); err != nil {
-		log.Error("failed to create services",
-			slog.String("err", err.Error()))
-		os.Exit(1)
+	for _, chain := range chains {
+		if err := createServices(ctx, *namespace, *startPort, clientset, chain); err != nil {
+			log.Error("failed to create service",
+				slog.String("err", err.Error()))
+			os.Exit(1)
+		}
+		log.Info("applied service", slog.Int("chain", chain))
 	}
-	log.Info("configs applied", slog.Int("chains", len(folders)))
+	log.Info("configs applied")
 }
 
 // buildDataMaps reads JSON files and builds the per-file-type data maps:
@@ -282,7 +285,7 @@ func applyConfigMap(ctx context.Context, clientset *kubernetes.Clientset, namesp
 	if !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("create ConfigMap %s/%s: %w", namespace, name, err)
 	}
-	// the configmap already exists, will try to update it
+	// the configmap already exists, try to update it
 	existing, err := cmClient.Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("get ConfigMap %s/%s: %w", namespace, name, err)
@@ -309,37 +312,50 @@ func getChains(nodes *Keys) []int {
 }
 
 // createServices creates a load balancer service for each chain to use
-func createServices(ctx context.Context, namespace string, startPort int, clientset *kubernetes.Clientset, chains []int) error {
-	for _, chainID := range chains {
-		serviceName := fmt.Sprintf("rpc-lb-chain-%d", chainID)
-		port := int32(startPort + chainID)
-		service := &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      serviceName,
-				Namespace: namespace,
-				Labels: map[string]string{
-					"type": "chain",
+func createServices(ctx context.Context, namespace string, startPort int, clientset *kubernetes.Clientset, chainID int) error {
+	serviceName := fmt.Sprintf("rpc-lb-chain-%d", chainID)
+	port := int32(startPort + chainID)
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"type": "chain",
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeLoadBalancer,
+			Selector: map[string]string{
+				"app":        "node",
+				chainIdLabel: strconv.Itoa(chainID),
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Name:       portName,
+					Port:       port,
+					TargetPort: intstr.FromInt(rpcPort),
 				},
 			},
-			Spec: corev1.ServiceSpec{
-				Type: corev1.ServiceTypeLoadBalancer,
-				Selector: map[string]string{
-					"app":        "node",
-					chainIdLabel: strconv.Itoa(chainID),
-				},
-				Ports: []corev1.ServicePort{
-					{
-						Name:       portName,
-						Port:       port,
-						TargetPort: intstr.FromInt(rpcPort),
-					},
-				},
-			},
-		}
-		_, err := clientset.CoreV1().Services(namespace).Create(ctx, service, metav1.CreateOptions{})
-		if err != nil {
-			return fmt.Errorf("service creation %s: %w", serviceName, err)
-		}
+		},
+	}
+	svcClient := clientset.CoreV1().Services(namespace)
+	_, err := svcClient.Create(ctx, service, metav1.CreateOptions{})
+	if err == nil {
+		return nil
+	}
+	if !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("service creation %s: %w", serviceName, err)
+	}
+	// the service already exists, try to update it
+	existing, err := svcClient.Get(ctx, serviceName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("get service %s/%s: %w", namespace, serviceName, err)
+	}
+	// overwrite spec (this replaces the spec entirely)
+	existing.Spec = service.Spec
+	_, err = svcClient.Update(ctx, existing, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("update service %s/%s: %w", namespace, serviceName, err)
 	}
 	return nil
 }
