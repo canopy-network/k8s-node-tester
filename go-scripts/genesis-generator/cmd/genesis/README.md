@@ -26,12 +26,14 @@ go run main.go -config default -path /path/to/configs -output /path/to/output
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-config` | `default` | Name of the config to use |
-| `-path` | `../../configs.yaml` | Path to the folder containing the config file |
+| `-path` | `../../` | Path to the folder containing the config files |
 | `-output` | `../../artifacts` | Path to the folder where the output files will be saved |
 
 ## Configuration
 
-Configuration is defined in `configs.yaml` (located at `go-scripts/genesis-generator/configs.yaml`). Each named config (e.g., `max`, `medium`, `default`) contains:
+### configs.yml
+
+Configuration is defined in `configs.yml` (located at `go-scripts/genesis-generator/configs.yml`). Each named config (e.g., `max`, `medium`, `default`) contains:
 
 ```yaml
 default:
@@ -152,6 +154,41 @@ Delegators are staked entities that delegate to validators but are **not physica
 - **Root Chain**: A chain where `rootChain` equals its own `id`
 - **Nested Chain**: A chain where `rootChain` points to another chain's `id`
 
+### accounts.yml
+
+Optional file (`go-scripts/genesis-generator/accounts.yml`) defining main accounts that are shared across all chains.
+
+**Format:**
+```yaml
+accounts:
+  <account-name>:
+    address: "<hex-encoded address>"
+    publicKey: "<hex-encoded public key>"
+    privateKey: "<hex-encoded private key>"
+```
+
+**Example:**
+```yaml
+accounts:
+  main-account:
+    address: "851e90eaef1fa27debaee2c2591503bdeec1d123"
+    publicKey: "b88a5928e54cbf0a36e0b98f5bcf02de9a9a1deba..."
+    privateKey: "6c275055a4f6ae6bccf1e6552e172c7b8cc538a7..."
+  faucet:
+    address: "f96bc4553a5c6ef2506a2260d2562d4db282e879"
+    publicKey: "a8053eb0cb6d69b292a508dba9af0bcf4be5f4d9..."
+    privateKey: "44609f49a53983d11792e83833f3c390742139864..."
+```
+
+Each account will be added to:
+- `ids.json` under `main-accounts` map
+- Each chain's genesis accounts (with that chain's configured account amount)
+- Each chain's keystore (with the account name as nickname)
+
+These accounts are **not** associated with any validator, delegator, or full node.
+
+If the file doesn't exist or is empty, no main accounts will be generated.
+
 ## Output Structure
 
 Output files are generated in `artifacts/{config-name}/`:
@@ -174,14 +211,21 @@ artifacts/
 
 ### ids.json
 
-Contains all validator and full node identities in a map structure (delegators are not included), plus the main account. Multi-committee validators appear multiple times with different IDs:
+Contains all validator and full node identities in a map structure (delegators are not included), plus the main accounts. Multi-committee validators appear multiple times with different IDs:
 
 ```json
 {
-  "main-account": {
-    "address": "a1b2c3d4e5f6789012345678901234567890abcd",
-    "publicKey": "c99b7821e54cbf0a36e0b98f5bcf02de9a9a1deba...",
-    "privateKey": "7d385055a4f6ae6bccf1e6552e172c7b8cc538a7..."
+  "main-accounts": {
+    "main-account": {
+      "address": "a1b2c3d4e5f6789012345678901234567890abcd",
+      "publicKey": "c99b7821e54cbf0a36e0b98f5bcf02de9a9a1deba...",
+      "privateKey": "7d385055a4f6ae6bccf1e6552e172c7b8cc538a7..."
+    },
+    "faucet": {
+      "address": "b2c3d4e5f67890123456789012345678901234ef",
+      "publicKey": "d88b6829f65dcf1b47f1c99f6cdf13ef0b0b2efcb...",
+      "privateKey": "8e386166b5g7bf7ccd2f7663e283d8c9ddc649b8..."
+    }
   },
   "keys": {
     "node-1": {
@@ -232,14 +276,12 @@ Contains all validator and full node identities in a map structure (delegators a
 }
 ```
 
-### Main Account
+### Main Accounts
 
-The `main-account` is a special account that:
-- Has the **same identity** (address, keys) across all chains
-- Is **not associated** with any validator, delegator, or full node
-- Appears in the **accounts** of each chain's genesis with that chain's configured account amount
-- Is included in the **keystore** of all chains with nickname `main-account`
-- Does **not** have chain-specific fields (`chainId`, `rootChainId`, `rootChainNode`, `peerNode`)
+The `main-accounts` map contains accounts defined in `accounts.yml` (see [accounts.yml](#accountsyml) section). These accounts:
+- Have the **same identity** (address, keys) across all chains
+- Do **not** have chain-specific fields (`chainId`, `rootChainId`, `rootChainNode`, `peerNode`)
+- Are added to each chain's genesis accounts and keystore
 
 **Notes:**
 - `node-1` and `node-4` have the same keys but different IDs - this is a multi-committee validator appearing once for each committee
@@ -330,7 +372,7 @@ Nicknames follow the pattern `node-{id}`.
 
 ## Adding Custom Configs
 
-Add a new entry to `configs.yaml`:
+Add a new entry to `configs.yml`:
 
 ```yaml
 my_custom:
