@@ -33,7 +33,7 @@ spec:
       initContainers:
       - name: init-node
         image: canopynetwork/loadtest-init-node:v1
-        # imagePullPolicy: Always
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
         env:
           - name: NAMESPACE
             valueFrom:

@@ -1,12 +1,12 @@
 package main
 
-// k8s-applier is a command-line tool that reads canopy chain configuration files and applies them to kubernetes as configmaps.
-// it scans a directory structure containing chain-specific genesis, keystore, and config files, along with a shared ids file,
-// then creates or updates kubernetes configmaps for each file type (genesis, keystore, config, ids) in the specified namespace.
-// All of the files it looks for are created by the genesis-generator tool.
-// The tool validates chain folder naming (chain_<number>), reads and formats json files with proper indentation,
-// and uses the kubernetes client-go library to apply configmaps, creating them if they don't exist or updating them if they do.
-// configuration is controlled via flags
+// k8s-applier reads canopy chain configuration files and applies them to kubernetes as configmaps,
+// then creates load balancer services for each chain.
+// It scans chain-specific genesis, keystore, and config files, along with a shared ids file,
+// validates chain folder naming (chain_<number>), and creates or updates configmaps in the specified namespace.
+// After configmaps are applied, it creates a LoadBalancer service for each chain (rpc-lb-{chainID})
+// that selects pods with matching chain ID labels and routes to the RPC port.
+// All configuration files are created by the genesis-generator tool and configuration is controlled via flags
 
 import (
 	"context"
@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"time"
@@ -24,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -34,6 +36,10 @@ const (
 	keystoreFile  = "keystore" // keystore file name
 	configFile    = "config"   // config file name
 	idsFile       = "ids"      // ids file name
+
+	chainIdLabel = "canopy/chain-id" // pod label for the chain id, required to make chain ID service targets
+	portName     = "rpc"             // name for the rpc service port
+	rpcPort      = 50002             // port for the rpc service
 )
 
 var (
@@ -42,10 +48,22 @@ var (
 	namespace  = flag.String("namespace", "canopy", "namespace to create configmaps in")
 	kubeconfig = flag.String("kubeconfig", filepath.Join(os.Getenv("HOME"), ".kube", "config"), "path to kubeconfig")
 	timeout    = flag.Duration("timeout", 30*time.Second, "timeout for operations")
+	startPort  = flag.Int("startPort", 1000, "start port range for the services")
 
 	// validates chain folder name format as in chain_<number>
 	chainRegex = regexp.MustCompile(`^chain_(\d+)$`)
 )
+
+// Keys is the map of node keys
+type Keys struct {
+	Keys map[string]NodeKey `json:"keys"`
+}
+
+// NodeKey is an excerpt of the node key information in order to initialize the node in the go-scripts/init-node script
+type NodeKey struct {
+	Id      int `json:"id"`
+	ChainID int `json:"chainId"`
+}
 
 func main() {
 	// parse flags
@@ -106,6 +124,21 @@ func main() {
 			os.Exit(1)
 		}
 		log.Info("applied configmap", slog.String("name", configmap.Name), slog.Int("keys", len(configmap.Data)))
+	}
+	// parse the ids file
+	var keys Keys
+	if err := json.Unmarshal([]byte(dataByType[idsFile][idsFile+configFileExt]), &keys); err != nil {
+		log.Error("failed to parse ids file",
+			slog.String("err", err.Error()))
+		os.Exit(1)
+	}
+	// get the chains
+	chains := getChains(&keys)
+	// create the service
+	if err := createServices(ctx, *namespace, *startPort, clientset, chains); err != nil {
+		log.Error("failed to create services",
+			slog.String("err", err.Error()))
+		os.Exit(1)
 	}
 	log.Info("configs applied", slog.Int("chains", len(folders)))
 }
@@ -259,6 +292,55 @@ func applyConfigMap(ctx context.Context, clientset *kubernetes.Clientset, namesp
 	_, err = cmClient.Update(ctx, existing, metav1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("update ConfigMap %s/%s: %w", namespace, name, err)
+	}
+	return nil
+}
+
+// getChains iterates over the ids file and returns a map of chainID->nodes
+func getChains(nodes *Keys) []int {
+	chains := make([]int, 0)
+	for _, node := range nodes.Keys {
+		if slices.Contains(chains, node.ChainID) {
+			continue
+		}
+		chains = append(chains, node.ChainID)
+	}
+	return chains
+}
+
+// createServices creates a load balancer service for each chain to use
+func createServices(ctx context.Context, namespace string, startPort int, clientset *kubernetes.Clientset, chains []int) error {
+	for _, chainID := range chains {
+		serviceName := fmt.Sprintf("rpc-lb-chain-%d", chainID)
+		port := int32(startPort + chainID)
+
+		service := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      serviceName,
+				Namespace: namespace,
+				Labels: map[string]string{
+					"type": "chain",
+				},
+			},
+			Spec: corev1.ServiceSpec{
+				Type: corev1.ServiceTypeLoadBalancer,
+				Selector: map[string]string{
+					"app":        "node",
+					chainIdLabel: strconv.Itoa(chainID),
+				},
+				Ports: []corev1.ServicePort{
+					{
+						Name:       portName,
+						Port:       port,
+						TargetPort: intstr.FromInt(rpcPort),
+					},
+				},
+			},
+		}
+		_, err := clientset.CoreV1().Services(namespace).Create(ctx, service, metav1.CreateOptions{})
+		if err != nil {
+			return fmt.Errorf("service creation %s: %w", serviceName, err)
+		}
 	}
 	return nil
 }

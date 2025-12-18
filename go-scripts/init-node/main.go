@@ -1,11 +1,12 @@
 package main
 
 // init-node is a Kubernetes init container script that prepares canopy node configuration files.
-// it reads the pod's hostname to determine its index, looks up the corresponding node key from a keys.json file,
+// It reads the pod's hostname to determine its index, looks up the corresponding node key from an ids.json file,
 // then copies and configures the appropriate genesis, keystore, config, and validator_key files for that specific node.
-// the script performs template substitution in the config file, replacing placeholders like |NODE_ID|, |ROOT_NODE_ID|,
-// and |ROOT_NODE_PUBLIC_KEY| with actual values based on the node's chain configuration and root chain node information.
-// all configuration files are written to /root/.canopy for the main canopy container to use.
+// The script unmarshals the config file into a Config struct and programmatically modifies it by setting root chain URLs,
+// external addresses, and dial peers based on the node's chain configuration and peer information.
+// After modification, the config is marshaled back to JSON and written to /root/.canopy for the main canopy container to use.
+// Finally, the script uses the Kubernetes API to label the pod with its chain ID for service targeting.
 
 import (
 	"context"
