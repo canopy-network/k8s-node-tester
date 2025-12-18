@@ -2327,7 +2327,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "builder",
-              "expr": "sum by(pod) (rate(canopy_block_processing_time_sum{pod=~\"$node\"}[$__rate_interval])) / (sum by(pod) (rate(canopy_block_processing_time_count{pod=~\"$node\"}[$__rate_interval])))",
+              "expr": "rate(canopy_block_processing_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_block_processing_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -2431,7 +2431,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "code",
-              "expr": "rate(canopy_root_chain_info_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_root_chain_info_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_root_chain_info_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -3081,7 +3081,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "builder",
-              "expr": "rate(canopy_bft_election_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_election_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_election_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "__auto",
               "range": true,
               "refId": "A"
@@ -3177,7 +3177,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "builder",
-              "expr": "rate(canopy_bft_election_vote_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_election_vote_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_election_vote_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -3273,7 +3273,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "builder",
-              "expr": "rate(canopy_bft_propose_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_propose_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_propose_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -3369,7 +3369,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "code",
-              "expr": "rate(canopy_bft_propose_vote_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_propose_vote_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_propose_vote_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -3465,7 +3465,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "code",
-              "expr": "rate(canopy_bft_precommit_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_precommit_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_precommit_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -3561,7 +3561,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "builder",
-              "expr": "rate(canopy_bft_precommit_vote_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_precommit_vote_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_precommit_vote_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -3657,7 +3657,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "code",
-              "expr": "rate(canopy_bft_commit_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_commit_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_commit_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -3753,7 +3753,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "code",
-              "expr": "rate(canopy_bft_commit_process_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_commit_process_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_commit_process_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
