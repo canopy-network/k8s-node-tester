@@ -313,7 +313,6 @@ func createServices(ctx context.Context, namespace string, startPort int, client
 	for _, chainID := range chains {
 		serviceName := fmt.Sprintf("rpc-lb-chain-%d", chainID)
 		port := int32(startPort + chainID)
-
 		service := &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      serviceName,
