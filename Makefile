@@ -30,6 +30,7 @@ test/start:
 test/destroy:
 	helm uninstall canopy -n canopy
 	kubectl delete configmap config genesis ids keystore -n canopy
+	kubectl delete svc -l type=chain -n canopy
 
 ## --- manual setup ---
 # ==================================================================================== #
