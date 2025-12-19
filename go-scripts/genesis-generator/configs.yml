@@ -28,7 +28,9 @@ default:
         amount: 100
       committees:
         - id: 2
-          validatorCount: 1
+          repeatedIdentityValidatorCount: 1
+          repeatedIdentityDelegatorCount: 0
+          validatorCount: 0
           delegatorCount: 0
     chain_2:
       id: 2
@@ -105,8 +107,10 @@ medium:
         amount: 1000000
       committees:
         - id: 2
-          validatorCount: 10
-          delegatorCount: 5
+          repeatedIdentityValidatorCount: 10
+          repeatedIdentityDelegatorCount: 5
+          validatorCount: 0
+          delegatorCount: 0
     chain_2:
       id: 2
       rootChain: 1
@@ -154,8 +158,10 @@ max:
         amount: 1000000
       committees:
         - id: 2
-          validatorCount: 50
-          delegatorCount: 20
+          repeatedIdentityValidatorCount: 50
+          repeatedIdentityDelegatorCount: 20
+          validatorCount: 0
+          delegatorCount: 0
     chain_2:
       id: 2
       rootChain: 1
