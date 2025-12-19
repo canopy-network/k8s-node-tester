@@ -37,18 +37,21 @@ const (
 	configFile    = "config"   // config file name
 	idsFile       = "ids"      // ids file name
 
-	chainIdLabel = "canopy/chain-id" // pod label for the chain id, required to make chain ID service targets
-	portName     = "rpc"             // name for the rpc service port
-	rpcPort      = 50002             // port for the rpc service
+	chainIdLabel     = "canopy/chain-id" // pod label for the chain id, required to make chain ID service targets
+	rpcPortName      = "rpc"             // name for the rpc service port
+	rpcPort          = 50002             // port for the rpc service
+	adminRpcPortName = "admin-rpc"       // name for the admin rpc service port
+	adminRpcPort     = 50003             // port for the admin rpc service
 )
 
 var (
-	path       = flag.String("path", "../../artifacts", "path to the folders containing the config files")
-	config     = flag.String("config", "default", "folder name of the specific config")
-	namespace  = flag.String("namespace", "canopy", "namespace to create configmaps in")
-	kubeconfig = flag.String("kubeconfig", filepath.Join(os.Getenv("HOME"), ".kube", "config"), "path to kubeconfig")
-	timeout    = flag.Duration("timeout", 30*time.Second, "timeout for operations")
-	startPort  = flag.Int("startPort", 1000, "start port range for the services")
+	path              = flag.String("path", "../../artifacts", "path to the folders containing the config files")
+	config            = flag.String("config", "default", "folder name of the specific config")
+	namespace         = flag.String("namespace", "canopy", "namespace to create configmaps in")
+	kubeconfig        = flag.String("kubeconfig", filepath.Join(os.Getenv("HOME"), ".kube", "config"), "path to kubeconfig")
+	timeout           = flag.Duration("timeout", 30*time.Second, "timeout for operations")
+	startRPCPort      = flag.Int("startRPCPort", 1000, "start port range for the rpc urls")
+	startAdminRpcPort = flag.Int("startAdminRPCPort", 2000, "start port range for the admin rpc urls")
 
 	// validates chain folder name format as in chain_<number>
 	chainRegex = regexp.MustCompile(`^chain_(\d+)$`)
@@ -136,7 +139,7 @@ func main() {
 	chains := getChains(&keys)
 	// create the service
 	for _, chain := range chains {
-		if err := createServices(ctx, *namespace, *startPort, clientset, chain); err != nil {
+		if err := createServices(ctx, *namespace, *startRPCPort, *startAdminRpcPort, clientset, chain); err != nil {
 			log.Error("failed to create service",
 				slog.String("err", err.Error()))
 			os.Exit(1)
@@ -312,9 +315,11 @@ func getChains(nodes *Keys) []int {
 }
 
 // createServices creates a load balancer service for each chain to use
-func createServices(ctx context.Context, namespace string, startPort int, clientset *kubernetes.Clientset, chainID int) error {
+func createServices(ctx context.Context, namespace string, startRPCPort, startAdminPort int,
+	clientset *kubernetes.Clientset, chainID int) error {
 	serviceName := fmt.Sprintf("rpc-lb-chain-%d", chainID)
-	port := int32(startPort + chainID)
+	port := int32(startRPCPort + chainID)
+	adminPort := int32(startAdminPort + chainID)
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
@@ -331,9 +336,14 @@ func createServices(ctx context.Context, namespace string, startPort int, client
 			},
 			Ports: []corev1.ServicePort{
 				{
-					Name:       portName,
+					Name:       rpcPortName,
 					Port:       port,
 					TargetPort: intstr.FromInt(rpcPort),
+				},
+				{
+					Name:       adminRpcPortName,
+					Port:       adminPort,
+					TargetPort: intstr.FromInt(adminRpcPort),
 				},
 			},
 		},
