@@ -131,7 +131,8 @@ type MainAccount struct {
 	Address         string `json:"address" yaml:"address"`
 	PublicKey       string `json:"publicKey" yaml:"publicKey"`
 	PrivateKey      string `json:"privateKey" yaml:"privateKey"`
-	PrivateKeyBytes []byte `json:"-" yaml:"-"` // Not exported to JSON, used for keystore
+	Password        string `json:"password" yaml:"-"` // Set from config, not from accounts.yml
+	PrivateKeyBytes []byte `json:"-" yaml:"-"`        // Not exported to JSON, used for keystore
 }
 
 // MainAccountsFile represents the structure of accounts.yml
@@ -1274,6 +1275,10 @@ func main() {
 	}
 	if len(mainAccounts) > 0 {
 		fmt.Printf("Loaded %d main accounts\n", len(mainAccounts))
+		// Set password from config for each main account
+		for _, account := range mainAccounts {
+			account.Password = cfg.General.Password
+		}
 	}
 
 	// Phase 1: Generate all identities for all chains
