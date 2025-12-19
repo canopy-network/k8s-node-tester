@@ -255,12 +255,14 @@ Contains all validator and full node identities in a map structure (delegators a
     "main-account": {
       "address": "a1b2c3d4e5f6789012345678901234567890abcd",
       "publicKey": "c99b7821e54cbf0a36e0b98f5bcf02de9a9a1deba...",
-      "privateKey": "7d385055a4f6ae6bccf1e6552e172c7b8cc538a7..."
+      "privateKey": "7d385055a4f6ae6bccf1e6552e172c7b8cc538a7...",
+      "password": "your_password"
     },
     "faucet": {
       "address": "b2c3d4e5f67890123456789012345678901234ef",
       "publicKey": "d88b6829f65dcf1b47f1c99f6cdf13ef0b0b2efcb...",
-      "privateKey": "8e386166b5g7bf7ccd2f7663e283d8c9ddc649b8..."
+      "privateKey": "8e386166b5g7bf7ccd2f7663e283d8c9ddc649b8...",
+      "password": "your_password"
     }
   },
   "keys": {
