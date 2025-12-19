@@ -42,7 +42,7 @@ func main() {
 		os.Exit(1)
 	}
 	// setup the block notifier
-	notifier := NotifyNewBlock(log, profile.General.BaseRpcURL, timeout, blockCheckInterval, retries)
+	notifier := NotifyNewBlock(log, profile, timeout, blockCheckInterval, retries)
 
 	for height := range notifier {
 		log.Info("new block", "height", height)
@@ -135,16 +135,19 @@ func filterDue[T DueAt](items []T, height int) []Tx {
 }
 
 // NotifyNewBlock notifies the caller each time a new block is created
-func NotifyNewBlock(log *slog.Logger, baseURL string, timeout time.Duration,
+func NotifyNewBlock(log *slog.Logger, profile *Profile, timeout time.Duration,
 	checkInterval time.Duration, maxRetries int) <-chan int {
-	// to avoid sending data to genesis blocks, avoid sending txs to genesis blocks
-	lastHeight := 1
 	type HeightResp struct {
 		Height int `json:"height"`
 	}
 	heightCh := make(chan int)
+
 	go func() {
+		defer close(heightCh)
+		// to avoid sending data to genesis blocks, avoid sending txs to genesis blocks
+		lastHeight := 1
 		retries := 0
+		initialized := false
 		// helper function to handle errors
 		handleErr := func(msg string, err error) (shouldContinue bool) {
 			retries++
@@ -154,17 +157,35 @@ func NotifyNewBlock(log *slog.Logger, baseURL string, timeout time.Duration,
 				slog.Int("maxRetries", maxRetries),
 			)
 			if retries >= maxRetries {
-				close(heightCh)
 				return false
 			}
 			return true
 		}
+		// handleHeight decides what to emit and whether to stop
+		counter := 0
+		handleHeight := func(height int) (stop bool, h int) {
+			// emit actual chain height until it exceeds MaxHeight
+			max := profile.General.MaxHeight
+			if !profile.General.Incremental {
+				if height <= max {
+					return false, height
+				}
+				return true, height
+			}
+			// incremental mode: height becomes a 0 based counter, incremented by 1 per block
+			// emit the counter value
+			counter++
+			if counter <= max {
+				return false, counter
+			}
+			return true, counter
+		}
 		// check for new heights on each tick
 		for range time.Tick(checkInterval) {
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
-			defer cancel()
 			// get height
-			got, err := post(ctx, baseURL+queryHeightURL, nil)
+			got, err := post(ctx, profile.General.BaseRpcURL+queryHeightURL, nil)
+			cancel()
 			if err != nil {
 				if !handleErr("wait block: failed to unmarshal height", err) {
 					return
@@ -182,12 +203,22 @@ func NotifyNewBlock(log *slog.Logger, baseURL string, timeout time.Duration,
 			}
 			// reset retries on success
 			retries = 0
-			// check for new heights
+			// ignore genesis or non-increasing heights
 			if resp.Height == 0 || resp.Height <= lastHeight {
 				continue
 			}
 			lastHeight = resp.Height
-			heightCh <- resp.Height
+			// wait for the next block on the very first iteration so is always notified on a "new block"
+			if !initialized {
+				initialized = true
+				continue
+			}
+			// handle the new height
+			stop, height := handleHeight(resp.Height)
+			if stop {
+				return
+			}
+			heightCh <- height
 		}
 	}()
 	// exit

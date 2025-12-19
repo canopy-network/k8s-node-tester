@@ -48,6 +48,7 @@ type Transactions struct {
 type General struct {
 	BaseRpcURL      string `yaml:"baseRpcURL"`
 	BaseAdminRpcURL string `yaml:"baseAdminRpcURL"`
+	Incremental     bool   `yaml:"incremental"`
 	BasePort        int    `yaml:"basePort"`
 	Accounts        int    `yaml:"accounts"`
 	Fee             int64  `yaml:"fee"`
