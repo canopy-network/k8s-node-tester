@@ -11,11 +11,13 @@ import (
 
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
+	"github.com/canopy-network/k8s-node-tester/go-scripts/shared"
 )
 
 type TxType string
 
 const (
+	TxSend        TxType = "send"
 	TxStake       TxType = "stake"
 	TxEditStake   TxType = "editStake"
 	TxPause       TxType = "pause"
@@ -72,8 +74,16 @@ type amount struct {
 	Amount uint64 `yaml:"amount"`
 }
 
-type Committees struct {
+type committees struct {
 	Committees []int `yaml:"committees"`
+}
+
+func (c committees) String() string {
+	strSlice := make([]string, len(c.Committees))
+	for i, committee := range c.Committees {
+		strSlice[i] = fmt.Sprintf("%d", committee)
+	}
+	return strings.Join(strSlice, ",")
 }
 
 // SendTx Tx is handled separately
@@ -88,11 +98,12 @@ type SendTx struct {
 
 // StakeTx represents a transaction to stake a validator/delegator
 type StakeTx struct {
-	height     `yaml:",inline"`
-	account    `yaml:",inline"`
-	amount     `yaml:",inline"`
-	Committees `yaml:",inline"`
-	Delegate   bool `yaml:"delegate"`
+	height          `yaml:",inline"`
+	account         `yaml:",inline"`
+	amount          `yaml:",inline"`
+	committees      `yaml:",inline"`
+	Delegate        bool `yaml:"delegate"`
+	EarlyWithdrawal bool `yaml:"earlyWithdrawal"`
 }
 
 // EditStakeTx represents a transaction to edit a validator/delegator's stake
@@ -100,7 +111,7 @@ type EditStakeTx struct {
 	height     `yaml:",inline"`
 	account    `yaml:",inline"`
 	amount     `yaml:",inline"`
-	Committees `yaml:",inline"`
+	committees `yaml:",inline"`
 }
 
 // PauseTx represents a transaction to pause a validator
@@ -133,7 +144,9 @@ type Tx interface {
 	// Route returns the full URL for the transaction
 	Route(baseURL string) string
 	// Do executes the transaction
-	Do(ctx context.Context, request TxRequest, baseURL string) (string, error)
+	Do(ctx context.Context, request *TxRequest, baseURL string) (string, error)
+	Sender() int   // Idx of the account to use to send
+	Receiver() int // Idx of the account to receive
 }
 
 // DueAt is the interface to represent a transaction that is due at a specific height
@@ -143,6 +156,7 @@ type DueAt interface {
 }
 
 // Kind implementations
+func (SendTx) Kind() TxType        { return TxSend }
 func (StakeTx) Kind() TxType       { return TxStake }
 func (EditStakeTx) Kind() TxType   { return TxEditStake }
 func (PauseTx) Kind() TxType       { return TxPause }
@@ -166,8 +180,24 @@ func (tx PauseTx) Route(baseURL string) string       { return baseURL + "/v1/adm
 func (tx UnstakeTx) Route(baseURL string) string     { return baseURL + "/v1/admin/tx-unstake" }
 func (tx ChangeParamTx) Route(baseURL string) string { return baseURL + "/v1/admin/tx-change-param" }
 
+// Sender implementation
+func (tx SendTx) Sender() int        { return 0 } // does not have a fixed sender
+func (tx StakeTx) Sender() int       { return tx.From }
+func (tx EditStakeTx) Sender() int   { return tx.From }
+func (tx PauseTx) Sender() int       { return tx.From }
+func (tx UnstakeTx) Sender() int     { return tx.From }
+func (tx ChangeParamTx) Sender() int { return tx.From }
+
+// Receiver implementation
+func (tx SendTx) Receiver() int        { return 0 } // does not have a fixed receiver
+func (tx StakeTx) Receiver() int       { return tx.To }
+func (tx EditStakeTx) Receiver() int   { return tx.To }
+func (tx PauseTx) Receiver() int       { return tx.To }
+func (tx UnstakeTx) Receiver() int     { return tx.To }
+func (tx ChangeParamTx) Receiver() int { return tx.To }
+
 // Do sends a send transaction
-func (tx SendTx) Do(ctx context.Context, req TxRequest, baseURL string) (string, error) {
+func (tx SendTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
 	return postTx(ctx, tx.Route(baseURL), txRequest{
 		Amount:   tx.Amount,
 		Address:  req.From.String(),
@@ -179,28 +209,61 @@ func (tx SendTx) Do(ctx context.Context, req TxRequest, baseURL string) (string,
 }
 
 // Do sends a stake transaction
-func (tx StakeTx) Do(ctx context.Context, req TxRequest, baseURL string) (string, error) {
-	return postTx(ctx, tx.Route(baseURL), txRequest{})
+func (tx StakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
+	return postTx(ctx, tx.Route(baseURL), txRequest{
+		Amount:          tx.Amount,
+		Address:         req.From.String(),
+		Output:          req.To.String(),
+		Password:        req.Password,
+		Fee:             req.Fee,
+		Delegate:        tx.Delegate,
+		Committees:      tx.committees.String(),
+		EarlyWithdrawal: tx.EarlyWithdrawal,
+		Submit:          true,
+	})
 }
 
 // Do sends an edit stake transaction
-func (tx EditStakeTx) Do(ctx context.Context, req TxRequest, baseURL string) (string, error) {
+func (tx EditStakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
 	return postTx(ctx, tx.Route(baseURL), txRequest{})
 }
 
 // Do sends a pause transaction
-func (tx PauseTx) Do(ctx context.Context, req TxRequest, baseURL string) (string, error) {
+func (tx PauseTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
 	return postTx(ctx, tx.Route(baseURL), txRequest{})
 }
 
 // Do sends an unstake transaction
-func (tx UnstakeTx) Do(ctx context.Context, req TxRequest, baseURL string) (string, error) {
+func (tx UnstakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
 	return postTx(ctx, tx.Route(baseURL), txRequest{})
 }
 
 // Do sends a change parameter transaction
-func (tx ChangeParamTx) Do(ctx context.Context, req TxRequest, baseURL string) (string, error) {
+func (tx ChangeParamTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
 	return postTx(ctx, tx.Route(baseURL), txRequest{})
+}
+
+// BuildTxRequest constructs a TxRequest with the required fields
+func BuildTxRequest(from, to shared.Account, config General) (*TxRequest, error) {
+	fromAddr, err := crypto.NewAddressFromString(from.Address)
+	if err != nil {
+		return nil, fmt.Errorf("create FROM address: %w", err)
+	}
+	toAddr, err := crypto.NewAddressFromString(to.Address)
+	if err != nil {
+		return nil, fmt.Errorf("create TO address: %w", err)
+	}
+	fee := baseFee
+	if config.Fee != 0 {
+		fee = config.Fee
+	}
+	req := TxRequest{
+		Fee:      fee,
+		Password: from.Password,
+		From:     fromAddr,
+		To:       toAddr,
+	}
+	return &req, nil
 }
 
 func postTx(ctx context.Context, url string, obj any) (string, error) {

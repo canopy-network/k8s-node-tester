@@ -12,36 +12,38 @@ default:
     waitForNewBlock: false
   send:
     chains: [1, 2]
-    count: 100 # per block
+    count: 10 # per block
     amount: 10
     concurrency: 10
   transactions:
     stake:
-      - from: 1
-        to: 2
+      - from: 0
+        to: 1
         amount: 1000
         committees: [1, 2]
-        delegate: false
+        delegate: true
         height: 1
-    editStake:
-      - from: 1
-        to: 2
-        amount: 1100
-        committees: [1]
-        height: 2
-    pause:
-      - from: 1
-        to: 2
-        height: 3
-    unstake:
-      - from: 1
-        to: 2
-        height: 4
-    changeParam:
-      - from: 1
-        paramSpace: "fee"
-        paramKey: "fee"
-        paramValue: 10001
-        height: 5
-        startBlock: 10
-        endBlock: 100
+        netAddress: "tcp://fake.com"
+        earlyWithdrawal: true
+    # editStake:
+    #   - from: 1
+    #     to: 2
+    #     amount: 1100
+    #     committees: [1]
+    #     height: 2
+    # pause:
+    #   - from: 1
+    #     to: 2
+    #     height: 3
+    # unstake:
+    #   - from: 1
+    #     to: 2
+    #     height: 4
+    # changeParam:
+    #   - from: 1
+    #     paramSpace: "fee"
+    #     paramKey: "fee"
+    #     paramValue: 10001
+    #     height: 5
+    #     startBlock: 10
+    #     endBlock: 100

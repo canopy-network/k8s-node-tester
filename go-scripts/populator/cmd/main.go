@@ -12,7 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/k8s-node-tester/go-scripts/shared"
 	"golang.org/x/sync/semaphore"
 	"gopkg.in/yaml.v3"
@@ -48,50 +47,30 @@ func main() {
 	}
 	// setup the block notifier
 	notifier := NotifyNewBlock(log, profile, timeout, blockCheckInterval, retries)
-	// start the send handler
+	// fan-out: listen for new blocks to broadcast
+	b := NewBroadcaster(notifier, 2)
+	// start the send tx handlers
 	wg := sync.WaitGroup{}
 	wg.Go(func() {
-		HandleSends(log, notifier, profile, accounts)
+		HandleTxSends(log, b.Channels()[0], profile, accounts)
+	})
+	wg.Go(func() {
+		HandleTxs(log, b.Channels()[1], profile, accounts)
 	})
 	wg.Wait()
 	log.Info("finished running populator")
 }
 
-func HandleSends(log *slog.Logger, notifier <-chan int, profile *Profile, accounts []shared.Account) {
-	sendTx := profile.Send
-	config := profile.General
-
-	doSendTx := func() (hash string, err error) {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		from, err := crypto.NewAddressFromString(accounts[0].Address)
-		if err != nil {
-			return "", fmt.Errorf("create FROM private key: %w", err)
-		}
-		to, err := crypto.NewAddressFromString(accounts[1].Address)
-		if err != nil {
-			return "", fmt.Errorf("create TO private key: %w", err)
-		}
-		fee := baseFee
-		if config.Fee != 0 {
-			fee = config.Fee
-		}
-		hash, err = profile.Send.Do(ctx, TxRequest{
-			Fee:      fee,
-			Password: accounts[0].Password,
-			From:     from,
-			To:       to,
-		}, config.BaseAdminRpcURL)
-		if err != nil {
-			return "", fmt.Errorf("send transaction: %w", err)
-		}
-		return hash, nil
+// HandleTxSends handles the sending of bulk `send` transactions per block
+func HandleTxSends(log *slog.Logger, notifier <-chan int, profile *Profile, accounts []shared.Account) {
+	if profile.Send.Count == 0 {
+		return
 	}
-
 	for height := range notifier {
-		log.Info("sending txs", slog.Int("count", sendTx.Count), slog.Int("height", height))
-		success, errors := RunConcurrentJobs(context.Background(),
-			sendTx.Count, sendTx.Concurrency, doSendTx, log)
+		send := func() (string, error) { return sendTx(profile.Send, accounts[0], accounts[1], profile.General) }
+		log.Info("sending txs", slog.Int("count", profile.Send.Count), slog.Int("height", height))
+		success, errors := RunConcurrentTxs(context.Background(),
+			profile.Send.Count, profile.Send.Concurrency, send, log)
 		if errors > 0 {
 			log.Warn("errors sending txs",
 				slog.Int("errors", errors),
@@ -102,9 +81,31 @@ func HandleSends(log *slog.Logger, notifier <-chan int, profile *Profile, accoun
 		}
 		log.Info("success sending txs",
 			slog.Int("success", success),
-			slog.Int("count", sendTx.Count),
+			slog.Int("count", profile.Send.Count),
 			slog.Int("height", height),
 		)
+	}
+}
+
+// HandleTxs handles the sending of most transactions per defined block
+func HandleTxs(log *slog.Logger, notifier <-chan int, profile *Profile, accounts []shared.Account) {
+	for height := range notifier {
+		// gather all the transactions for the current
+		txs := GatherAtHeight(profile, height)
+		for _, tx := range txs {
+			log.Info("sending transaction",
+				slog.String("type", string(tx.Kind())), slog.Int("height", height))
+			// send the transaction
+			hash, err := sendTx(tx, accounts[tx.Sender()], accounts[tx.Receiver()], profile.General)
+			if err != nil {
+				log.Error("failed to send transaction",
+					slog.String("type", string(tx.Kind())),
+					slog.Int("height", height), slog.String("error", err.Error()))
+				continue
+			}
+			log.Info("successfully sent transaction", slog.String("type",
+				string(tx.Kind())), slog.Int("height", height), slog.String("hash", hash))
+		}
 	}
 }
 
@@ -146,28 +147,6 @@ func LoadConfigs(configPath, profile string, accountsPath string) (*Profile, []s
 			pf.General.Accounts, len(accounts))
 	}
 	return &pf, accounts, nil
-}
-
-// ExecuteScheduledAtHeight runs scheduled txs for the height
-func ExecuteScheduledAtHeight(ctx context.Context, profile *Profile, height int) error {
-	due := GatherAtHeight(profile, height)
-	for _, tx := range due {
-		switch v := tx.(type) {
-		case StakeTx:
-			// doStake(ctx, v)
-		case EditStakeTx:
-			// doEditStake(ctx, v)
-		case PauseTx:
-			// doPause(ctx, v)
-		case UnstakeTx:
-			// doUnstake(ctx, v)
-		case ChangeParamTx:
-			// doChangeParam(ctx, v)
-		default:
-			return fmt.Errorf("unhandled tx: %T", v)
-		}
-	}
-	return nil
 }
 
 // GatherAtHeight returns all scheduled transactions due at height
@@ -284,9 +263,9 @@ func NotifyNewBlock(log *slog.Logger, profile *Profile, timeout time.Duration,
 	return heightCh
 }
 
-// RunConcurrentJobs runs up to concurrency concurrent tx for a total of count.
+// RunConcurrentTxs runs up to concurrency concurrent tx for a total of count.
 // The do function should perform the work for a single job.
-func RunConcurrentJobs(ctx context.Context, count, concurrency int,
+func RunConcurrentTxs(ctx context.Context, count, concurrency int,
 	do func() (string, error), log *slog.Logger) (int, int) {
 	if concurrency <= 0 {
 		concurrency = 1
@@ -326,4 +305,19 @@ func RunConcurrentJobs(ctx context.Context, count, concurrency int,
 
 	wg.Wait()
 	return int(successes.Load()), int(errors.Load())
+}
+
+// sendTx is an util to build and send a transaction
+func sendTx(tx Tx, from, to shared.Account, config General) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	req, err := BuildTxRequest(from, to, config)
+	if err != nil {
+		return "", fmt.Errorf("build tx request: %w", err)
+	}
+	hash, err := tx.Do(ctx, req, config.BaseAdminRpcURL)
+	if err != nil {
+		return "", fmt.Errorf("send transaction: %w", err)
+	}
+	return hash, nil
 }
