@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/canopy-network/k8s-node-tester/go-scripts/shared"
 	"gopkg.in/yaml.v3"
@@ -20,7 +21,12 @@ var (
 )
 
 const (
-	baseFee = 10_000
+	baseFee        = 10_000             // Base fee for transactions
+	queryHeightURL = "/v1/query/height" // URL for querying the height of the blockchain
+	// TODO: should this be configurable?
+	retries            = 5                      // Number of retries for failed requests
+	timeout            = 5 * time.Second        // Timeout for each request
+	blockCheckInterval = 500 * time.Millisecond // Interval to check for new blocks
 )
 
 // go run *.go --accounts ../../genesis-generator/artifacts/default/ids.json
@@ -30,10 +36,16 @@ func main() {
 	// create default logger
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	// load the accounts and config
-	_, _, err := LoadConfigs(*path, *profileConfig, *accounts)
+	profile, _, err := LoadConfigs(*path, *profileConfig, *accounts)
 	if err != nil {
 		log.Error("failed to load configs", "error", err)
 		os.Exit(1)
+	}
+	// setup the block notifier
+	notifier := NotifyNewBlock(log, profile.General.BaseRpcURL, timeout, blockCheckInterval, retries)
+
+	for height := range notifier {
+		log.Info("new block", "height", height)
 	}
 }
 
@@ -120,4 +132,64 @@ func filterDue[T DueAt](items []T, height int) []Tx {
 		}
 	}
 	return out
+}
+
+// NotifyNewBlock notifies the caller each time a new block is created
+func NotifyNewBlock(log *slog.Logger, baseURL string, timeout time.Duration,
+	checkInterval time.Duration, maxRetries int) <-chan int {
+	// to avoid sending data to genesis blocks, avoid sending txs to genesis blocks
+	lastHeight := 1
+	type HeightResp struct {
+		Height int `json:"height"`
+	}
+	heightCh := make(chan int)
+	go func() {
+		retries := 0
+		// helper function to handle errors
+		handleErr := func(msg string, err error) (shouldContinue bool) {
+			retries++
+			log.Error(msg,
+				slog.String("err", err.Error()),
+				slog.Int("retry", retries),
+				slog.Int("maxRetries", maxRetries),
+			)
+			if retries >= maxRetries {
+				close(heightCh)
+				return false
+			}
+			return true
+		}
+		// check for new heights on each tick
+		for range time.Tick(checkInterval) {
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			defer cancel()
+			// get height
+			got, err := post(ctx, baseURL+queryHeightURL, nil)
+			if err != nil {
+				if !handleErr("wait block: failed to unmarshal height", err) {
+					return
+				}
+				continue
+			}
+			// unmarshal response
+			resp := &HeightResp{}
+			err = json.Unmarshal(got, resp)
+			if err != nil {
+				if !handleErr("wait block: failed to unmarshal height", err) {
+					return
+				}
+				continue
+			}
+			// reset retries on success
+			retries = 0
+			// check for new heights
+			if resp.Height == 0 || resp.Height <= lastHeight {
+				continue
+			}
+			lastHeight = resp.Height
+			heightCh <- resp.Height
+		}
+	}()
+	// exit
+	return heightCh
 }

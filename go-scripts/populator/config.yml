@@ -1,11 +1,13 @@
 default:
   general:
-    baseURL: "http://localhost:50000"
+    baseRpcURL: "http://localhost"
+    baseAdminRpcURL: "http://localhost"
     basePort: 50000
     accounts: 3
     fee: 10001
     chains: [1, 2]
     password: "pablito"
+    incremental: false
     maxHeight: 100
   send:
     chains: [1, 2]

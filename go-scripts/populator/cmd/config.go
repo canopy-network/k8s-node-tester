@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -45,12 +46,14 @@ type Transactions struct {
 
 // General populator configuration
 type General struct {
-	BaseURL   string `yaml:"baseURL"`
-	BasePort  int    `yaml:"basePort"`
-	Accounts  int    `yaml:"accounts"`
-	Fee       int64  `yaml:"fee"`
-	Chains    []int  `yaml:"chains"`
-	MaxHeight int    `yaml:"maxHeight"`
+	BaseRpcURL      string `yaml:"baseRpcURL"`
+	BaseAdminRpcURL string `yaml:"baseAdminRpcURL"`
+	BasePort        int    `yaml:"basePort"`
+	Accounts        int    `yaml:"accounts"`
+	Fee             int64  `yaml:"fee"`
+	Chains          []int  `yaml:"chains"`
+	MinHeight       int    `yaml:"minHeight"`
+	MaxHeight       int    `yaml:"maxHeight"`
 }
 
 // Common fields
@@ -128,7 +131,7 @@ type Tx interface {
 	// Route returns the full URL for the transaction
 	Route(baseURL string) string
 	// Do executes the transaction
-	Do(request TxRequest, baseURL string) (string, error)
+	Do(ctx context.Context, request TxRequest, baseURL string) (string, error)
 }
 
 // DueAt is the interface to represent a transaction that is due at a specific height
@@ -162,8 +165,8 @@ func (tx UnstakeTx) Route(baseURL string) string     { return baseURL + "/v1/adm
 func (tx ChangeParamTx) Route(baseURL string) string { return baseURL + "/v1/admin/tx-change-param" }
 
 // Do sends a send transaction
-func (tx SendTx) Do(req TxRequest, baseURL string) (string, error) {
-	return postTx(tx.Route(baseURL), txRequest{
+func (tx SendTx) Do(ctx context.Context, req TxRequest, baseURL string) (string, error) {
+	return postTx(ctx, tx.Route(baseURL), txRequest{
 		Amount:   tx.Amount,
 		Address:  req.From.String(),
 		Output:   req.From.String(),
@@ -174,48 +177,48 @@ func (tx SendTx) Do(req TxRequest, baseURL string) (string, error) {
 }
 
 // Do sends a stake transaction
-func (tx StakeTx) Do(req TxRequest, baseURL string) (string, error) {
-	return postTx(tx.Route(baseURL), txRequest{})
+func (tx StakeTx) Do(ctx context.Context, req TxRequest, baseURL string) (string, error) {
+	return postTx(ctx, tx.Route(baseURL), txRequest{})
 }
 
 // Do sends an edit stake transaction
-func (tx EditStakeTx) Do(req TxRequest, baseURL string) (string, error) {
-	return postTx(tx.Route(baseURL), txRequest{})
+func (tx EditStakeTx) Do(ctx context.Context, req TxRequest, baseURL string) (string, error) {
+	return postTx(ctx, tx.Route(baseURL), txRequest{})
 }
 
 // Do sends a pause transaction
-func (tx PauseTx) Do(req TxRequest, baseURL string) (string, error) {
-	return postTx(tx.Route(baseURL), txRequest{})
+func (tx PauseTx) Do(ctx context.Context, req TxRequest, baseURL string) (string, error) {
+	return postTx(ctx, tx.Route(baseURL), txRequest{})
 }
 
 // Do sends an unstake transaction
-func (tx UnstakeTx) Do(req TxRequest, baseURL string) (string, error) {
-	return postTx(tx.Route(baseURL), txRequest{})
+func (tx UnstakeTx) Do(ctx context.Context, req TxRequest, baseURL string) (string, error) {
+	return postTx(ctx, tx.Route(baseURL), txRequest{})
 }
 
 // Do sends a change parameter transaction
-func (tx ChangeParamTx) Do(req TxRequest, baseURL string) (string, error) {
-	return postTx(tx.Route(baseURL), txRequest{})
+func (tx ChangeParamTx) Do(ctx context.Context, req TxRequest, baseURL string) (string, error) {
+	return postTx(ctx, tx.Route(baseURL), txRequest{})
 }
 
-func postTx(url string, obj any) (string, error) {
+func postTx(ctx context.Context, url string, obj any) (string, error) {
 	// marshal the tx
 	bz, e := json.MarshalIndent(obj, "", "  ")
 	fmt.Printf("%+v\n", string(bz))
 	if e != nil {
 		return "", fmt.Errorf("post tx: marshalling: %w", e)
 	}
-	// send the txn
-	hash, e := post(url, bz)
+	// send the tx
+	hash, e := post(ctx, url, bz)
 	if e != nil {
 		return "", fmt.Errorf("post tx: posting: %w", e)
 	}
 	return strings.Trim(string(hash), "\""), nil
 }
 
-func post(url string, bz []byte) ([]byte, error) {
+func post(ctx context.Context, url string, bz []byte) ([]byte, error) {
 	// generate the request
-	request, e := http.NewRequest("POST", url, bytes.NewBuffer(bz))
+	request, e := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(bz))
 	if e != nil {
 		return nil, fmt.Errorf("post: request %s:%s", url, e.Error())
 	}
