@@ -7,12 +7,14 @@ default:
     fee: 10001
     chains: [1, 2]
     password: "pablito"
-    incremental: false
-    maxHeight: 100
+    incremental: true
+    maxHeight: 3
+    waitForNewBlock: false
   send:
     chains: [1, 2]
-    count: 1 # per block
-    amount: 1000
+    count: 100 # per block
+    amount: 10
+    concurrency: 10
   transactions:
     stake:
       - from: 1

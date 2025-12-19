@@ -8,9 +8,13 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/k8s-node-tester/go-scripts/shared"
+	"golang.org/x/sync/semaphore"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,7 +25,7 @@ var (
 )
 
 const (
-	baseFee        = 10_000             // Base fee for transactions
+	baseFee        = uint64(10_000)     // Base fee for transactions
 	queryHeightURL = "/v1/query/height" // URL for querying the height of the blockchain
 	// TODO: should this be configurable?
 	retries            = 5                      // Number of retries for failed requests
@@ -35,17 +39,72 @@ func main() {
 	flag.Parse()
 	// create default logger
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	log.Debug("starting populator")
 	// load the accounts and config
-	profile, _, err := LoadConfigs(*path, *profileConfig, *accounts)
+	profile, accounts, err := LoadConfigs(*path, *profileConfig, *accounts)
 	if err != nil {
 		log.Error("failed to load configs", "error", err)
 		os.Exit(1)
 	}
 	// setup the block notifier
 	notifier := NotifyNewBlock(log, profile, timeout, blockCheckInterval, retries)
+	// start the send handler
+	wg := sync.WaitGroup{}
+	wg.Go(func() {
+		HandleSends(log, notifier, profile, accounts)
+	})
+	wg.Wait()
+	log.Info("finished running populator")
+}
+
+func HandleSends(log *slog.Logger, notifier <-chan int, profile *Profile, accounts []shared.Account) {
+	sendTx := profile.Send
+	config := profile.General
+
+	doSendTx := func() (hash string, err error) {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		from, err := crypto.NewAddressFromString(accounts[0].Address)
+		if err != nil {
+			return "", fmt.Errorf("create FROM private key: %w", err)
+		}
+		to, err := crypto.NewAddressFromString(accounts[1].Address)
+		if err != nil {
+			return "", fmt.Errorf("create TO private key: %w", err)
+		}
+		fee := baseFee
+		if config.Fee != 0 {
+			fee = config.Fee
+		}
+		hash, err = profile.Send.Do(ctx, TxRequest{
+			Fee:      fee,
+			Password: accounts[0].Password,
+			From:     from,
+			To:       to,
+		}, config.BaseAdminRpcURL)
+		if err != nil {
+			return "", fmt.Errorf("send transaction: %w", err)
+		}
+		return hash, nil
+	}
 
 	for height := range notifier {
-		log.Info("new block", "height", height)
+		log.Info("sending txs", slog.Int("count", sendTx.Count), slog.Int("height", height))
+		success, errors := RunConcurrentJobs(context.Background(),
+			sendTx.Count, sendTx.Concurrency, doSendTx, log)
+		if errors > 0 {
+			log.Warn("errors sending txs",
+				slog.Int("errors", errors),
+				slog.Int("success", success),
+				slog.Int("height", height),
+			)
+			continue
+		}
+		log.Info("success sending txs",
+			slog.Int("success", success),
+			slog.Int("count", sendTx.Count),
+			slog.Int("height", height),
+		)
 	}
 }
 
@@ -82,7 +141,7 @@ func LoadConfigs(configPath, profile string, accountsPath string) (*Profile, []s
 		return nil, nil, fmt.Errorf("profile %s not found", profile)
 	}
 	// validate there's the minimun number of accounts enforced by the config
-	if len(accounts) < pf.General.Accounts {
+	if len(accounts) < 2 || len(accounts) < pf.General.Accounts {
 		return nil, nil, fmt.Errorf("not enough accounts, min: %d, actual: %d",
 			pf.General.Accounts, len(accounts))
 	}
@@ -147,7 +206,7 @@ func NotifyNewBlock(log *slog.Logger, profile *Profile, timeout time.Duration,
 		// to avoid sending data to genesis blocks, avoid sending txs to genesis blocks
 		lastHeight := 1
 		retries := 0
-		initialized := false
+		initialized := !profile.General.WaitForNewBlock
 		// helper function to handle errors
 		handleErr := func(msg string, err error) (shouldContinue bool) {
 			retries++
@@ -223,4 +282,48 @@ func NotifyNewBlock(log *slog.Logger, profile *Profile, timeout time.Duration,
 	}()
 	// exit
 	return heightCh
+}
+
+// RunConcurrentJobs runs up to concurrency concurrent tx for a total of count.
+// The do function should perform the work for a single job.
+func RunConcurrentJobs(ctx context.Context, count, concurrency int,
+	do func() (string, error), log *slog.Logger) (int, int) {
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+	if concurrency > count {
+		concurrency = count
+	}
+
+	sem := semaphore.NewWeighted(int64(concurrency))
+	var wg sync.WaitGroup
+	var successes atomic.Int32
+	var errors atomic.Int32
+
+	for range count {
+		if err := sem.Acquire(ctx, 1); err != nil {
+			// typically only fails if ctx is canceled
+			if errors.Add(1) == 1 {
+				log.Error("semaphore acquire failed", slog.String("error", err.Error()))
+			}
+			break
+		}
+		wg.Add(1)
+		go func() {
+			defer sem.Release(1)
+			defer wg.Done()
+
+			if _, err := do(); err != nil {
+				// log the first error only (others likely same cause)
+				if errors.Add(1) == 1 {
+					log.Error("error sending tx", slog.String("error", err.Error()))
+				}
+				return
+			}
+			successes.Add(1)
+		}()
+	}
+
+	wg.Wait()
+	return int(successes.Load()), int(errors.Load())
 }

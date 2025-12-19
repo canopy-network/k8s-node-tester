@@ -51,10 +51,10 @@ type General struct {
 	Incremental     bool   `yaml:"incremental"`
 	BasePort        int    `yaml:"basePort"`
 	Accounts        int    `yaml:"accounts"`
-	Fee             int64  `yaml:"fee"`
+	Fee             uint64 `yaml:"fee"`
 	Chains          []int  `yaml:"chains"`
-	MinHeight       int    `yaml:"minHeight"`
 	MaxHeight       int    `yaml:"maxHeight"`
+	WaitForNewBlock bool   `yaml:"waitForNewBlock"`
 }
 
 // Common fields
@@ -78,9 +78,10 @@ type Committees struct {
 
 // SendTx Tx is handled separately
 type SendTx struct {
-	amount `yaml:",inline"`
-	Chains []int `yaml:"chains"`
-	Count  int   `yaml:"count"`
+	amount      `yaml:",inline"`
+	Chains      []int `yaml:"chains"`
+	Count       int   `yaml:"count"`
+	Concurrency int   `yaml:"concurrency"`
 }
 
 // Transaction types
@@ -170,7 +171,7 @@ func (tx SendTx) Do(ctx context.Context, req TxRequest, baseURL string) (string,
 	return postTx(ctx, tx.Route(baseURL), txRequest{
 		Amount:   tx.Amount,
 		Address:  req.From.String(),
-		Output:   req.From.String(),
+		Output:   req.To.String(),
 		Password: req.Password,
 		Fee:      req.Fee,
 		Submit:   true,
@@ -205,7 +206,6 @@ func (tx ChangeParamTx) Do(ctx context.Context, req TxRequest, baseURL string) (
 func postTx(ctx context.Context, url string, obj any) (string, error) {
 	// marshal the tx
 	bz, e := json.MarshalIndent(obj, "", "  ")
-	fmt.Printf("%+v\n", string(bz))
 	if e != nil {
 		return "", fmt.Errorf("post tx: marshalling: %w", e)
 	}
