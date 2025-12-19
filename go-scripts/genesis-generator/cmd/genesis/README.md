@@ -68,9 +68,11 @@ default:
         amount: 1000000
       # Cross-chain committee assignments
       committees:
-        - id: 2               # Committee ID (typically another chain's ID)
-          validatorCount: 1   # Number of validators to assign to this committee
-          delegatorCount: 0   # Number of delegators to assign to this committee
+        - id: 2                             # Committee ID (typically another chain's ID)
+          repeatedIdentityValidatorCount: 1 # Validators that appear in BOTH chains' genesis (creates expanded entries)
+          repeatedIdentityDelegatorCount: 0 # Delegators that appear in BOTH chains' genesis
+          validatorCount: 0                 # Validators staked for this committee but ONLY appear in native chain's genesis
+          delegatorCount: 0                 # Delegators staked for this committee but ONLY appear in native chain's genesis
     chain_2:
       id: 2
       rootChain: 1            # Nested chain (chain_1 is root)
@@ -94,50 +96,84 @@ default:
 ### Node Count Calculation
 
 The `nodes.count` field must equal the total number of entries in `ids.json`, which includes:
-- All validators (once per committee they participate in)
+- All regular validators
 - All full nodes
+- RepeatedIdentity expansions (one per additional committee)
+- Committee-only validators (these are NEW validators)
 - Delegators do NOT count (they're not physical nodes)
 
 **Example calculation for the default config:**
-- Chain_1: 2 validators + 0 full nodes + 1 cross-chain expansion = 3
+- Chain_1: 3 regular validators + 0 full nodes + 1 repeatedIdentity expansion + 1 committee-only validator = 5
 - Chain_2: 1 validator + 0 full nodes = 1
-- **Total: 4**
+- **Total: 6**
 
 ### Committee Assignments
 
 Validators and delegators are automatically assigned to their own chain's committee (using the chain's ID). The `committees` field allows assigning validators/delegators to **additional** committees on other chains.
+
+There are two types of committee assignments:
+
+1. **RepeatedIdentity** (`repeatedIdentityValidatorCount`, `repeatedIdentityDelegatorCount`):
+   - **Reuses existing validators** from the chain's validator pool
+   - Validators/delegators appear in **both** chains' genesis files
+   - Create **multiple entries** in `ids.json` (one per committee, with different IDs)
+   - In native chain genesis: `committees: [own_chain, target_chain]`
+   - In target chain genesis: `committees: [target_chain]`
+   - Used for validators that need to be physical nodes on both chains
+
+2. **Committee-Only** (`validatorCount`, `delegatorCount`):
+   - Creates **NEW validators** that are staked **only** for the target committee (NOT their own chain's committee)
+   - Appear **only** in their native chain's genesis with `committees: [target_chain]`
+   - Do **not** appear in the target chain's genesis
+   - Create **additional entries** in `ids.json` (count towards `nodes.count`)
+   - Used for validators that stake for another committee but don't participate in their own chain's committee
 
 **Example:**
 ```yaml
 chain_1:
   id: 1
   validators:
-    count: 2
+    count: 3
   committees:
     - id: 2
-      validatorCount: 1
+      repeatedIdentityValidatorCount: 1  # 1 existing validator appears in both chains
+      repeatedIdentityDelegatorCount: 0
+      validatorCount: 1                   # 1 NEW validator staked only for committee 2
       delegatorCount: 0
 ```
 
 This means:
-- 2 validators are created for chain_1
-- 1 validator will participate in **both** committee 1 (its own chain) AND committee 2
-- 1 validator will only participate in committee 1
+- 3 regular validators are created for chain_1 (staked for committee 1)
+- 1 additional committee-only validator is created (staked only for committee 2)
+- 1st regular validator: participates in committee 1 AND committee 2, appears in **both** genesis files (repeatedIdentity)
+- 2nd & 3rd regular validators: only participate in committee 1
+- Committee-only validator: appears in chain_1's genesis with `committees: [2]`, does NOT appear in chain_2's genesis
 
-**Multi-committee validators:**
+**Node Count:**
+- `nodes.count` = validators + fullNodes + repeatedIdentity expansions + committee-only validators
+- For this example: 3 + 0 + 1 + 1 = 5
+
+**RepeatedIdentity validators:**
 - Appear in **both** chains' genesis files
 - In the root chain genesis: `committees: [1, 2]`
 - In the nested chain genesis: `committees: [2]`
 - Have **multiple entries** in `ids.json` (one per committee, with different IDs)
 
+**Committee-only validators:**
+- Appear **only** in their native chain's genesis with `committees: [target_chain]`
+- Do **not** appear in the target chain's genesis
+- Have **one entry** in `ids.json`
+
 ### Validation
 
 The script validates:
-1. The sum of validators + full nodes + cross-chain validator expansions equals `nodes.count`
+1. The sum of validators + full nodes + repeatedIdentity expansions + committee-only validators equals `nodes.count`
 2. At least one root chain has validators (for rootChainNode assignment)
-3. Committee assignment counts don't exceed available validators/delegators
+3. RepeatedIdentity assignment counts don't exceed available validators/delegators (committee-only creates NEW validators, so no limit)
 4. Committee IDs reference valid chain IDs
-5. For each nested chain, its root chain must have at least one validator assigned to the nested chain's committee (for peerNode assignment)
+5. For each nested chain:
+   - **If it has native validators**: the root chain **must** have `repeatedIdentityValidatorCount > 0` for peerNode assignment
+   - **If it has no native validators**: either `repeatedIdentityValidatorCount` or `validatorCount` is acceptable
 
 ### Delegators
 
@@ -211,7 +247,7 @@ artifacts/
 
 ### ids.json
 
-Contains all validator and full node identities in a map structure (delegators are not included), plus the main accounts. Multi-committee validators appear multiple times with different IDs:
+Contains all validator and full node identities in a map structure (delegators are not included), plus the main accounts. **RepeatedIdentity** multi-committee validators appear multiple times with different IDs (one per committee). Non-repeatedIdentity multi-committee validators appear only once:
 
 ```json
 {
@@ -284,8 +320,8 @@ The `main-accounts` map contains accounts defined in `accounts.yml` (see [accoun
 - Are added to each chain's genesis accounts and keystore
 
 **Notes:**
-- `node-1` and `node-4` have the same keys but different IDs - this is a multi-committee validator appearing once for each committee
-- `node-4` has `rootChainNode: 1` because it's the same identity as `node-1` (multi-committee)
+- `node-1` and `node-4` have the same keys but different IDs - this is a **repeatedIdentity** multi-committee validator appearing once for each committee
+- `node-4` has `rootChainNode: 1` because it's the same identity as `node-1` (repeatedIdentity multi-committee)
 - `node-3` has `rootChainNode: 1` because it's a native nested chain node assigned to a root chain node (round-robin distribution)
 - `node-4` has `peerNode: 4` (itself) because it has a root chain identity
 - `node-3` has `peerNode: 4` because it's a nested chain node without root chain identity, assigned to a peer node that does have root chain identity
@@ -405,7 +441,7 @@ my_custom:
       committees: []
 ```
 
-**Note:** `nodes.count` must equal validators + full nodes + cross-chain expansions. Delegators don't count.
+**Note:** `nodes.count` must equal validators + full nodes + repeatedIdentity expansions + committee-only validators. Delegators don't create entries.
 
 Then run:
 ```bash
