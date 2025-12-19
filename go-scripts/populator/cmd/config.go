@@ -1,5 +1,17 @@
 package main
 
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+
+	"github.com/canopy-network/canopy/lib"
+	"github.com/canopy-network/canopy/lib/crypto"
+)
+
 type TxType string
 
 const (
@@ -8,6 +20,11 @@ const (
 	TxPause       TxType = "pause"
 	TxUnstake     TxType = "unstake"
 	TxChangeParam TxType = "changeParam"
+)
+
+var (
+	// default http client for making requests
+	httpClient = &http.Client{}
 )
 
 // Profile is a configuration for a single profile
@@ -28,25 +45,27 @@ type Transactions struct {
 
 // General populator configuration
 type General struct {
-	BaseURL  string `yaml:"baseURL"`
-	BasePort int    `yaml:"basePort"`
-	Accounts int    `yaml:"accounts"`
-	Fee      int64  `yaml:"fee"`
-	Chains   []int  `yaml:"chains"`
+	BaseURL   string `yaml:"baseURL"`
+	BasePort  int    `yaml:"basePort"`
+	Accounts  int    `yaml:"accounts"`
+	Fee       int64  `yaml:"fee"`
+	Chains    []int  `yaml:"chains"`
+	MaxHeight int    `yaml:"maxHeight"`
 }
 
 // Common fields
 
-type Height struct {
+type height struct {
 	Height int `yaml:"height"`
 }
 
-type Account struct {
-	Account int `yaml:"account"`
+type account struct {
+	From int `yaml:"from"`
+	To   int `yaml:"to"`
 }
 
-type Amount struct {
-	Amount int `yaml:"amount"`
+type amount struct {
+	Amount uint64 `yaml:"amount"`
 }
 
 type Committees struct {
@@ -55,41 +74,46 @@ type Committees struct {
 
 // SendTx Tx is handled separately
 type SendTx struct {
+	amount `yaml:",inline"`
 	Chains []int `yaml:"chains"`
 	Count  int   `yaml:"count"`
-	Amount int64 `yaml:"amount"`
 }
 
 // Transaction types
 
+// StakeTx represents a transaction to stake a validator/delegator
 type StakeTx struct {
-	Height     `yaml:",inline"`
-	Account    `yaml:",inline"`
-	Amount     `yaml:",inline"`
+	height     `yaml:",inline"`
+	account    `yaml:",inline"`
+	amount     `yaml:",inline"`
 	Committees `yaml:",inline"`
 	Delegate   bool `yaml:"delegate"`
 }
 
+// EditStakeTx represents a transaction to edit a validator/delegator's stake
 type EditStakeTx struct {
-	Height     `yaml:",inline"`
-	Account    `yaml:",inline"`
-	Amount     `yaml:",inline"`
+	height     `yaml:",inline"`
+	account    `yaml:",inline"`
+	amount     `yaml:",inline"`
 	Committees `yaml:",inline"`
 }
 
+// PauseTx represents a transaction to pause a validator
 type PauseTx struct {
-	Height  `yaml:",inline"`
-	Account `yaml:",inline"`
+	height  `yaml:",inline"`
+	account `yaml:",inline"`
 }
 
+// UnstakeTx represents a transaction to unstake a validator/delegator
 type UnstakeTx struct {
-	Height  `yaml:",inline"`
-	Account `yaml:",inline"`
+	height  `yaml:",inline"`
+	account `yaml:",inline"`
 }
 
+// ChangeParam represents a transaction to change a parameter
 type ChangeParamTx struct {
-	Account    `yaml:",inline"`
-	Height     `yaml:",inline"`
+	account    `yaml:",inline"`
+	height     `yaml:",inline"`
 	ParamSpace string `yaml:"paramSpace"`
 	ParamKey   string `yaml:"paramKey"`
 	ParamValue any    `yaml:"paramValue"`
@@ -97,12 +121,17 @@ type ChangeParamTx struct {
 	EndBlock   int    `yaml:"endBlock"`
 }
 
-// Tx is a type that represents a transaction
+// Tx is the interface to represent a transaction
 type Tx interface {
+	// Kind returns the type of the transaction that is being represented
 	Kind() TxType
+	// Route returns the full URL for the transaction
+	Route(baseURL string) string
+	// Do executes the transaction
+	Do(request TxRequest, baseURL string) (string, error)
 }
 
-// DueAt is a type that represents a transaction that is due at a specific height
+// DueAt is the interface to represent a transaction that is due at a specific height
 type DueAt interface {
 	Tx
 	Due(h int) bool
@@ -116,10 +145,137 @@ func (UnstakeTx) Kind() TxType     { return TxUnstake }
 func (ChangeParamTx) Kind() TxType { return TxChangeParam }
 
 // Due returns true if the height is due
-func (s Height) Due(h int) bool { return s.Height == h }
+func (s height) Due(h int) bool { return s.Height == h }
 
 // Due implementations
-func (t StakeTx) Due(h int) bool     { return t.Height.Due(h) }
-func (t EditStakeTx) Due(h int) bool { return t.Height.Due(h) }
-func (t PauseTx) Due(h int) bool     { return t.Height.Due(h) }
-func (t UnstakeTx) Due(h int) bool   { return t.Height.Due(h) }
+func (tx StakeTx) Due(h int) bool     { return tx.height.Due(h) }
+func (tx EditStakeTx) Due(h int) bool { return tx.height.Due(h) }
+func (tx PauseTx) Due(h int) bool     { return tx.height.Due(h) }
+func (tx UnstakeTx) Due(h int) bool   { return tx.height.Due(h) }
+
+// Routes implementations
+func (tx SendTx) Route(baseURL string) string        { return baseURL + "/v1/admin/tx-send" }
+func (tx StakeTx) Route(baseURL string) string       { return baseURL + "/v1/admin/tx-stake" }
+func (tx EditStakeTx) Route(baseURL string) string   { return baseURL + "/v1/admin/tx-edit-stake" }
+func (tx PauseTx) Route(baseURL string) string       { return baseURL + "/v1/admin/tx-pause" }
+func (tx UnstakeTx) Route(baseURL string) string     { return baseURL + "/v1/admin/tx-unstake" }
+func (tx ChangeParamTx) Route(baseURL string) string { return baseURL + "/v1/admin/tx-change-param" }
+
+// Do sends a send transaction
+func (tx SendTx) Do(req TxRequest, baseURL string) (string, error) {
+	return postTx(tx.Route(baseURL), txRequest{
+		Amount:   tx.Amount,
+		Address:  req.From.String(),
+		Output:   req.From.String(),
+		Password: req.Password,
+		Fee:      req.Fee,
+		Submit:   true,
+	})
+}
+
+// Do sends a stake transaction
+func (tx StakeTx) Do(req TxRequest, baseURL string) (string, error) {
+	return postTx(tx.Route(baseURL), txRequest{})
+}
+
+// Do sends an edit stake transaction
+func (tx EditStakeTx) Do(req TxRequest, baseURL string) (string, error) {
+	return postTx(tx.Route(baseURL), txRequest{})
+}
+
+// Do sends a pause transaction
+func (tx PauseTx) Do(req TxRequest, baseURL string) (string, error) {
+	return postTx(tx.Route(baseURL), txRequest{})
+}
+
+// Do sends an unstake transaction
+func (tx UnstakeTx) Do(req TxRequest, baseURL string) (string, error) {
+	return postTx(tx.Route(baseURL), txRequest{})
+}
+
+// Do sends a change parameter transaction
+func (tx ChangeParamTx) Do(req TxRequest, baseURL string) (string, error) {
+	return postTx(tx.Route(baseURL), txRequest{})
+}
+
+func postTx(url string, obj any) (string, error) {
+	// marshal the tx
+	bz, e := json.MarshalIndent(obj, "", "  ")
+	fmt.Printf("%+v\n", string(bz))
+	if e != nil {
+		return "", fmt.Errorf("post tx: marshalling: %w", e)
+	}
+	// send the txn
+	hash, e := post(url, bz)
+	if e != nil {
+		return "", fmt.Errorf("post tx: posting: %w", e)
+	}
+	return strings.Trim(string(hash), "\""), nil
+}
+
+func post(url string, bz []byte) ([]byte, error) {
+	// generate the request
+	request, e := http.NewRequest("POST", url, bytes.NewBuffer(bz))
+	if e != nil {
+		return nil, fmt.Errorf("post: request %s:%s", url, e.Error())
+	}
+	// execute the request
+	resp, e := httpClient.Do(request)
+	if e != nil {
+		return nil, fmt.Errorf("post: do %s:%s", url, e.Error())
+	}
+	defer resp.Body.Close()
+	// check the status code
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("post: non 200 status code (%s): %d", url, resp.StatusCode)
+	}
+	// read the request bytes
+	respBz, e := io.ReadAll(resp.Body)
+	if e != nil {
+		return nil, fmt.Errorf("post: reading response %s:%s", url, e.Error())
+	}
+	// return
+	return respBz, nil
+}
+
+// TxRequest is the public struct for the arguments for a transaction request
+type TxRequest struct {
+	From     crypto.AddressI // Address of the sender
+	To       crypto.AddressI // Address of the recipient
+	Password string          // Password for the sender's account
+	Fee      uint64          // Fee for the transaction
+}
+
+// txRequest represents a full transaction request
+type txRequest struct {
+	Amount          uint64          `json:"amount"`
+	PubKey          string          `json:"pubKey"`
+	NetAddress      string          `json:"netAddress"`
+	Output          string          `json:"output"`
+	OpCode          lib.HexBytes    `json:"opCode"`
+	Data            lib.HexBytes    `json:"data"`
+	Fee             uint64          `json:"fee"`
+	Delegate        bool            `json:"delegate"`
+	EarlyWithdrawal bool            `json:"earlyWithdrawal"`
+	Submit          bool            `json:"submit"`
+	ReceiveAmount   uint64          `json:"receiveAmount"`
+	ReceiveAddress  lib.HexBytes    `json:"receiveAddress"`
+	Percent         uint64          `json:"percent"`
+	OrderId         string          `json:"orderId"`
+	Memo            string          `json:"memo"`
+	PollJSON        json.RawMessage `json:"pollJSON"`
+	PollApprove     bool            `json:"pollApprove"`
+	Signer          lib.HexBytes    `json:"signer"`
+	SignerNickname  string          `json:"signerNickname"`
+	Address         string          `json:"address"`
+	Nickname        string          `json:"nickname"`
+	Password        string          `json:"password"`
+
+	ParamSpace string `json:"paramSpace"`
+	ParamKey   string `json:"paramKey"`
+	ParamValue string `json:"paramValue"`
+	StartBlock uint64 `json:"startBlock"`
+	EndBlock   uint64 `json:"endBlock"`
+
+	Committees string `json:"committees"`
+}

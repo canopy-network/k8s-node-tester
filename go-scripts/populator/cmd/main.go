@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -18,7 +19,11 @@ var (
 	accounts      = flag.String("accounts", "", "path to the accounts file")
 )
 
-// go run *.go --accounts ../../genesis-generator/accounts.yml
+const (
+	baseFee = 10_000
+)
+
+// go run *.go --accounts ../../genesis-generator/artifacts/default/ids.json
 func main() {
 	// parse flags
 	flag.Parse()
@@ -40,8 +45,10 @@ func LoadConfigs(configPath, profile string, accountsPath string) (*Profile, []s
 	if err != nil {
 		return nil, nil, fmt.Errorf("load accounts %s: %w", path, err)
 	}
-	var accountsMap shared.Accounts
-	if err := yaml.Unmarshal(rawAccounts, &accountsMap); err != nil {
+	var accountsMap struct {
+		Accounts map[string]shared.Account `json:"main-accounts"`
+	}
+	if err := json.Unmarshal(rawAccounts, &accountsMap); err != nil {
 		return nil, nil, fmt.Errorf("parse accounts %s: %w", path, err)
 	}
 	accounts := make([]shared.Account, 0, len(accountsMap.Accounts))
@@ -62,12 +69,17 @@ func LoadConfigs(configPath, profile string, accountsPath string) (*Profile, []s
 	if !ok {
 		return nil, nil, fmt.Errorf("profile %s not found", profile)
 	}
+	// validate there's the minimun number of accounts enforced by the config
+	if len(accounts) < pf.General.Accounts {
+		return nil, nil, fmt.Errorf("not enough accounts, min: %d, actual: %d",
+			pf.General.Accounts, len(accounts))
+	}
 	return &pf, accounts, nil
 }
 
-// ExecuteScheduledAtHeight runs scheduled txs for a specific profile at height h.
-func ExecuteScheduledAtHeight(ctx context.Context, profile *Profile, h int) error {
-	due := GatherAtHeight(profile, h)
+// ExecuteScheduledAtHeight runs scheduled txs for the height
+func ExecuteScheduledAtHeight(ctx context.Context, profile *Profile, height int) error {
+	due := GatherAtHeight(profile, height)
 	for _, tx := range due {
 		switch v := tx.(type) {
 		case StakeTx:

@@ -80,15 +80,15 @@ func main() {
 		os.Exit(1)
 	}
 	defer idsFile.Close()
-	// load the keys file into memory
-	var keys Keys
-	err = json.NewDecoder(idsFile).Decode(&keys)
+	// load the nodes file into memory
+	var nodes Keys
+	err = json.NewDecoder(idsFile).Decode(&nodes)
 	if err != nil {
 		log.Error("failed to decode keys file", slog.String("err", err.Error()))
 		os.Exit(1)
 	}
 	// get the node key for the pod index
-	node, ok := keys.Keys[hostname]
+	node, ok := nodes.Keys[hostname]
 	if !ok {
 		log.Error("node key not found for hostname", slog.String("hostname", hostname))
 		os.Exit(1)
@@ -136,14 +136,14 @@ func main() {
 	}
 	// obtain the root node full key by splitting the hostname by "-" and obtaining the identifier
 	rootNodeKey := fmt.Sprintf("%s%d", podPrefix, node.RootChainNode)
-	rootNode, ok := keys.Keys[rootNodeKey]
+	rootNode, ok := nodes.Keys[rootNodeKey]
 	if !ok {
 		log.Error("failed to find root node", slog.String("rootNodeKey", rootNodeKey))
 		os.Exit(1)
 	}
 	// do the same for the peer node
 	peerNodeKey := fmt.Sprintf("%s%d", podPrefix, node.PeerNode)
-	peerNode, ok := keys.Keys[peerNodeKey]
+	peerNode, ok := nodes.Keys[peerNodeKey]
 	if !ok {
 		log.Error("failed to find peer node", slog.String("peerNodeKey", peerNodeKey))
 		os.Exit(1)
