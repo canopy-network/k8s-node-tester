@@ -51,160 +51,539 @@ default:
         amount: 100
       committees: []
 
-min:
+one-chain-1000:
   general:
     concurrency: 10
     password: "pablito"
     buffer: 1000
     netAddressSuffix: ".p2p"
+    jsonBeautify: true
   nodes:
-    count: 2
+    count: 1000
   chains:
     chain_1:
       id: 1
       rootChain: 1
       validators:
-        count: 2
+        count: 1000
         stakedAmount: 1000000000
         amount: 1000000
-      fullNodes:
-        count: 0
-        amount: 1000000
-      accounts:
-        count: 1
-        amount: 1000000
-      delegators:
-        count: 0
-        stakedAmount: 100
-        amount: 1000000
-      committees: []
 
-medium:
+100-subchains:
   general:
     concurrency: 100
     password: "pablito"
     buffer: 1000
     netAddressSuffix: ".p2p"
+    jsonBeautify: true
   nodes:
-    count: 100
+    count: 203
   chains:
     chain_1:
       id: 1
       rootChain: 1
       validators:
-        count: 50
+        count: 3
         stakedAmount: 1000000000
-        amount: 1000000
-      fullNodes:
-        count: 10
-        amount: 1000000
-      accounts:
-        count: 100
-        amount: 1000000
-      delegators:
-        count: 10
-        stakedAmount: 100
         amount: 1000000
       committees:
         - id: 2
-          repeatedIdentityValidatorCount: 10
-          repeatedIdentityDelegatorCount: 5
-          validatorCount: 0
-          delegatorCount: 0
+          validatorCount: 2
+        - id: 3
+          validatorCount: 2
+        - id: 4
+          validatorCount: 2
+        - id: 5
+          validatorCount: 2
+        - id: 6
+          validatorCount: 2
+        - id: 7
+          validatorCount: 2
+        - id: 8
+          validatorCount: 2
+        - id: 9
+          validatorCount: 2
+        - id: 10
+          validatorCount: 2
+        - id: 11
+          validatorCount: 2
+        - id: 12
+          validatorCount: 2
+        - id: 13
+          validatorCount: 2
+        - id: 14
+          validatorCount: 2
+        - id: 15
+          validatorCount: 2
+        - id: 16
+          validatorCount: 2
+        - id: 17
+          validatorCount: 2
+        - id: 18
+          validatorCount: 2
+        - id: 19
+          validatorCount: 2
+        - id: 20
+          validatorCount: 2
+        - id: 21
+          validatorCount: 2
+        - id: 22
+          validatorCount: 2
+        - id: 23
+          validatorCount: 2
+        - id: 24
+          validatorCount: 2
+        - id: 25
+          validatorCount: 2
+        - id: 26
+          validatorCount: 2
+        - id: 27
+          validatorCount: 2
+        - id: 28
+          validatorCount: 2
+        - id: 29
+          validatorCount: 2
+        - id: 30
+          validatorCount: 2
+        - id: 31
+          validatorCount: 2
+        - id: 32
+          validatorCount: 2
+        - id: 33
+          validatorCount: 2
+        - id: 34
+          validatorCount: 2
+        - id: 35
+          validatorCount: 2
+        - id: 36
+          validatorCount: 2
+        - id: 37
+          validatorCount: 2
+        - id: 38
+          validatorCount: 2
+        - id: 39
+          validatorCount: 2
+        - id: 40
+          validatorCount: 2
+        - id: 41
+          validatorCount: 2
+        - id: 42
+          validatorCount: 2
+        - id: 43
+          validatorCount: 2
+        - id: 44
+          validatorCount: 2
+        - id: 45
+          validatorCount: 2
+        - id: 46
+          validatorCount: 2
+        - id: 47
+          validatorCount: 2
+        - id: 48
+          validatorCount: 2
+        - id: 49
+          validatorCount: 2
+        - id: 50
+          validatorCount: 2
+        - id: 51
+          validatorCount: 2
+        - id: 52
+          validatorCount: 2
+        - id: 53
+          validatorCount: 2
+        - id: 54
+          validatorCount: 2
+        - id: 55
+          validatorCount: 2
+        - id: 56
+          validatorCount: 2
+        - id: 57
+          validatorCount: 2
+        - id: 58
+          validatorCount: 2
+        - id: 59
+          validatorCount: 2
+        - id: 60
+          validatorCount: 2
+        - id: 61
+          validatorCount: 2
+        - id: 62
+          validatorCount: 2
+        - id: 63
+          validatorCount: 2
+        - id: 64
+          validatorCount: 2
+        - id: 65
+          validatorCount: 2
+        - id: 66
+          validatorCount: 2
+        - id: 67
+          validatorCount: 2
+        - id: 68
+          validatorCount: 2
+        - id: 69
+          validatorCount: 2
+        - id: 70
+          validatorCount: 2
+        - id: 71
+          validatorCount: 2
+        - id: 72
+          validatorCount: 2
+        - id: 73
+          validatorCount: 2
+        - id: 74
+          validatorCount: 2
+        - id: 75
+          validatorCount: 2
+        - id: 76
+          validatorCount: 2
+        - id: 77
+          validatorCount: 2
+        - id: 78
+          validatorCount: 2
+        - id: 79
+          validatorCount: 2
+        - id: 80
+          validatorCount: 2
+        - id: 81
+          validatorCount: 2
+        - id: 82
+          validatorCount: 2
+        - id: 83
+          validatorCount: 2
+        - id: 84
+          validatorCount: 2
+        - id: 85
+          validatorCount: 2
+        - id: 86
+          validatorCount: 2
+        - id: 87
+          validatorCount: 2
+        - id: 88
+          validatorCount: 2
+        - id: 89
+          validatorCount: 2
+        - id: 90
+          validatorCount: 2
+        - id: 91
+          validatorCount: 2
+        - id: 92
+          validatorCount: 2
+        - id: 93
+          validatorCount: 2
+        - id: 94
+          validatorCount: 2
+        - id: 95
+          validatorCount: 2
+        - id: 96
+          validatorCount: 2
+        - id: 97
+          validatorCount: 2
+        - id: 98
+          validatorCount: 2
+        - id: 99
+          validatorCount: 2
+        - id: 100
+          validatorCount: 2
+        - id: 101
+          validatorCount: 2
     chain_2:
       id: 2
       rootChain: 1
-      validators:
-        count: 25
-        stakedAmount: 1000000000
-        amount: 1000000
-      fullNodes:
-        count: 5
-        amount: 1000000
-      accounts:
-        count: 50
-        amount: 1000000
-      delegators:
-        count: 0
-        stakedAmount: 100
-        amount: 1000000
-      committees: []
-
-max:
-  general:
-    concurrency: 200
-    password: "pablito"
-    buffer: 1000
-    netAddressSuffix: ".p2p"
-  nodes:
-    count: 475
-  chains:
-    chain_1:
-      id: 1
+    chain_3:
+      id: 3
       rootChain: 1
-      validators:
-        count: 200
-        stakedAmount: 1000000000
-        amount: 1000000
-      fullNodes:
-        count: 50
-        amount: 1000000
-      accounts:
-        count: 500
-        amount: 1000000
-      delegators:
-        count: 50
-        stakedAmount: 100
-        amount: 1000000
-      committees:
-        - id: 2
-          repeatedIdentityValidatorCount: 50
-          repeatedIdentityDelegatorCount: 20
-          validatorCount: 0
-          delegatorCount: 0
-    chain_2:
-      id: 2
+    chain_4:
+      id: 4
       rootChain: 1
-      validators:
-        count: 150
-        stakedAmount: 1000000000
-        amount: 1000000
-      fullNodes:
-        count: 25
-        amount: 1000000
-      accounts:
-        count: 250
-        amount: 1000000
-      delegators:
-        count: 25
-        stakedAmount: 100
-        amount: 1000000
-      committees: []
-
-mature:
-  general:
-    concurrency: 150
-    password: "pablito"
-    buffer: 1000
-    netAddressSuffix: ".p2p"
-  nodes:
-    count: 200
-  chains:
-    chain_1:
-      id: 1
+    chain_5:
+      id: 5
       rootChain: 1
-      validators:
-        count: 150
-        stakedAmount: 1000000000
-        amount: 1000000
-      fullNodes:
-        count: 50
-        amount: 1000000
-      accounts:
-        count: 500
-        amount: 1000000
-      delegators:
-        count: 100
-        stakedAmount: 100
-        amount: 1000000
-      committees: []
+    chain_6:
+      id: 6
+      rootChain: 1
+    chain_7:
+      id: 7
+      rootChain: 1
+    chain_8:
+      id: 8
+      rootChain: 1
+    chain_9:
+      id: 9
+      rootChain: 1
+    chain_10:
+      id: 10
+      rootChain: 1
+    chain_11:
+      id: 11
+      rootChain: 1
+    chain_12:
+      id: 12
+      rootChain: 1
+    chain_13:
+      id: 13
+      rootChain: 1
+    chain_14:
+      id: 14
+      rootChain: 1
+    chain_15:
+      id: 15
+      rootChain: 1
+    chain_16:
+      id: 16
+      rootChain: 1
+    chain_17:
+      id: 17
+      rootChain: 1
+    chain_18:
+      id: 18
+      rootChain: 1
+    chain_19:
+      id: 19
+      rootChain: 1
+    chain_20:
+      id: 20
+      rootChain: 1
+    chain_21:
+      id: 21
+      rootChain: 1
+    chain_22:
+      id: 22
+      rootChain: 1
+    chain_23:
+      id: 23
+      rootChain: 1
+    chain_24:
+      id: 24
+      rootChain: 1
+    chain_25:
+      id: 25
+      rootChain: 1
+    chain_26:
+      id: 26
+      rootChain: 1
+    chain_27:
+      id: 27
+      rootChain: 1
+    chain_28:
+      id: 28
+      rootChain: 1
+    chain_29:
+      id: 29
+      rootChain: 1
+    chain_30:
+      id: 30
+      rootChain: 1
+    chain_31:
+      id: 31
+      rootChain: 1
+    chain_32:
+      id: 32
+      rootChain: 1
+    chain_33:
+      id: 33
+      rootChain: 1
+    chain_34:
+      id: 34
+      rootChain: 1
+    chain_35:
+      id: 35
+      rootChain: 1
+    chain_36:
+      id: 36
+      rootChain: 1
+    chain_37:
+      id: 37
+      rootChain: 1
+    chain_38:
+      id: 38
+      rootChain: 1
+    chain_39:
+      id: 39
+      rootChain: 1
+    chain_40:
+      id: 40
+      rootChain: 1
+    chain_41:
+      id: 41
+      rootChain: 1
+    chain_42:
+      id: 42
+      rootChain: 1
+    chain_43:
+      id: 43
+      rootChain: 1
+    chain_44:
+      id: 44
+      rootChain: 1
+    chain_45:
+      id: 45
+      rootChain: 1
+    chain_46:
+      id: 46
+      rootChain: 1
+    chain_47:
+      id: 47
+      rootChain: 1
+    chain_48:
+      id: 48
+      rootChain: 1
+    chain_49:
+      id: 49
+      rootChain: 1
+    chain_50:
+      id: 50
+      rootChain: 1
+    chain_51:
+      id: 51
+      rootChain: 1
+    chain_52:
+      id: 52
+      rootChain: 1
+    chain_53:
+      id: 53
+      rootChain: 1
+    chain_54:
+      id: 54
+      rootChain: 1
+    chain_55:
+      id: 55
+      rootChain: 1
+    chain_56:
+      id: 56
+      rootChain: 1
+    chain_57:
+      id: 57
+      rootChain: 1
+    chain_58:
+      id: 58
+      rootChain: 1
+    chain_59:
+      id: 59
+      rootChain: 1
+    chain_60:
+      id: 60
+      rootChain: 1
+    chain_61:
+      id: 61
+      rootChain: 1
+    chain_62:
+      id: 62
+      rootChain: 1
+    chain_63:
+      id: 63
+      rootChain: 1
+    chain_64:
+      id: 64
+      rootChain: 1
+    chain_65:
+      id: 65
+      rootChain: 1
+    chain_66:
+      id: 66
+      rootChain: 1
+    chain_67:
+      id: 67
+      rootChain: 1
+    chain_68:
+      id: 68
+      rootChain: 1
+    chain_69:
+      id: 69
+      rootChain: 1
+    chain_70:
+      id: 70
+      rootChain: 1
+    chain_71:
+      id: 71
+      rootChain: 1
+    chain_72:
+      id: 72
+      rootChain: 1
+    chain_73:
+      id: 73
+      rootChain: 1
+    chain_74:
+      id: 74
+      rootChain: 1
+    chain_75:
+      id: 75
+      rootChain: 1
+    chain_76:
+      id: 76
+      rootChain: 1
+    chain_77:
+      id: 77
+      rootChain: 1
+    chain_78:
+      id: 78
+      rootChain: 1
+    chain_79:
+      id: 79
+      rootChain: 1
+    chain_80:
+      id: 80
+      rootChain: 1
+    chain_81:
+      id: 81
+      rootChain: 1
+    chain_82:
+      id: 82
+      rootChain: 1
+    chain_83:
+      id: 83
+      rootChain: 1
+    chain_84:
+      id: 84
+      rootChain: 1
+    chain_85:
+      id: 85
+      rootChain: 1
+    chain_86:
+      id: 86
+      rootChain: 1
+    chain_87:
+      id: 87
+      rootChain: 1
+    chain_88:
+      id: 88
+      rootChain: 1
+    chain_89:
+      id: 89
+      rootChain: 1
+    chain_90:
+      id: 90
+      rootChain: 1
+    chain_91:
+      id: 91
+      rootChain: 1
+    chain_92:
+      id: 92
+      rootChain: 1
+    chain_93:
+      id: 93
+      rootChain: 1
+    chain_94:
+      id: 94
+      rootChain: 1
+    chain_95:
+      id: 95
+      rootChain: 1
+    chain_96:
+      id: 96
+      rootChain: 1
+    chain_97:
+      id: 97
+      rootChain: 1
+    chain_98:
+      id: 98
+      rootChain: 1
+    chain_99:
+      id: 99
+      rootChain: 1
+    chain_100:
+      id: 100
+      rootChain: 1
+    chain_101:
+      id: 101
+      rootChain: 1
