@@ -25,6 +25,12 @@ test/start:
 	$(call check_vars, NODES)
 	helm upgrade --install canopy ./cluster/canopy/helm -n canopy --create-namespace --set replicaCount=$(NODES)
 
+## test/load: runs the populator load test
+.PHONY: test/load
+test/load:
+	$(call check_vars, CONFIG PROFILE)
+	$(MAKE) populator/load
+
 ## test/destroy: destroy the load-test-related resources in the canopy namespace
 .PHONY: test/destroy
 test/destroy:
@@ -88,6 +94,8 @@ monitoring:
 go-scripts/build:
 	cd ./go-scripts/genesis-generator && go build -o ../bin/genesis_apply ./cmd/k8s-applier/main.go
 	cd ./go-scripts/genesis-generator && go build -o ../bin/genesis_generate ./cmd/genesis/main.go
+	cd ./go-scripts/populator && go build -o ../bin/populator ./cmd/*.go
+
 
 ## genesis/generate: generates the genesis config files based on the given config
 .PHONY: genesis/generate
@@ -101,6 +109,13 @@ genesis/generate:
 genesis/apply:
 	$(call check_vars, CONFIG)
 	./go-scripts/bin/genesis_apply --path ./go-scripts/genesis-generator/artifacts --config $(CONFIG)
+
+## populator/load: runs the populator load test
+.PHONY: populator/load
+populator/load:
+	$(call check_vars, CONFIG PROFILE)
+	./go-scripts/bin/populator --path ./go-scripts/populator/config.yml \
+	--accounts ./go-scripts/genesis-generator/artifacts/$(CONFIG)/ids.json --profile $(PROFILE)
 
 ## --- ansible ---
 # ==================================================================================== #
