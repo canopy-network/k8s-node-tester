@@ -12,7 +12,6 @@ func NewBroadcaster(src <-chan int, subscribers int) *Broadcaster {
 	for i := range subscribers {
 		b.subs[i] = make(chan int) // unbuffered
 	}
-
 	go func() {
 		for v := range src {
 			for _, ch := range b.subs {

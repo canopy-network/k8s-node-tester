@@ -68,7 +68,6 @@ func HandleTxSends(log *slog.Logger, notifier <-chan int, profile *Profile, acco
 	}
 	for height := range notifier {
 		send := func() (string, error) { return sendTx(profile.Send, accounts[0], accounts[1], profile.General) }
-		log.Info("sending txs", slog.Int("count", profile.Send.Count), slog.Int("height", height))
 		success, errors := RunConcurrentTxs(context.Background(),
 			profile.Send.Count, profile.Send.Concurrency, send, log)
 		if errors > 0 {
@@ -90,7 +89,7 @@ func HandleTxSends(log *slog.Logger, notifier <-chan int, profile *Profile, acco
 // HandleTxs handles the sending of most transactions per defined block
 func HandleTxs(log *slog.Logger, notifier <-chan int, profile *Profile, accounts []shared.Account) {
 	for height := range notifier {
-		// gather all the transactions for the current
+		// gather all the transactions for the current height
 		txs := GatherAtHeight(profile, height)
 		for _, tx := range txs {
 			log.Info("sending transaction",
@@ -121,7 +120,7 @@ func LoadConfigs(configPath, profile string, accountsPath string) (*Profile, []s
 		Accounts map[string]shared.Account `json:"main-accounts"`
 	}
 	if err := json.Unmarshal(rawAccounts, &accountsMap); err != nil {
-		return nil, nil, fmt.Errorf("parse accounts %s: %w", path, err)
+		return nil, nil, fmt.Errorf("parse accounts: %s: %w", path, err)
 	}
 	accounts := make([]shared.Account, 0, len(accountsMap.Accounts))
 	for _, account := range accountsMap.Accounts {
@@ -142,9 +141,10 @@ func LoadConfigs(configPath, profile string, accountsPath string) (*Profile, []s
 		return nil, nil, fmt.Errorf("profile %s not found", profile)
 	}
 	// validate there's the minimun number of accounts enforced by the config
-	if len(accounts) < 2 || len(accounts) < pf.General.Accounts {
+	min := max(2, pf.General.Accounts)
+	if len(accounts) < min {
 		return nil, nil, fmt.Errorf("not enough accounts, min: %d, actual: %d",
-			pf.General.Accounts, len(accounts))
+			min, len(accounts))
 	}
 	return &pf, accounts, nil
 }
@@ -263,8 +263,8 @@ func NotifyNewBlock(log *slog.Logger, profile *Profile, timeout time.Duration,
 	return heightCh
 }
 
-// RunConcurrentTxs runs up to concurrency concurrent tx for a total of count.
-// The do function should perform the work for a single job.
+// RunConcurrentTxs runs concurrent tx for a total of count.
+// The do function should perform the work for a single idempotent job.
 func RunConcurrentTxs(ctx context.Context, count, concurrency int,
 	do func() (string, error), log *slog.Logger) (int, int) {
 	if concurrency <= 0 {
@@ -293,7 +293,7 @@ func RunConcurrentTxs(ctx context.Context, count, concurrency int,
 			defer wg.Done()
 
 			if _, err := do(); err != nil {
-				// log the first error only (others likely same cause)
+				// log the first error only (others are likely same cause)
 				if errors.Add(1) == 1 {
 					log.Error("error sending tx", slog.String("error", err.Error()))
 				}
