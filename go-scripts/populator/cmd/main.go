@@ -45,6 +45,8 @@ func main() {
 		log.Error("failed to load configs", "error", err)
 		os.Exit(1)
 	}
+	// set the client urls
+	SetCanopyClient(profile.General.RpcURL, profile.General.AdminRpcURL)
 	// setup the block notifier
 	notifier := NotifyNewBlock(log, profile, timeout, blockCheckInterval, retries)
 	// fan-out: listen for new blocks to broadcast
@@ -140,6 +142,10 @@ func LoadConfigs(configPath, profile string, accountsPath string) (*Profile, []s
 	if !ok {
 		return nil, nil, fmt.Errorf("profile %s not found", profile)
 	}
+	// validate the profile configuration
+	if err := pf.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("validate profile %s: %w", profile, err)
+	}
 	// validate there's the minimun number of accounts enforced by the config
 	min := max(2, pf.General.Accounts)
 	if len(accounts) < min {
@@ -222,7 +228,7 @@ func NotifyNewBlock(log *slog.Logger, profile *Profile, timeout time.Duration,
 		for range time.Tick(checkInterval) {
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			// get height
-			got, err := post(ctx, profile.General.BaseRpcURL+queryHeightURL, nil)
+			got, err := post(ctx, profile.General.RpcURL+queryHeightURL, nil)
 			cancel()
 			if err != nil {
 				if !handleErr("wait block: failed to unmarshal height", err) {
@@ -315,7 +321,7 @@ func sendTx(tx Tx, from, to shared.Account, config General) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("build tx request: %w", err)
 	}
-	hash, err := tx.Do(ctx, req, config.BaseAdminRpcURL)
+	hash, err := tx.Do(ctx, req, config.AdminRpcURL)
 	if err != nil {
 		return "", fmt.Errorf("send transaction: %w", err)
 	}

@@ -1,7 +1,7 @@
 default:
   general:
-    baseRpcURL: "http://91.99.158.81:1001"
-    baseAdminRpcURL: "http://91.99.158.81:2001"
+    rpcURL: "http://localhost:50002"
+    adminRpcURL: "http://localhost:50003"
     basePort: 50000
     accounts: 3
     fee: 10001
