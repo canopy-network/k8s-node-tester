@@ -25,7 +25,7 @@ serviceAccount:
 
 # container image
 image:
-  repository: canopynetwork/canopy
+  repository: canopynetwork/canopy-test
   tag: latest
   pullPolicy: IfNotPresent
 
