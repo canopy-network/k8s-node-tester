@@ -72,16 +72,21 @@ type DelegatorsConfig struct {
 // CommitteeAssignment defines cross-chain committee participation
 type CommitteeAssignment struct {
 	ID int `yaml:"id"`
-	// RepeatedIdentityValidatorCount: existing validators that participate in this committee AND appear in the other chain's genesis
-	// These reuse validators from the chain's validator pool and create expanded entries in ids.json
+	// RepeatedIdentityValidatorCount: existing validators that participate in this committee AND appear in BOTH chains' genesis
+	// These reuse validators from the chain's validator pool and create expanded entries in ids.json (one per chain)
 	RepeatedIdentityValidatorCount int `yaml:"repeatedIdentityValidatorCount"`
-	// RepeatedIdentityDelegatorCount: existing delegators that participate in this committee AND appear in the other chain's genesis
+	// RepeatedIdentityDelegatorCount: existing delegators that participate in this committee AND appear in BOTH chains' genesis
 	RepeatedIdentityDelegatorCount int `yaml:"repeatedIdentityDelegatorCount"`
-	// ValidatorCount: NEW validators staked ONLY for this committee (not their own chain's committee)
-	// They appear ONLY in their native chain's genesis with committees: [target_committee]
+	// ValidatorCount: NEW validators staked ONLY for the target committee
+	// Genesis validators: appear in ROOT chain's genesis with committees: [target_committee]
+	// Accounts/Keystore: appear in TARGET chain
+	// In ids.json they have chainId = target committee ID
 	// These are additional nodes that count towards nodes.count
 	ValidatorCount int `yaml:"validatorCount"`
-	// DelegatorCount: NEW delegators staked ONLY for this committee (not their own chain's committee)
+	// DelegatorCount: NEW delegators staked ONLY for the target committee
+	// Genesis validators: appear in ROOT chain's genesis with committees: [target_committee]
+	// Accounts/Keystore: appear in TARGET chain
+	// In ids.json they would have chainId = target committee ID (if included)
 	DelegatorCount int `yaml:"delegatorCount"`
 }
 
@@ -124,6 +129,8 @@ type NodeIdentity struct {
 	Amount              uint64          `json:"-"` // Not exported to JSON, used for genesis
 	IsDelegate          bool            `json:"-"` // Not exported to JSON, used for genesis
 	NetAddress          string          `json:"-"` // Not exported to JSON, used for genesis
+	// GenesisChainID is which chain's genesis this validator appears in (may differ from ChainID for committee-only validators)
+	GenesisChainID int `json:"-"` // Not exported to JSON, used for genesis placement
 }
 
 // MainAccount represents a main account identity for ids.json
@@ -325,37 +332,24 @@ func validateCommitteeAssignments(cfg *AppConfig) error {
 			return fmt.Errorf("chain %s: rootChain %d does not exist", chainName, chainCfg.RootChain)
 		}
 
-		// Check committee assignment requirements based on whether the nested chain has native validators
-		hasNativeValidators := chainCfg.Validators.Count > 0
-
+		// Check if there's any committee assignment for this nested chain
 		hasRepeatedIdentityValidator := false
-		hasAnyValidator := false
+		committeeOnlyValidatorCount := 0
 		for _, ca := range rootChainCfg.Committees {
 			if ca.ID == chainCfg.ID {
 				if ca.RepeatedIdentityValidatorCount > 0 {
 					hasRepeatedIdentityValidator = true
 				}
-				if ca.RepeatedIdentityValidatorCount > 0 || ca.ValidatorCount > 0 {
-					hasAnyValidator = true
-				}
+				committeeOnlyValidatorCount = ca.ValidatorCount
 				break
 			}
 		}
 
-		if hasNativeValidators {
-			// If nested chain has native validators, require repeatedIdentityValidatorCount for peerNode assignment
-			if !hasRepeatedIdentityValidator {
-				return fmt.Errorf("chain %s (nested chain with ID %d): has %d native validators, so root chain (ID %d) must have at least one repeatedIdentityValidatorCount assigned to committee %d for peerNode assignment",
-					chainName, chainCfg.ID, chainCfg.Validators.Count, chainCfg.RootChain, chainCfg.ID)
-			}
-			fmt.Printf("  Nested chain %s: root chain has repeatedIdentity validators in committee %d (required for peerNode) ✓\n", chainName, chainCfg.ID)
-		} else {
-			// If nested chain has no native validators, accept either type
-			if !hasAnyValidator {
-				return fmt.Errorf("chain %s (nested chain with ID %d): its root chain (ID %d) must have at least one validator (repeatedIdentity or committee-only) assigned to committee %d",
-					chainName, chainCfg.ID, chainCfg.RootChain, chainCfg.ID)
-			}
+		hasAnyAssignment := hasRepeatedIdentityValidator || committeeOnlyValidatorCount > 0
+		if hasAnyAssignment {
 			fmt.Printf("  Nested chain %s: root chain has validators in committee %d ✓\n", chainName, chainCfg.ID)
+		} else {
+			fmt.Printf("  Nested chain %s: no validators assigned to committee %d\n", chainName, chainCfg.ID)
 		}
 	}
 
@@ -454,16 +448,17 @@ func addFullNodes(count int, amount uint64, startIdx int, chainID int, rootChain
 				Amount:  amount,
 			}
 
-			identity := NodeIdentity{
-				ID:              startIdx + i,
-				ChainID:         chainID,
-				RootChainID:     rootChainID,
-				Address:         hex.EncodeToString(pk.PublicKey().Address().Bytes()),
-				PublicKey:       hex.EncodeToString(pk.PublicKey().Bytes()),
-				PrivateKey:      hex.EncodeToString(pk.Bytes()),
-				NodeType:        "fullnode",
-				PrivateKeyBytes: pk.Bytes(),
-			}
+		identity := NodeIdentity{
+			ID:              startIdx + i,
+			ChainID:         chainID,
+			RootChainID:     rootChainID,
+			Address:         hex.EncodeToString(pk.PublicKey().Address().Bytes()),
+			PublicKey:       hex.EncodeToString(pk.PublicKey().Bytes()),
+			PrivateKey:      hex.EncodeToString(pk.Bytes()),
+			NodeType:        "fullnode",
+			PrivateKeyBytes: pk.Bytes(),
+			GenesisChainID:  chainID,
+		}
 
 			gsync.Lock()
 			*identities = append(*identities, identity)
@@ -528,22 +523,23 @@ func addValidators(count int, isDelegate bool, startIdx int, stakedAmount uint64
 				}
 			}
 
-			identity := NodeIdentity{
-				ID:                  nodeID,
-				ChainID:             chainID,
-				RootChainID:         rootChainID,
-				Address:             hex.EncodeToString(pk.PublicKey().Address().Bytes()),
-				PublicKey:           hex.EncodeToString(pk.PublicKey().Bytes()),
-				PrivateKey:          hex.EncodeToString(pk.Bytes()),
-				NodeType:            nodeType,
-				Committees:          committees,
-				ExpandingCommittees: identityExpandingCommittees,
-				PrivateKeyBytes:     pk.Bytes(),
-				StakedAmount:        stakedAmount,
-				Amount:              amount,
-				IsDelegate:          isDelegate,
-				NetAddress:          netAddress,
-			}
+		identity := NodeIdentity{
+			ID:                  nodeID,
+			ChainID:             chainID,
+			RootChainID:         rootChainID,
+			Address:             hex.EncodeToString(pk.PublicKey().Address().Bytes()),
+			PublicKey:           hex.EncodeToString(pk.PublicKey().Bytes()),
+			PrivateKey:          hex.EncodeToString(pk.Bytes()),
+			NodeType:            nodeType,
+			Committees:          committees,
+			ExpandingCommittees: identityExpandingCommittees,
+			PrivateKeyBytes:     pk.Bytes(),
+			StakedAmount:        stakedAmount,
+			Amount:              amount,
+			IsDelegate:          isDelegate,
+			NetAddress:          netAddress,
+			GenesisChainID:      chainID,
+		}
 
 			gsync.Lock()
 			*identities = append(*identities, identity)
@@ -558,8 +554,10 @@ func addValidators(count int, isDelegate bool, startIdx int, stakedAmount uint64
 	}
 }
 
-// addCommitteeOnlyValidator creates a validator staked ONLY for a specific committee (not their own chain's committee)
-// These validators appear only in their native chain's genesis and don't create expanded entries
+// addCommitteeOnlyValidator creates a validator staked ONLY for a specific committee
+// Genesis validators: appear in ROOT chain's genesis with committees: [target_committee]
+// Accounts/Keystore: appear in TARGET chain (not root chain)
+// In ids.json, they have chainId = target committee (the committee they're staked for)
 func addCommitteeOnlyValidator(nodeID int, stakedAmount uint64, amount uint64,
 	chainID int, rootChainID int, targetCommittee uint64, netAddressSuffix string,
 	identities *[]NodeIdentity, gsync *sync.Mutex, wg *sync.WaitGroup,
@@ -585,19 +583,20 @@ func addCommitteeOnlyValidator(nodeID int, stakedAmount uint64, amount uint64,
 
 		identity := NodeIdentity{
 			ID:                  nodeID,
-			ChainID:             chainID,
+			ChainID:             int(targetCommittee), // ids.json and accounts/keystore use target committee
 			RootChainID:         rootChainID,
 			Address:             hex.EncodeToString(pk.PublicKey().Address().Bytes()),
 			PublicKey:           hex.EncodeToString(pk.PublicKey().Bytes()),
 			PrivateKey:          hex.EncodeToString(pk.Bytes()),
 			NodeType:            "validator",
 			Committees:          committees,
-			ExpandingCommittees: nil, // No expanding - stays in native chain only
+			ExpandingCommittees: nil, // No expanding
 			PrivateKeyBytes:     pk.Bytes(),
 			StakedAmount:        stakedAmount,
 			Amount:              amount,
 			IsDelegate:          false,
 			NetAddress:          netAddress,
+			GenesisChainID:      chainID, // Genesis validators in ROOT chain
 		}
 
 		gsync.Lock()
@@ -608,7 +607,10 @@ func addCommitteeOnlyValidator(nodeID int, stakedAmount uint64, amount uint64,
 	}()
 }
 
-// addCommitteeOnlyDelegator creates a delegator staked ONLY for a specific committee (not their own chain's committee)
+// addCommitteeOnlyDelegator creates a delegator staked ONLY for a specific committee
+// Genesis validators: appear in ROOT chain's genesis with committees: [target_committee]
+// Accounts/Keystore: appear in TARGET chain (not root chain)
+// In ids.json (if included), they would have chainId = target committee
 func addCommitteeOnlyDelegator(nodeID int, stakedAmount uint64, amount uint64,
 	chainID int, rootChainID int, targetCommittee uint64, netAddressSuffix string,
 	identities *[]NodeIdentity, gsync *sync.Mutex, wg *sync.WaitGroup,
@@ -634,19 +636,20 @@ func addCommitteeOnlyDelegator(nodeID int, stakedAmount uint64, amount uint64,
 
 		identity := NodeIdentity{
 			ID:                  nodeID,
-			ChainID:             chainID,
+			ChainID:             int(targetCommittee), // ids.json and accounts/keystore use target committee
 			RootChainID:         rootChainID,
 			Address:             hex.EncodeToString(pk.PublicKey().Address().Bytes()),
 			PublicKey:           hex.EncodeToString(pk.PublicKey().Bytes()),
 			PrivateKey:          hex.EncodeToString(pk.Bytes()),
 			NodeType:            "delegator",
 			Committees:          committees,
-			ExpandingCommittees: nil, // No expanding - stays in native chain only
+			ExpandingCommittees: nil, // No expanding
 			PrivateKeyBytes:     pk.Bytes(),
 			StakedAmount:        stakedAmount,
 			Amount:              amount,
 			IsDelegate:          true,
 			NetAddress:          netAddress,
+			GenesisChainID:      chainID, // Genesis validators in ROOT chain
 		}
 
 		gsync.Lock()
@@ -714,11 +717,16 @@ func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, v
 		// Determine which committees to include in this genesis
 		// There are three cases:
 		// 1. Native validator (first committee == chainID): include all committees
-		// 2. Committee-only validator (ChainID == chainID but first committee != chainID, no expanding): include original committees
+		// 2. Committee-only validator (GenesisChainID == chainID but ChainID != chainID, no expanding): include original committees [target_committee]
 		// 3. RepeatedIdentity expanded entry (expanded to this chain): only include this chain's committee
 		var committeesForGenesis []uint64
 		isNativeValidator := len(v.Committees) > 0 && int(v.Committees[0]) == chainID
-		isCommitteeOnlyValidator := v.ChainID == chainID && v.ExpandingCommittees == nil && !isNativeValidator
+		// Committee-only: GenesisChainID is root chain, but ChainID is target committee
+		genesisChainID := v.GenesisChainID
+		if genesisChainID == 0 {
+			genesisChainID = v.ChainID
+		}
+		isCommitteeOnlyValidator := genesisChainID == chainID && v.ChainID != chainID && v.ExpandingCommittees == nil
 
 		if isNativeValidator {
 			// Native validator: include all their committees
@@ -985,12 +993,11 @@ func generateChainIdentities(chainName string, chainCfg *ChainConfig, startIdx i
 		chainCfg.ID, chainCfg.RootChain, validatorCommitteeAssignments, validatorExpandingCommittees,
 		netAddressSuffix, &chainIdentities, &chainSync, &wg, semaphoreChan, accountChan)
 
-	// Create committee-only validators (staked ONLY for target committee, not their own chain)
-	// These are NEW validators that don't use their chain's committee
+	// Create committee-only validators (staked ONLY for target committee in the root chain)
+	// These validators appear in the ROOT chain's genesis with committees: [target_committee]
 	committeeOnlyValidatorIdx := committeeOnlyValidatorStartIdx
 	for _, ca := range chainCfg.Committees {
 		for i := 0; i < ca.ValidatorCount; i++ {
-			// Create a validator staked ONLY for the target committee (not the chain's own committee)
 			addCommitteeOnlyValidator(committeeOnlyValidatorIdx+i, chainCfg.Validators.StakedAmount, chainCfg.Validators.Amount,
 				chainCfg.ID, chainCfg.RootChain, uint64(ca.ID), netAddressSuffix,
 				&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan)
@@ -1003,7 +1010,7 @@ func generateChainIdentities(chainName string, chainCfg *ChainConfig, startIdx i
 		chainCfg.ID, chainCfg.RootChain, delegatorCommitteeAssignments, delegatorExpandingCommittees,
 		netAddressSuffix, &chainIdentities, &chainSync, &wg, semaphoreChan, accountChan)
 
-	// Create committee-only delegators (staked ONLY for target committee)
+	// Create committee-only delegators (staked ONLY for target committee in the root chain)
 	committeeOnlyDelegatorIdx := delegatorStartIdx - chainCfg.Delegators.Count // Continue negative IDs after regular delegators
 	for _, ca := range chainCfg.Committees {
 		for i := 0; i < ca.DelegatorCount; i++ {
@@ -1034,14 +1041,12 @@ func generateChainIdentities(chainName string, chainCfg *ChainConfig, startIdx i
 
 // writeChainFiles writes genesis.json, config.json, and keystore.json for a chain
 // expandedValidators contains validators/delegators with correct IDs for this chain (including cross-chain)
-func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []NodeIdentity, expandedValidators []NodeIdentity,
+func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []NodeIdentity,
+	genesisValidators []NodeIdentity, keystoreValidators []NodeIdentity,
 	accounts []*fsm.Account, mainAccounts map[string]*MainAccount, password string, jsonBeautify bool, outputBaseDir string) {
 
 	chainDir := filepath.Join(outputBaseDir, chainName)
 	mustSetDirectory(chainDir)
-
-	// Use expanded validators directly - they already have correct IDs and netAddresses for this chain
-	validatorsForGenesis := expandedValidators
 
 	// Build a set of native account addresses for deduplication
 	nativeAddresses := make(map[string]bool)
@@ -1049,10 +1054,10 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 		nativeAddresses[hex.EncodeToString(account.Address)] = true
 	}
 
-	// Find validators/delegators that need accounts in this chain
+	// Find validators/delegators that need accounts in this chain (from keystoreValidators)
 	// (those whose addresses are not already in native accounts)
 	var crossChainAccounts []NodeIdentity
-	for _, v := range validatorsForGenesis {
+	for _, v := range keystoreValidators {
 		if !nativeAddresses[v.Address] {
 			crossChainAccounts = append(crossChainAccounts, v)
 			nativeAddresses[v.Address] = true // Prevent duplicates
@@ -1095,8 +1100,8 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 	}
 	accountsFile.Close()
 
-	// Write genesis.json
-	writeGenesisFromIdentities(chainDir, chainCfg.ID, chainCfg.RootChain, validatorsForGenesis, accountsPath)
+	// Write genesis.json (uses genesisValidators for validators section)
+	writeGenesisFromIdentities(chainDir, chainCfg.ID, chainCfg.RootChain, genesisValidators, accountsPath)
 
 	// Beautify genesis.json if configured
 	if jsonBeautify {
@@ -1128,12 +1133,12 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 	mustSaveAsJSON(filepath.Join(chainDir, "config.json"), templateConfig)
 
 	// Create keystore.json for this chain
-	// Include all validators/delegators that participate in this chain (including cross-chain)
+	// Include all validators/delegators whose accounts are in this chain (keystoreValidators)
 	// Plus all native full nodes
 	keystoreIdentities := make([]NodeIdentity, 0)
 
-	// Add all validators/delegators for this chain's genesis (includes cross-chain)
-	keystoreIdentities = append(keystoreIdentities, validatorsForGenesis...)
+	// Add all validators/delegators for this chain's keystore
+	keystoreIdentities = append(keystoreIdentities, keystoreValidators...)
 
 	// Add native full nodes
 	for _, identity := range chainIdentities {
@@ -1303,16 +1308,16 @@ func main() {
 		allIdentities = append(allIdentities, identities...)
 	}
 
-	// Sort all identities by ID
-	sort.Slice(allIdentities, func(i, j int) bool {
-		return allIdentities[i].ID < allIdentities[j].ID
-	})
-
 	// Build a map of chain ID to root chain ID
 	chainToRootChain := make(map[int]int)
 	for _, chainCfg := range cfg.Chains {
 		chainToRootChain[chainCfg.ID] = chainCfg.RootChain
 	}
+
+	// Sort all identities by ID
+	sort.Slice(allIdentities, func(i, j int) bool {
+		return allIdentities[i].ID < allIdentities[j].ID
+	})
 
 	// Expand multi-committee validators into multiple entries
 	// This is needed before Phase 2 so genesis.json and keystore use correct IDs
@@ -1397,8 +1402,10 @@ func main() {
 						nextExpandedID++
 					}
 
-					// Update chainId to match the committee
+					// Update chainId to match the committee (for ids.json)
 					expandedIdentity.ChainID = int(committee)
+					// Update GenesisChainID to match the committee (expanded entries go to target chain's genesis)
+					expandedIdentity.GenesisChainID = int(committee)
 					// Update netAddress to use the correct ID for this expanded entry
 					expandedIdentity.NetAddress = fmt.Sprintf("tcp://node-%d%s", expandedIdentity.ID, cfg.General.NetAddressSuffix)
 
@@ -1416,12 +1423,26 @@ func main() {
 		}
 	}
 
-	// Build a map of chainID -> expanded validators/delegators for that chain
-	chainExpandedValidators := make(map[int][]NodeIdentity)
+	// Build two maps:
+	// 1. chainGenesisValidators: validators for genesis validators section (uses GenesisChainID)
+	// 2. chainKeystoreValidators: validators for accounts and keystore (uses ChainID)
+	chainGenesisValidators := make(map[int][]NodeIdentity)
+	chainKeystoreValidators := make(map[int][]NodeIdentity)
 	for _, entry := range expandedEntries {
 		if entry.identity.NodeType == "validator" || entry.identity.NodeType == "delegator" {
-			chainExpandedValidators[entry.identity.ChainID] = append(
-				chainExpandedValidators[entry.identity.ChainID],
+			// GenesisChainID for genesis validators section
+			genesisChainID := entry.identity.GenesisChainID
+			if genesisChainID == 0 {
+				genesisChainID = entry.identity.ChainID
+			}
+			chainGenesisValidators[genesisChainID] = append(
+				chainGenesisValidators[genesisChainID],
+				entry.identity,
+			)
+
+			// ChainID for accounts and keystore
+			chainKeystoreValidators[entry.identity.ChainID] = append(
+				chainKeystoreValidators[entry.identity.ChainID],
 				entry.identity,
 			)
 		}
@@ -1430,11 +1451,13 @@ func main() {
 	// Phase 2: Write files for all chains
 	fmt.Println("Phase 2: Writing chain files...")
 	for _, chainName := range chainNames {
+		chainID := cfg.Chains[chainName].ID
 		writeChainFiles(
 			chainName,
 			cfg.Chains[chainName],
 			chainIdentitiesMap[chainName],
-			chainExpandedValidators[cfg.Chains[chainName].ID],
+			chainGenesisValidators[chainID],
+			chainKeystoreValidators[chainID],
 			chainAccountsMap[chainName],
 			mainAccounts,
 			cfg.General.Password,
@@ -1560,10 +1583,13 @@ func main() {
 	}
 
 	// Helper function to find the peer node with fewest assignments for a given nested chain
-	// Note: nestedChainPeerNodes[chainID] is guaranteed to be non-empty due to config validation
-	// (nested chains with native validators require repeatedIdentityValidatorCount > 0)
+	// Falls back to root chain validators if there are no repeatedIdentity validators for this nested chain
 	findLeastAssignedPeerNode := func(chainID int) int {
 		peerIDs := nestedChainPeerNodes[chainID]
+		// If no repeatedIdentity validators exist for this nested chain, fall back to root chain validators
+		if len(peerIDs) == 0 {
+			return findLeastAssignedRootChainPeerNode()
+		}
 		minAssignments := -1
 		selectedNode := peerIDs[0]
 		for _, id := range peerIDs {
@@ -1614,7 +1640,7 @@ func main() {
 				identity.PeerNode = &identity.ID
 			} else {
 				// Nested chain validator without root chain identity: assign to least-used peer node
-				// Note: validation ensures repeatedIdentity validators exist for nested chains with native validators
+				// Falls back to root chain validators if no repeatedIdentity validators exist
 				leastUsed := findLeastAssignedPeerNode(identity.ChainID)
 				identity.PeerNode = &leastUsed
 				peerNodeAssignments[leastUsed]++
@@ -1626,8 +1652,8 @@ func main() {
 				identity.PeerNode = &leastUsed
 				peerNodeAssignments[leastUsed]++
 			} else {
-				// Nested chain full node: assign to least-used peer node (like validators without root identity)
-				// Note: validation ensures repeatedIdentity validators exist for nested chains with native validators
+				// Nested chain full node: assign to least-used peer node
+				// Falls back to root chain validators if no repeatedIdentity validators exist
 				leastUsed := findLeastAssignedPeerNode(identity.ChainID)
 				identity.PeerNode = &leastUsed
 				peerNodeAssignments[leastUsed]++
