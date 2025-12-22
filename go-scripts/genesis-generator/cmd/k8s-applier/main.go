@@ -52,6 +52,7 @@ var (
 	timeout           = flag.Duration("timeout", 2*time.Minute, "timeout for operations")
 	startRPCPort      = flag.Int("startRPCPort", 1000, "start port range for the rpc urls")
 	startAdminRpcPort = flag.Int("startAdminRPCPort", 2000, "start port range for the admin rpc urls")
+	chainLB           = flag.Bool("chainLB", false, "create a load balancer for each chain")
 
 	// validates chain folder name format as in chain_<number>
 	chainRegex = regexp.MustCompile(`^chain_(\d+)$`)
@@ -134,6 +135,10 @@ func main() {
 		log.Error("failed to parse ids file",
 			slog.String("err", err.Error()))
 		os.Exit(1)
+	}
+	// check whether to create a load balancer for each chain
+	if !*chainLB {
+		return
 	}
 	// get the chains
 	chains := getChains(&keys)
