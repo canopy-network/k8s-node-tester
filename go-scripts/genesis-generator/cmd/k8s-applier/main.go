@@ -49,7 +49,7 @@ var (
 	config            = flag.String("config", "default", "folder name of the specific config")
 	namespace         = flag.String("namespace", "canopy", "namespace to create configmaps in")
 	kubeconfig        = flag.String("kubeconfig", filepath.Join(os.Getenv("HOME"), ".kube", "config"), "path to kubeconfig")
-	timeout           = flag.Duration("timeout", 30*time.Second, "timeout for operations")
+	timeout           = flag.Duration("timeout", 2*time.Minute, "timeout for operations")
 	startRPCPort      = flag.Int("startRPCPort", 1000, "start port range for the rpc urls")
 	startAdminRpcPort = flag.Int("startAdminRPCPort", 2000, "start port range for the admin rpc urls")
 
