@@ -1,7 +1,7 @@
 default:
   general:
-    baseRpcURL: "http://localhost"
-    baseAdminRpcURL: "http://localhost"
+    baseRpcURL: "http://91.99.158.81:1001"
+    baseAdminRpcURL: "http://91.99.158.81:2001"
     basePort: 50000
     accounts: 3
     fee: 10001
@@ -18,7 +18,7 @@ default:
   transactions:
     stake:
       - from: 0
-        to: 1
+        to: 0
         amount: 1000
         committees: [1, 2]
         delegate: true
