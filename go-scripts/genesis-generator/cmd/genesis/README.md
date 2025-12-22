@@ -388,10 +388,11 @@ For **root chains** (chain is its own root):
 For **nested chains** (different root chain):
 ```json
 "rootChain": [
-  { "chainId": 2, "url": "NODE_ID" },
   { "chainId": 1, "url": "ROOT_NODE_ID" }
 ]
 ```
+
+Note: Both root and nested chains have a single entry in `rootChain` pointing to the root chain.
 
 ### genesis.json
 

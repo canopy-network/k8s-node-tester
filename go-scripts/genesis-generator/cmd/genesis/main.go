@@ -842,12 +842,8 @@ func createTemplateConfig(chainID int, rootChainID int, sleepUntilSeconds int) *
 			},
 		}
 	} else {
-		// Nested chain: two entries - own chain with NODE_ID, root chain with ROOT_NODE_ID
+		// Nested chain: single entry with just the root chain
 		rootChain = []lib.RootChain{
-			{
-				ChainId: uint64(chainID),
-				Url:     "NODE_ID",
-			},
 			{
 				ChainId: uint64(rootChainID),
 				Url:     "ROOT_NODE_ID",
