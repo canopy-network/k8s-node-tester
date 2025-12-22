@@ -24,8 +24,7 @@ var (
 )
 
 const (
-	baseFee        = uint64(10_000)     // Base fee for transactions
-	queryHeightURL = "/v1/query/height" // URL for querying the height of the blockchain
+	baseFee = uint64(10_000) // Base fee for transactions
 	// TODO: should this be configurable?
 	retries            = 5                      // Number of retries for failed requests
 	timeout            = 5 * time.Second        // Timeout for each request
@@ -45,6 +44,8 @@ func main() {
 		log.Error("failed to load configs", "error", err)
 		os.Exit(1)
 	}
+	// set the client urls
+	SetCanopyClient(profile.General.RpcURL, profile.General.AdminRpcURL)
 	// setup the block notifier
 	notifier := NotifyNewBlock(log, profile, timeout, blockCheckInterval, retries)
 	// fan-out: listen for new blocks to broadcast
@@ -62,7 +63,7 @@ func main() {
 }
 
 // HandleTxSends handles the sending of bulk `send` transactions per block
-func HandleTxSends(log *slog.Logger, notifier <-chan int, profile *Profile, accounts []shared.Account) {
+func HandleTxSends(log *slog.Logger, notifier <-chan uint64, profile *Profile, accounts []shared.Account) {
 	if profile.Send.Count == 0 {
 		return
 	}
@@ -74,36 +75,36 @@ func HandleTxSends(log *slog.Logger, notifier <-chan int, profile *Profile, acco
 			log.Warn("errors sending txs",
 				slog.Int("errors", errors),
 				slog.Int("success", success),
-				slog.Int("height", height),
+				slog.Uint64("height", height),
 			)
 			continue
 		}
 		log.Info("success sending txs",
 			slog.Int("success", success),
 			slog.Int("count", profile.Send.Count),
-			slog.Int("height", height),
+			slog.Uint64("height", height),
 		)
 	}
 }
 
 // HandleTxs handles the sending of most transactions per defined block
-func HandleTxs(log *slog.Logger, notifier <-chan int, profile *Profile, accounts []shared.Account) {
+func HandleTxs(log *slog.Logger, notifier <-chan uint64, profile *Profile, accounts []shared.Account) {
 	for height := range notifier {
 		// gather all the transactions for the current height
 		txs := GatherAtHeight(profile, height)
 		for _, tx := range txs {
 			log.Info("sending transaction",
-				slog.String("type", string(tx.Kind())), slog.Int("height", height))
+				slog.String("type", string(tx.Kind())), slog.Uint64("height", height))
 			// send the transaction
 			hash, err := sendTx(tx, accounts[tx.Sender()], accounts[tx.Receiver()], profile.General)
 			if err != nil {
 				log.Error("failed to send transaction",
 					slog.String("type", string(tx.Kind())),
-					slog.Int("height", height), slog.String("error", err.Error()))
+					slog.Uint64("height", height), slog.String("error", err.Error()))
 				continue
 			}
 			log.Info("successfully sent transaction", slog.String("type",
-				string(tx.Kind())), slog.Int("height", height), slog.String("hash", hash))
+				string(tx.Kind())), slog.Uint64("height", height), slog.String("hash", hash))
 		}
 	}
 }
@@ -140,6 +141,10 @@ func LoadConfigs(configPath, profile string, accountsPath string) (*Profile, []s
 	if !ok {
 		return nil, nil, fmt.Errorf("profile %s not found", profile)
 	}
+	// validate the profile configuration
+	if err := pf.Validate(); err != nil {
+		return nil, nil, fmt.Errorf("validate profile %s: %w", profile, err)
+	}
 	// validate there's the minimun number of accounts enforced by the config
 	min := max(2, pf.General.Accounts)
 	if len(accounts) < min {
@@ -151,7 +156,7 @@ func LoadConfigs(configPath, profile string, accountsPath string) (*Profile, []s
 
 // GatherAtHeight returns all scheduled transactions due at height
 // SendPlan is excluded (handled separately).
-func GatherAtHeight(p *Profile, height int) []Tx {
+func GatherAtHeight(p *Profile, height uint64) []Tx {
 	var out []Tx
 	out = append(out, filterDue(p.Transactions.Stake, height)...)
 	out = append(out, filterDue(p.Transactions.EditStake, height)...)
@@ -162,7 +167,7 @@ func GatherAtHeight(p *Profile, height int) []Tx {
 }
 
 // filterDue is a helper that filters a slice of DueAt items by height
-func filterDue[T DueAt](items []T, height int) []Tx {
+func filterDue[T DueAt](items []T, height uint64) []Tx {
 	var out []Tx
 	for _, v := range items {
 		if v.Due(height) {
@@ -174,16 +179,16 @@ func filterDue[T DueAt](items []T, height int) []Tx {
 
 // NotifyNewBlock notifies the caller each time a new block is created
 func NotifyNewBlock(log *slog.Logger, profile *Profile, timeout time.Duration,
-	checkInterval time.Duration, maxRetries int) <-chan int {
+	checkInterval time.Duration, maxRetries int) <-chan uint64 {
 	type HeightResp struct {
 		Height int `json:"height"`
 	}
-	heightCh := make(chan int)
+	heightCh := make(chan uint64)
 
 	go func() {
 		defer close(heightCh)
 		// to avoid sending data to genesis blocks, avoid sending txs to genesis blocks
-		lastHeight := 1
+		lastHeight := uint64(1)
 		retries := 0
 		initialized := !profile.General.WaitForNewBlock
 		// helper function to handle errors
@@ -200,8 +205,8 @@ func NotifyNewBlock(log *slog.Logger, profile *Profile, timeout time.Duration,
 			return true
 		}
 		// handleHeight decides what to emit and whether to stop
-		counter := 0
-		handleHeight := func(height int) (stop bool, h int) {
+		counter := uint64(0)
+		handleHeight := func(height uint64) (stop bool, h uint64) {
 			// emit actual chain height until it exceeds MaxHeight
 			max := profile.General.MaxHeight
 			if !profile.General.Incremental {
@@ -220,21 +225,9 @@ func NotifyNewBlock(log *slog.Logger, profile *Profile, timeout time.Duration,
 		}
 		// check for new heights on each tick
 		for range time.Tick(checkInterval) {
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
-			// get height
-			got, err := post(ctx, profile.General.BaseRpcURL+queryHeightURL, nil)
-			cancel()
+			resp, err := canopyClient.Height()
 			if err != nil {
-				if !handleErr("wait block: failed to unmarshal height", err) {
-					return
-				}
-				continue
-			}
-			// unmarshal response
-			resp := &HeightResp{}
-			err = json.Unmarshal(got, resp)
-			if err != nil {
-				if !handleErr("wait block: failed to unmarshal height", err) {
+				if !handleErr("wait block: get height:", err) {
 					return
 				}
 				continue
@@ -315,7 +308,7 @@ func sendTx(tx Tx, from, to shared.Account, config General) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("build tx request: %w", err)
 	}
-	hash, err := tx.Do(ctx, req, config.BaseAdminRpcURL)
+	hash, err := tx.Do(ctx, req, config.AdminRpcURL)
 	if err != nil {
 		return "", fmt.Errorf("send transaction: %w", err)
 	}

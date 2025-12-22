@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/canopy-network/canopy/cmd/rpc"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/k8s-node-tester/go-scripts/shared"
@@ -27,14 +29,39 @@ const (
 
 var (
 	// default http client for making requests
-	httpClient = &http.Client{}
+	httpClient   = &http.Client{}
+	canopyClient *rpc.Client
+
+	ErrAlreadyStaked = errors.New("validator already staked")
+	ErrNotStaked     = errors.New("validator not staked")
 )
+
+// SetCanopyClient sets the canopy global client for making requests
+func SetCanopyClient(rpcURL, adminRPCURL string) {
+	canopyClient = rpc.NewClient(rpcURL, adminRPCURL)
+}
 
 // Profile is a configuration for a single profile
 type Profile struct {
 	General      General      `yaml:"general"`
 	Send         SendTx       `yaml:"send"`         // handled separately
 	Transactions Transactions `yaml:"transactions"` // height-driven ones
+}
+
+// Validate validates the profile configuration
+func (p *Profile) Validate() error {
+	var errs error
+	required := func(field string) error { return fmt.Errorf("%s is required", field) }
+	if p.General.RpcURL == "" {
+		errs = errors.Join(errs, required("baseURL"))
+	}
+	if p.General.AdminRpcURL == "" {
+		errs = errors.Join(errs, required("adminURL"))
+	}
+	if len(p.General.Chains) == 0 {
+		errs = errors.Join(errs, required("chains"))
+	}
+	return errs
 }
 
 // Transactions is the config part that defines all the transactions to make
@@ -48,21 +75,21 @@ type Transactions struct {
 
 // General populator configuration
 type General struct {
-	BaseRpcURL      string `yaml:"baseRpcURL"`
-	BaseAdminRpcURL string `yaml:"baseAdminRpcURL"`
+	RpcURL          string `yaml:"rpcURL"`
+	AdminRpcURL     string `yaml:"adminRpcURL"`
 	Incremental     bool   `yaml:"incremental"`
 	BasePort        int    `yaml:"basePort"`
 	Accounts        int    `yaml:"accounts"`
 	Fee             uint64 `yaml:"fee"`
 	Chains          []int  `yaml:"chains"`
-	MaxHeight       int    `yaml:"maxHeight"`
+	MaxHeight       uint64 `yaml:"maxHeight"`
 	WaitForNewBlock bool   `yaml:"waitForNewBlock"`
 }
 
 // Common fields
 
 type height struct {
-	Height int `yaml:"height"`
+	Height uint64 `yaml:"height"`
 }
 
 type account struct {
@@ -102,8 +129,9 @@ type StakeTx struct {
 	account         `yaml:",inline"`
 	amount          `yaml:",inline"`
 	committees      `yaml:",inline"`
-	Delegate        bool `yaml:"delegate"`
-	EarlyWithdrawal bool `yaml:"earlyWithdrawal"`
+	Delegate        bool   `yaml:"delegate"`
+	EarlyWithdrawal bool   `yaml:"earlyWithdrawal"`
+	NetAddr         string `yaml:"netAddr"`
 }
 
 // EditStakeTx represents a transaction to edit a validator/delegator's stake
@@ -152,7 +180,7 @@ type Tx interface {
 // DueAt is the interface to represent a transaction that is due at a specific height
 type DueAt interface {
 	Tx
-	Due(h int) bool
+	Due(h uint64) bool
 }
 
 // Kind implementations
@@ -164,13 +192,13 @@ func (UnstakeTx) Kind() TxType     { return TxUnstake }
 func (ChangeParamTx) Kind() TxType { return TxChangeParam }
 
 // Due returns true if the height is due
-func (s height) Due(h int) bool { return s.Height == h }
+func (s height) Due(h uint64) bool { return s.Height == h }
 
 // Due implementations
-func (tx StakeTx) Due(h int) bool     { return tx.height.Due(h) }
-func (tx EditStakeTx) Due(h int) bool { return tx.height.Due(h) }
-func (tx PauseTx) Due(h int) bool     { return tx.height.Due(h) }
-func (tx UnstakeTx) Due(h int) bool   { return tx.height.Due(h) }
+func (tx StakeTx) Due(h uint64) bool     { return tx.height.Due(h) }
+func (tx EditStakeTx) Due(h uint64) bool { return tx.height.Due(h) }
+func (tx PauseTx) Due(h uint64) bool     { return tx.height.Due(h) }
+func (tx UnstakeTx) Due(h uint64) bool   { return tx.height.Due(h) }
 
 // Routes implementations
 func (tx SendTx) Route(baseURL string) string        { return baseURL + "/v1/admin/tx-send" }
@@ -198,29 +226,37 @@ func (tx ChangeParamTx) Receiver() int { return tx.To }
 
 // Do sends a send transaction
 func (tx SendTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	return postTx(ctx, tx.Route(baseURL), txRequest{
-		Amount:   tx.Amount,
-		Address:  req.From.String(),
-		Output:   req.To.String(),
-		Password: req.Password,
-		Fee:      req.Fee,
-		Submit:   true,
-	})
+	from := rpc.AddrOrNickname{Address: req.From.String()}
+	hash, _, err := canopyClient.TxSend(from, req.To.String(), tx.Amount, req.Password, true, req.Fee)
+	return *hash, err
 }
 
 // Do sends a stake transaction
 func (tx StakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	return postTx(ctx, tx.Route(baseURL), txRequest{
-		Amount:          tx.Amount,
-		Address:         req.From.String(),
-		Output:          req.To.String(),
-		Password:        req.Password,
-		Fee:             req.Fee,
-		Delegate:        tx.Delegate,
-		Committees:      tx.committees.String(),
-		EarlyWithdrawal: tx.EarlyWithdrawal,
-		Submit:          true,
-	})
+	// validate that is staked
+	staked, _, err := isStaked(req.From.String())
+	if err != nil {
+		return "", fmt.Errorf("stake: %w", err)
+	}
+	if staked {
+		return "", fmt.Errorf("stake: [%s] %w", req.From, ErrAlreadyStaked)
+	}
+	from := rpc.AddrOrNickname{Address: req.From.String()}
+	hash, _, err := canopyClient.TxStake(from,
+		tx.NetAddr,
+		tx.Amount,
+		tx.committees.String(),
+		req.To.String(),
+		from,
+		tx.Delegate,
+		false,
+		req.Password,
+		true,
+		req.Fee)
+	if err != nil {
+		return "", fmt.Errorf("stake: [%s] %w", req.From, err)
+	}
+	return *hash, nil
 }
 
 // Do sends an edit stake transaction
@@ -268,7 +304,7 @@ func BuildTxRequest(from, to shared.Account, config General) (*TxRequest, error)
 
 func postTx(ctx context.Context, url string, obj any) (string, error) {
 	// marshal the tx
-	bz, e := json.MarshalIndent(obj, "", "  ")
+	bz, e := json.Marshal(obj)
 	if e != nil {
 		return "", fmt.Errorf("post tx: marshalling: %w", e)
 	}
@@ -345,4 +381,22 @@ type txRequest struct {
 	EndBlock   uint64 `json:"endBlock"`
 
 	Committees string `json:"committees"`
+}
+
+// network utils
+
+func isStaked(address string) (staked, delegator bool, err error) {
+	if address == "" {
+		return false, false, errors.New("address is empty")
+	}
+	validator, err := canopyClient.Validator(0, address)
+	if err != nil {
+		// client error handling is broken, need to handle errors by looking at the error message string
+		if strings.Contains(err.Error(), "validator does not exist") {
+			return false, false, nil
+		}
+		fmt.Println("this should not happen")
+		return false, false, err
+	}
+	return true, validator.Delegate, nil
 }
