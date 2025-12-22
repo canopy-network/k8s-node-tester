@@ -110,7 +110,7 @@ genesis/apply:
 	$(call check_vars, CONFIG)
 	$(eval CHAIN_LB ?= false)
 	./go-scripts/bin/genesis_apply --path ./go-scripts/genesis-generator/artifacts \
-		--config $(CONFIG) --chainLB $(CHAIN_LB)
+		--config $(CONFIG) $(if $(filter true,$(CHAIN_LB)),--chainLB)
 
 ## populator/load: runs the populator load test
 .PHONY: populator/load
