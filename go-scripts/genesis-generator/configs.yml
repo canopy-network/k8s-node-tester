@@ -587,3 +587,72 @@ one-chain-1000:
     chain_101:
       id: 101
       rootChain: 1
+
+10-subchains:
+  general:
+    concurrency: 100
+    password: "pablito"
+    buffer: 1000
+    netAddressSuffix: ".p2p"
+    jsonBeautify: true
+  nodes:
+    count: 23
+  chains:
+    chain_1:
+      id: 1
+      rootChain: 1
+      validators:
+        count: 3
+        stakedAmount: 1000000000
+        amount: 1000000
+      committees:
+        - id: 2
+          validatorCount: 2
+        - id: 3
+          validatorCount: 2
+        - id: 4
+          validatorCount: 2
+        - id: 5
+          validatorCount: 2
+        - id: 6
+          validatorCount: 2
+        - id: 7
+          validatorCount: 2
+        - id: 8
+          validatorCount: 2
+        - id: 9
+          validatorCount: 2
+        - id: 10
+          validatorCount: 2
+        - id: 11
+          validatorCount: 2
+    chain_2:
+      id: 2
+      rootChain: 1
+    chain_3:
+      id: 3
+      rootChain: 1
+    chain_4:
+      id: 4
+      rootChain: 1
+    chain_5:
+      id: 5
+      rootChain: 1
+    chain_6:
+      id: 6
+      rootChain: 1
+    chain_7:
+      id: 7
+      rootChain: 1
+    chain_8:
+      id: 8
+      rootChain: 1
+    chain_9:
+      id: 9
+      rootChain: 1
+    chain_10:
+      id: 10
+      rootChain: 1
+    chain_11:
+      id: 11
+      rootChain: 1

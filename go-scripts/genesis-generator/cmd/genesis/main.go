@@ -842,12 +842,8 @@ func createTemplateConfig(chainID int, rootChainID int, sleepUntilSeconds int) *
 			},
 		}
 	} else {
-		// Nested chain: two entries - own chain with NODE_ID, root chain with ROOT_NODE_ID
+		// Nested chain: single entry with just the root chain
 		rootChain = []lib.RootChain{
-			{
-				ChainId: uint64(chainID),
-				Url:     "NODE_ID",
-			},
 			{
 				ChainId: uint64(rootChainID),
 				Url:     "ROOT_NODE_ID",
@@ -859,6 +855,12 @@ func createTemplateConfig(chainID int, rootChainID int, sleepUntilSeconds int) *
 	var sleepUntilEpoch uint64
 	if sleepUntilSeconds != 0 {
 		sleepUntilEpoch = uint64(time.Now().Unix() + int64(sleepUntilSeconds))
+	}
+
+	// Set ProposeVoteTimeoutMS based on chain type
+	proposeVoteTimeoutMS := 4000 // Root chain default
+	if chainID != rootChainID {
+		proposeVoteTimeoutMS = 3000 // Nested chain
 	}
 
 	return &lib.Config{
@@ -899,7 +901,7 @@ func createTemplateConfig(chainID int, rootChainID int, sleepUntilSeconds int) *
 			ElectionTimeoutMS:       1500,
 			ElectionVoteTimeoutMS:   1500,
 			ProposeTimeoutMS:        2500,
-			ProposeVoteTimeoutMS:    4000,
+			ProposeVoteTimeoutMS:    proposeVoteTimeoutMS,
 			PrecommitTimeoutMS:      2000,
 			PrecommitVoteTimeoutMS:  2000,
 			CommitTimeoutMS:         2000,
