@@ -106,24 +106,24 @@ type AppConfig struct {
 
 // NodeIdentity represents a node's identity for ids.json
 type NodeIdentity struct {
-	ID              int      `json:"id"`
-	ChainID         int      `json:"chainId"`
-	RootChainID     int      `json:"rootChainId"`
-	RootChainNode   *int     `json:"rootChainNode,omitempty"` // nil for delegators (they're not physical nodes)
-	PeerNode        *int     `json:"peerNode,omitempty"`      // nil for delegators (they're not physical nodes)
-	Address         string   `json:"address"`
-	PublicKey       string   `json:"publicKey"`
-	PrivateKey      string   `json:"privateKey"`
-	NodeType        string   `json:"nodeType"`
-	Committees      []uint64 `json:"-"` // Not exported to JSON, used internally
+	ID            int      `json:"id"`
+	ChainID       int      `json:"chainId"`
+	RootChainID   int      `json:"rootChainId"`
+	RootChainNode *int     `json:"rootChainNode,omitempty"` // nil for delegators (they're not physical nodes)
+	PeerNode      *int     `json:"peerNode,omitempty"`      // nil for delegators (they're not physical nodes)
+	Address       string   `json:"address"`
+	PublicKey     string   `json:"publicKey"`
+	PrivateKey    string   `json:"privateKey"`
+	NodeType      string   `json:"nodeType"`
+	Committees    []uint64 `json:"-"` // Not exported to JSON, used internally
 	// ExpandingCommittees tracks which committees this validator should create expanded entries for
 	// (appears in other chain's genesis). Other committees are just staked but don't expand.
 	ExpandingCommittees map[uint64]bool `json:"-"` // Not exported to JSON, used internally
-	PrivateKeyBytes []byte   `json:"-"` // Not exported to JSON, used for keystore
-	StakedAmount    uint64   `json:"-"` // Not exported to JSON, used for genesis
-	Amount          uint64   `json:"-"` // Not exported to JSON, used for genesis
-	IsDelegate      bool     `json:"-"` // Not exported to JSON, used for genesis
-	NetAddress      string   `json:"-"` // Not exported to JSON, used for genesis
+	PrivateKeyBytes     []byte          `json:"-"` // Not exported to JSON, used for keystore
+	StakedAmount        uint64          `json:"-"` // Not exported to JSON, used for genesis
+	Amount              uint64          `json:"-"` // Not exported to JSON, used for genesis
+	IsDelegate          bool            `json:"-"` // Not exported to JSON, used for genesis
+	NetAddress          string          `json:"-"` // Not exported to JSON, used for genesis
 }
 
 // MainAccount represents a main account identity for ids.json
@@ -886,13 +886,14 @@ func createTemplateConfig(chainID int, rootChainID int, sleepUntilSeconds int) *
 			BannedIPs:       nil,
 		},
 		ConsensusConfig: lib.ConsensusConfig{
-			ElectionTimeoutMS:       2000,
-			ElectionVoteTimeoutMS:   3000,
-			ProposeTimeoutMS:        3000,
-			ProposeVoteTimeoutMS:    2000,
+			NewHeightTimeoutMs:      4500,
+			ElectionTimeoutMS:       1500,
+			ElectionVoteTimeoutMS:   1500,
+			ProposeTimeoutMS:        2500,
+			ProposeVoteTimeoutMS:    4000,
 			PrecommitTimeoutMS:      2000,
 			PrecommitVoteTimeoutMS:  2000,
-			CommitTimeoutMS:         6000,
+			CommitTimeoutMS:         2000,
 			RoundInterruptTimeoutMS: 2000,
 		},
 		MempoolConfig: lib.MempoolConfig{
@@ -1611,26 +1612,26 @@ func main() {
 			} else if _, hasRootIdentity := addressToRootChainID[entry.originalAddr]; hasRootIdentity {
 				// Nested chain validator with same identity on root chain: peerNode is itself
 				identity.PeerNode = &identity.ID
-		} else {
-			// Nested chain validator without root chain identity: assign to least-used peer node
-			// Note: validation ensures repeatedIdentity validators exist for nested chains with native validators
-			leastUsed := findLeastAssignedPeerNode(identity.ChainID)
-			identity.PeerNode = &leastUsed
-			peerNodeAssignments[leastUsed]++
-		}
+			} else {
+				// Nested chain validator without root chain identity: assign to least-used peer node
+				// Note: validation ensures repeatedIdentity validators exist for nested chains with native validators
+				leastUsed := findLeastAssignedPeerNode(identity.ChainID)
+				identity.PeerNode = &leastUsed
+				peerNodeAssignments[leastUsed]++
+			}
 		case "fullnode":
 			if entry.isRootChain {
 				// Root chain full node: peerNode is assigned to a root chain validator (distributed evenly)
 				leastUsed := findLeastAssignedRootChainPeerNode()
 				identity.PeerNode = &leastUsed
 				peerNodeAssignments[leastUsed]++
-		} else {
-			// Nested chain full node: assign to least-used peer node (like validators without root identity)
-			// Note: validation ensures repeatedIdentity validators exist for nested chains with native validators
-			leastUsed := findLeastAssignedPeerNode(identity.ChainID)
-			identity.PeerNode = &leastUsed
-			peerNodeAssignments[leastUsed]++
-		}
+			} else {
+				// Nested chain full node: assign to least-used peer node (like validators without root identity)
+				// Note: validation ensures repeatedIdentity validators exist for nested chains with native validators
+				leastUsed := findLeastAssignedPeerNode(identity.ChainID)
+				identity.PeerNode = &leastUsed
+				peerNodeAssignments[leastUsed]++
+			}
 		}
 
 		key := fmt.Sprintf("node-%d", identity.ID)
