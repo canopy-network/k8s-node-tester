@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -64,10 +65,10 @@ func main() {
 
 // HandleTxSends handles the sending of bulk `send` transactions per block
 func HandleTxSends(log *slog.Logger, notifier <-chan uint64, profile *Profile, accounts []shared.Account) {
-	if profile.Send.Count == 0 {
-		return
-	}
 	for height := range notifier {
+		if profile.Send.Count == 0 {
+			continue
+		}
 		send := func() (string, error) { return sendTx(profile.Send, accounts[0], accounts[1], profile.General) }
 		success, errors := RunConcurrentTxs(context.Background(),
 			profile.Send.Count, profile.Send.Concurrency, send, log)
@@ -81,7 +82,7 @@ func HandleTxSends(log *slog.Logger, notifier <-chan uint64, profile *Profile, a
 		}
 		log.Info("success sending txs",
 			slog.Int("success", success),
-			slog.Int("count", profile.Send.Count),
+			slog.Uint64("count", uint64(profile.Send.Count)),
 			slog.Uint64("height", height),
 		)
 	}
@@ -127,6 +128,10 @@ func LoadConfigs(configPath, profile string, accountsPath string) (*Profile, []s
 	for _, account := range accountsMap.Accounts {
 		accounts = append(accounts, account)
 	}
+	// sort the accounts lexicographically for deterministic order
+	sort.Slice(accounts, func(i, j int) bool {
+		return accounts[i].Address < accounts[j].Address
+	})
 	// retrieve the populator config
 	path = filepath.Clean(configPath)
 	rawConfig, err := os.ReadFile(path)
@@ -258,13 +263,10 @@ func NotifyNewBlock(log *slog.Logger, profile *Profile, timeout time.Duration,
 
 // RunConcurrentTxs runs concurrent tx for a total of count.
 // The do function should perform the work for a single idempotent job.
-func RunConcurrentTxs(ctx context.Context, count, concurrency int,
+func RunConcurrentTxs(ctx context.Context, count, concurrency uint,
 	do func() (string, error), log *slog.Logger) (int, int) {
-	if concurrency <= 0 {
+	if concurrency == 0 {
 		concurrency = 1
-	}
-	if concurrency > count {
-		concurrency = count
 	}
 
 	sem := semaphore.NewWeighted(int64(concurrency))

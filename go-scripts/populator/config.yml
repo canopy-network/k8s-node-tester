@@ -12,25 +12,28 @@ default:
     waitForNewBlock: false
   send:
     chains: [1, 2]
-    count: 10 # per block
+    count: 0 # per block
     amount: 10
     concurrency: 10
   transactions:
     stake:
-      - from: 0
-        to: 0
+      - from: 1
+        to: 1
         amount: 1000
+        committees: [1, 2]
+        delegate: true
+        height: 0
+        netAddress: "tcp://fake.com"
+        earlyWithdrawal: true
+    editStake:
+      - from: 1
+        to: 1
+        amount: 10000
         committees: [1, 2]
         delegate: true
         height: 1
         netAddress: "tcp://fake.com"
         earlyWithdrawal: true
-    # editStake:
-    #   - from: 1
-    #     to: 2
-    #     amount: 1100
-    #     committees: [1]
-    #     height: 2
     # pause:
     #   - from: 1
     #     to: 2
