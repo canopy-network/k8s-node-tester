@@ -857,6 +857,12 @@ func createTemplateConfig(chainID int, rootChainID int, sleepUntilSeconds int) *
 		sleepUntilEpoch = uint64(time.Now().Unix() + int64(sleepUntilSeconds))
 	}
 
+	// Set ProposeVoteTimeoutMS based on chain type
+	proposeVoteTimeoutMS := 4000 // Root chain default
+	if chainID != rootChainID {
+		proposeVoteTimeoutMS = 3000 // Nested chain
+	}
+
 	return &lib.Config{
 		MainConfig: lib.MainConfig{
 			LogLevel:   "debug",
@@ -895,7 +901,7 @@ func createTemplateConfig(chainID int, rootChainID int, sleepUntilSeconds int) *
 			ElectionTimeoutMS:       1500,
 			ElectionVoteTimeoutMS:   1500,
 			ProposeTimeoutMS:        2500,
-			ProposeVoteTimeoutMS:    4000,
+			ProposeVoteTimeoutMS:    proposeVoteTimeoutMS,
 			PrecommitTimeoutMS:      2000,
 			PrecommitVoteTimeoutMS:  2000,
 			CommitTimeoutMS:         2000,

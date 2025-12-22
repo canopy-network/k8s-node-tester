@@ -394,6 +394,10 @@ For **nested chains** (different root chain):
 
 Note: Both root and nested chains have a single entry in `rootChain` pointing to the root chain.
 
+**Consensus Timeout Differences:**
+- **Root chains**: `proposeVoteTimeoutMS: 4000`
+- **Nested chains**: `proposeVoteTimeoutMS: 3000`
+
 ### genesis.json
 
 Chain genesis file containing validators, accounts, and parameters. Validators from other chains that participate in this chain's committee are included with only this chain's committee in their committees list.
