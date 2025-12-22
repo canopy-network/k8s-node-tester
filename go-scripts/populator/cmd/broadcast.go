@@ -1,16 +1,16 @@
 package main
 
-// Broadcaster fans out ints from a single source channel to multiple subscribers (no buffers).
-type Broadcaster struct {
-	subs []chan int
+// Broadcaster fans out values of type T from a single source channel to multiple subscribers (no buffers).
+type Broadcaster[T any] struct {
+	subs []chan T
 }
 
 // NewBroadcaster creates a broadcaster that relays values from src to all subscribers.
 // When src closes, all subscriber channels are closed.
-func NewBroadcaster(src <-chan int, subscribers int) *Broadcaster {
-	b := &Broadcaster{subs: make([]chan int, subscribers)}
+func NewBroadcaster[T any](src <-chan T, subscribers int) *Broadcaster[T] {
+	b := &Broadcaster[T]{subs: make([]chan T, subscribers)}
 	for i := range subscribers {
-		b.subs[i] = make(chan int) // unbuffered
+		b.subs[i] = make(chan T) // unbuffered
 	}
 	go func() {
 		for v := range src {
@@ -26,8 +26,8 @@ func NewBroadcaster(src <-chan int, subscribers int) *Broadcaster {
 }
 
 // Channels returns the subscriber receive-only channels.
-func (b *Broadcaster) Channels() []<-chan int {
-	outs := make([]<-chan int, len(b.subs))
+func (b *Broadcaster[T]) Channels() []<-chan T {
+	outs := make([]<-chan T, len(b.subs))
 	for i, ch := range b.subs {
 		outs[i] = ch
 	}

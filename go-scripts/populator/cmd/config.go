@@ -82,14 +82,14 @@ type General struct {
 	Accounts        int    `yaml:"accounts"`
 	Fee             uint64 `yaml:"fee"`
 	Chains          []int  `yaml:"chains"`
-	MaxHeight       int    `yaml:"maxHeight"`
+	MaxHeight       uint64 `yaml:"maxHeight"`
 	WaitForNewBlock bool   `yaml:"waitForNewBlock"`
 }
 
 // Common fields
 
 type height struct {
-	Height int `yaml:"height"`
+	Height uint64 `yaml:"height"`
 }
 
 type account struct {
@@ -180,7 +180,7 @@ type Tx interface {
 // DueAt is the interface to represent a transaction that is due at a specific height
 type DueAt interface {
 	Tx
-	Due(h int) bool
+	Due(h uint64) bool
 }
 
 // Kind implementations
@@ -192,13 +192,13 @@ func (UnstakeTx) Kind() TxType     { return TxUnstake }
 func (ChangeParamTx) Kind() TxType { return TxChangeParam }
 
 // Due returns true if the height is due
-func (s height) Due(h int) bool { return s.Height == h }
+func (s height) Due(h uint64) bool { return s.Height == h }
 
 // Due implementations
-func (tx StakeTx) Due(h int) bool     { return tx.height.Due(h) }
-func (tx EditStakeTx) Due(h int) bool { return tx.height.Due(h) }
-func (tx PauseTx) Due(h int) bool     { return tx.height.Due(h) }
-func (tx UnstakeTx) Due(h int) bool   { return tx.height.Due(h) }
+func (tx StakeTx) Due(h uint64) bool     { return tx.height.Due(h) }
+func (tx EditStakeTx) Due(h uint64) bool { return tx.height.Due(h) }
+func (tx PauseTx) Due(h uint64) bool     { return tx.height.Due(h) }
+func (tx UnstakeTx) Due(h uint64) bool   { return tx.height.Due(h) }
 
 // Routes implementations
 func (tx SendTx) Route(baseURL string) string        { return baseURL + "/v1/admin/tx-send" }
