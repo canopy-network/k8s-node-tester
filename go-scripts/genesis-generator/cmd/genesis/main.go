@@ -333,24 +333,25 @@ func validateCommitteeAssignments(cfg *AppConfig) error {
 		}
 
 		// Check if there's any committee assignment for this nested chain
-		hasRepeatedIdentityValidator := false
+		// At least one of validatorCount + repeatedIdentityValidatorCount must be > 0 for peerNode assignment
+		repeatedIdentityValidatorCount := 0
 		committeeOnlyValidatorCount := 0
 		for _, ca := range rootChainCfg.Committees {
 			if ca.ID == chainCfg.ID {
-				if ca.RepeatedIdentityValidatorCount > 0 {
-					hasRepeatedIdentityValidator = true
-				}
+				repeatedIdentityValidatorCount = ca.RepeatedIdentityValidatorCount
 				committeeOnlyValidatorCount = ca.ValidatorCount
 				break
 			}
 		}
 
-		hasAnyAssignment := hasRepeatedIdentityValidator || committeeOnlyValidatorCount > 0
-		if hasAnyAssignment {
-			fmt.Printf("  Nested chain %s: root chain has validators in committee %d ✓\n", chainName, chainCfg.ID)
-		} else {
-			fmt.Printf("  Nested chain %s: no validators assigned to committee %d\n", chainName, chainCfg.ID)
+		totalValidatorsForCommittee := repeatedIdentityValidatorCount + committeeOnlyValidatorCount
+		if totalValidatorsForCommittee == 0 {
+			return fmt.Errorf("nested chain %s (ID %d): root chain must have at least one validator assigned to committee %d "+
+				"(either via repeatedIdentityValidatorCount or validatorCount) for peerNode assignment",
+				chainName, chainCfg.ID, chainCfg.ID)
 		}
+		fmt.Printf("  Nested chain %s: root chain has %d validators in committee %d (%d repeatedIdentity + %d committee-only) ✓\n",
+			chainName, totalValidatorsForCommittee, chainCfg.ID, repeatedIdentityValidatorCount, committeeOnlyValidatorCount)
 	}
 
 	return nil
@@ -1486,13 +1487,15 @@ func main() {
 	}
 
 	// For peerNode: Build a map of nested chain ID -> list of validator IDs that have root chain identity
-	// These are validators from the root chain that also participate in this nested chain
+	// These are validators from the root chain that also participate in this nested chain (repeatedIdentity)
 	nestedChainPeerNodes := make(map[int][]int) // chainID -> []nodeID
+	// Also build a map of committee-only validators per chain (validators from root chain staked only for that committee)
+	committeeOnlyPeerNodes := make(map[int][]int) // chainID -> []nodeID
 	for _, entry := range expandedEntries {
 		if entry.identity.NodeType != "validator" || entry.identity.IsDelegate {
 			continue
 		}
-		// Check if this is a nested chain entry AND the validator has a root chain identity
+		// Check if this is a nested chain entry AND the validator has a root chain identity (repeatedIdentity)
 		if !entry.isRootChain {
 			if _, hasRootIdentity := addressToRootChainID[entry.originalAddr]; hasRootIdentity {
 				// This validator has root chain identity and participates in this nested chain
@@ -1501,6 +1504,19 @@ func main() {
 					entry.identity.ID,
 				)
 			}
+		}
+		// Check if this is a committee-only validator (GenesisChainID != ChainID)
+		// These are validators from root chain staked only for a specific committee
+		genesisChainID := entry.identity.GenesisChainID
+		if genesisChainID == 0 {
+			genesisChainID = entry.identity.ChainID
+		}
+		if genesisChainID != entry.identity.ChainID && entry.identity.ExpandingCommittees == nil {
+			// Committee-only validator: from root chain, staked for target committee
+			committeeOnlyPeerNodes[entry.identity.ChainID] = append(
+				committeeOnlyPeerNodes[entry.identity.ChainID],
+				entry.identity.ID,
+			)
 		}
 	}
 
@@ -1515,6 +1531,12 @@ func main() {
 	// Count existing assignments to each peer node (per nested chain)
 	peerNodeAssignments := make(map[int]int) // nodeID -> count
 	for _, peerIDs := range nestedChainPeerNodes {
+		for _, id := range peerIDs {
+			peerNodeAssignments[id] = 0
+		}
+	}
+	// Also track committee-only validators for peerNode
+	for _, peerIDs := range committeeOnlyPeerNodes {
 		for _, id := range peerIDs {
 			peerNodeAssignments[id] = 0
 		}
@@ -1551,8 +1573,18 @@ func main() {
 			// Root chain validators reference themselves for peerNode
 			peerNodeAssignments[entry.identity.ID]++
 		} else if _, hasRootIdentity := addressToRootChainID[entry.originalAddr]; hasRootIdentity {
-			// Nested chain validators with root chain identity reference themselves for peerNode
+			// Nested chain validators with root chain identity (repeatedIdentity) reference themselves for peerNode
 			peerNodeAssignments[entry.identity.ID]++
+		} else {
+			// Check if this is a committee-only validator (from root chain, staked for this committee)
+			genesisChainID := entry.identity.GenesisChainID
+			if genesisChainID == 0 {
+				genesisChainID = entry.identity.ChainID
+			}
+			if genesisChainID != entry.identity.ChainID && entry.identity.ExpandingCommittees == nil {
+				// Committee-only validator: references itself for peerNode
+				peerNodeAssignments[entry.identity.ID]++
+			}
 		}
 	}
 
@@ -1583,13 +1615,16 @@ func main() {
 	}
 
 	// Helper function to find the peer node with fewest assignments for a given nested chain
-	// Falls back to root chain validators if there are no repeatedIdentity validators for this nested chain
+	// Priority: repeatedIdentity validators > committee-only validators
+	// Note: Validation ensures at least one of these exists for each nested chain
 	findLeastAssignedPeerNode := func(chainID int) int {
+		// First try repeatedIdentity validators
 		peerIDs := nestedChainPeerNodes[chainID]
-		// If no repeatedIdentity validators exist for this nested chain, fall back to root chain validators
+		// If no repeatedIdentity validators, use committee-only validators
 		if len(peerIDs) == 0 {
-			return findLeastAssignedRootChainPeerNode()
+			peerIDs = committeeOnlyPeerNodes[chainID]
 		}
+		// Validation ensures peerIDs is never empty for nested chains
 		minAssignments := -1
 		selectedNode := peerIDs[0]
 		for _, id := range peerIDs {
@@ -1630,17 +1665,27 @@ func main() {
 		}
 
 		// Assign peerNode (for validators and full nodes)
+		// Check if this is a committee-only validator (from root chain, staked for target committee)
+		genesisChainID := identity.GenesisChainID
+		if genesisChainID == 0 {
+			genesisChainID = identity.ChainID
+		}
+		isCommitteeOnlyValidator := genesisChainID != identity.ChainID && identity.ExpandingCommittees == nil
+
 		switch identity.NodeType {
 		case "validator":
 			if entry.isRootChain {
 				// Root chain validator: peerNode is itself
 				identity.PeerNode = &identity.ID
 			} else if _, hasRootIdentity := addressToRootChainID[entry.originalAddr]; hasRootIdentity {
-				// Nested chain validator with same identity on root chain: peerNode is itself
+				// Nested chain validator with same identity on root chain (repeatedIdentity): peerNode is itself
+				identity.PeerNode = &identity.ID
+			} else if isCommitteeOnlyValidator {
+				// Committee-only validator (from root chain, staked for this committee): peerNode is itself
 				identity.PeerNode = &identity.ID
 			} else {
 				// Nested chain validator without root chain identity: assign to least-used peer node
-				// Falls back to root chain validators if no repeatedIdentity validators exist
+				// Priority: repeatedIdentity > committee-only > root chain validators
 				leastUsed := findLeastAssignedPeerNode(identity.ChainID)
 				identity.PeerNode = &leastUsed
 				peerNodeAssignments[leastUsed]++

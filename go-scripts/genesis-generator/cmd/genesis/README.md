@@ -173,10 +173,11 @@ The script validates:
 2. At least one root chain has validators (for rootChainNode assignment)
 3. RepeatedIdentity assignment counts don't exceed available validators/delegators (committee-only creates NEW validators, so no limit)
 4. Committee IDs reference valid chain IDs
+5. **Each nested chain must have at least one validator assigned via `repeatedIdentityValidatorCount + validatorCount`** (for peerNode assignment)
 
 **peerNode Assignment:**
-- Validators with root chain identity: peerNode is themselves
-- Validators without root chain identity: peerNode is assigned to repeatedIdentity validators if available, otherwise falls back to root chain validators
+- Validators with root chain identity (repeatedIdentity or committee-only): peerNode is themselves
+- Validators without root chain identity: peerNode is assigned to repeatedIdentity or committee-only validators (never root chain validators)
 
 ### Delegators
 
@@ -340,10 +341,13 @@ The `main-accounts` map contains accounts defined in `accounts.yml` (see [accoun
 
 **peerNode Logic** (validators and full nodes only, delegators don't have this field):
 - **Root chain validator**: `peerNode` = its own ID
-- **Nested chain validator (same identity on root chain)**: `peerNode` = its own ID
-- **Nested chain validator (no root chain identity)**: `peerNode` = ID of a nested chain validator that has root chain identity (distributed evenly)
+- **Nested chain validator (repeatedIdentity - same identity on root chain)**: `peerNode` = its own ID
+- **Committee-only validator (from root chain, staked for target committee)**: `peerNode` = its own ID
+- **Nested chain validator (no root chain identity)**: `peerNode` = ID of another validator (priority: repeatedIdentity > committee-only, distributed evenly)
 - **Root chain full node**: `peerNode` = ID of a root chain validator (distributed evenly)
-- **Nested chain full node**: `peerNode` = ID of a nested chain validator that has root chain identity (distributed evenly)
+- **Nested chain full node**: `peerNode` = ID of another validator (priority: repeatedIdentity > committee-only, distributed evenly)
+
+**Note**: Root chain validators are never assigned as `peerNode` for nested chains. Validation ensures each nested chain has at least one validator from `repeatedIdentityValidatorCount + validatorCount`.
 
 ### config.json
 
