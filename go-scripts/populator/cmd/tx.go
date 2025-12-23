@@ -130,7 +130,7 @@ func (tx StakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (strin
 		req.To.String(),
 		from,
 		tx.Delegate,
-		false,
+		tx.EarlyWithdrawal,
 		req.Password,
 		true,
 		req.Fee)
@@ -168,7 +168,7 @@ func (tx EditStakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (s
 		req.To.String(),
 		from,
 		tx.Delegate,
-		false,
+		tx.EarlyWithdrawal,
 		req.Password,
 		true,
 		req.Fee)

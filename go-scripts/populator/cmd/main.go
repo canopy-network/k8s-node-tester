@@ -48,7 +48,7 @@ func main() {
 	// set the client urls
 	SetCanopyClient(profile.General.RpcURL, profile.General.AdminRpcURL)
 	// setup the block notifier
-	notifier := NotifyNewBlock(log, profile, timeout, blockCheckInterval, retries)
+	notifier := BlockNotifier(log, profile, timeout, blockCheckInterval, retries)
 	// fan-out: listen for new blocks to broadcast
 	b := NewBroadcaster(notifier, 2)
 	// start the send tx handlers
@@ -184,85 +184,6 @@ func filterDue[T DueAt](items []T, height uint64) []Tx {
 	return out
 }
 
-// NotifyNewBlock notifies the caller each time a new block is created
-func NotifyNewBlock(log *slog.Logger, profile *Profile, timeout time.Duration,
-	checkInterval time.Duration, maxRetries int) <-chan uint64 {
-	type HeightResp struct {
-		Height int `json:"height"`
-	}
-	heightCh := make(chan uint64)
-
-	go func() {
-		defer close(heightCh)
-		// to avoid sending data to genesis blocks, avoid sending txs to genesis blocks
-		lastHeight := uint64(1)
-		retries := 0
-		initialized := !profile.General.WaitForNewBlock
-		// helper function to handle errors
-		handleErr := func(msg string, err error) (shouldContinue bool) {
-			retries++
-			log.Error(msg,
-				slog.String("err", err.Error()),
-				slog.Int("retry", retries),
-				slog.Int("maxRetries", maxRetries),
-			)
-			if retries >= maxRetries {
-				return false
-			}
-			return true
-		}
-		// handleHeight decides what to emit and whether to stop
-		counter := uint64(0)
-		handleHeight := func(height uint64) (stop bool, h uint64) {
-			// emit actual chain height until it exceeds MaxHeight
-			max := profile.General.MaxHeight
-			if !profile.General.Incremental {
-				if height <= max {
-					return false, height
-				}
-				return true, height
-			}
-			// incremental mode: height becomes a 0 based counter, incremented by 1 per block
-			// emit the counter value
-			counter++
-			if counter <= max {
-				return false, counter
-			}
-			return true, counter
-		}
-		// check for new heights on each tick
-		for range time.Tick(checkInterval) {
-			resp, err := cnpyClient.Height()
-			if err != nil {
-				if !handleErr("wait block: get height:", err) {
-					return
-				}
-				continue
-			}
-			// reset retries on success
-			retries = 0
-			// ignore genesis or non-increasing heights
-			if resp.Height == 0 || resp.Height <= lastHeight {
-				continue
-			}
-			lastHeight = resp.Height
-			// wait for the next block on the very first iteration so is always notified on a "new block"
-			if !initialized {
-				initialized = true
-				continue
-			}
-			// handle the new height
-			stop, height := handleHeight(resp.Height)
-			if stop {
-				return
-			}
-			heightCh <- height
-		}
-	}()
-	// exit
-	return heightCh
-}
-
 // RunConcurrentTxs runs concurrent tx for a total of count.
 // The do function should perform the work for a single idempotent job.
 func RunConcurrentTxs(ctx context.Context, count, concurrency uint,
@@ -270,12 +191,12 @@ func RunConcurrentTxs(ctx context.Context, count, concurrency uint,
 	if concurrency == 0 {
 		concurrency = 1
 	}
-
+	// create a semaphore to limit concurrency
 	sem := semaphore.NewWeighted(int64(concurrency))
 	var wg sync.WaitGroup
 	var successes atomic.Int32
 	var errors atomic.Int32
-
+	// run the tx N times
 	for range count {
 		if err := sem.Acquire(ctx, 1); err != nil {
 			// typically only fails if ctx is canceled
@@ -299,7 +220,7 @@ func RunConcurrentTxs(ctx context.Context, count, concurrency uint,
 			successes.Add(1)
 		}()
 	}
-
+	// wait for all txs to complete
 	wg.Wait()
 	return int(successes.Load()), int(errors.Load())
 }
