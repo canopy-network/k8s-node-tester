@@ -92,14 +92,15 @@ type CommitteeAssignment struct {
 
 // ChainConfig represents a single chain's configuration
 type ChainConfig struct {
-	ID         int                   `yaml:"id"`
-	RootChain  int                   `yaml:"rootChain"`
-	Validators ValidatorsConfig      `yaml:"validators"`
-	FullNodes  FullNodesConfig       `yaml:"fullNodes"`
-	Accounts   AccountsConfig        `yaml:"accounts"`
-	Delegators DelegatorsConfig      `yaml:"delegators"`
-	Committees []CommitteeAssignment `yaml:"committees"`
-	SleepUntil int                   `yaml:"sleepUntil,omitempty"` // Optional: epoch timestamp for sleepUntil
+	ID               int                   `yaml:"id"`
+	RootChain        int                   `yaml:"rootChain"`
+	Validators       ValidatorsConfig      `yaml:"validators"`
+	FullNodes        FullNodesConfig       `yaml:"fullNodes"`
+	Accounts         AccountsConfig        `yaml:"accounts"`
+	Delegators       DelegatorsConfig      `yaml:"delegators"`
+	Committees       []CommitteeAssignment `yaml:"committees"`
+	SleepUntil       int                   `yaml:"sleepUntil,omitempty"`       // Optional: epoch timestamp for sleepUntil
+	MaxCommitteeSize int                   `yaml:"maxCommitteeSize,omitempty"` // Optional: max committee size (default: 100)
 }
 
 // AppConfig represents the configuration structure
@@ -700,7 +701,7 @@ func mustSaveAsJSON(filename string, data any) {
 
 // writeGenesisFromIdentities writes genesis.json for a specific chain using identities
 // For validators from other chains (cross-chain), only include this chain's committee
-func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, validators []NodeIdentity, accountsPath string) {
+func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, validators []NodeIdentity, accountsPath string, maxCommitteeSize int) {
 	genesisFile, err := os.Create(filepath.Join(chainDir, "genesis.json"))
 	if err != nil {
 		panic(err)
@@ -784,7 +785,7 @@ func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, v
 				MaxNonSign:                         4,
 				NonSignWindow:                      10,
 				MaxCommittees:                      15,
-				MaxCommitteeSize:                   100,
+				MaxCommitteeSize:                   uint64(maxCommitteeSize),
 				EarlyWithdrawalPenalty:             20,
 				DelegateUnstakingBlocks:            2,
 				MinimumOrderSize:                   1000,
@@ -1101,7 +1102,11 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 	accountsFile.Close()
 
 	// Write genesis.json (uses genesisValidators for validators section)
-	writeGenesisFromIdentities(chainDir, chainCfg.ID, chainCfg.RootChain, genesisValidators, accountsPath)
+	maxCommitteeSize := chainCfg.MaxCommitteeSize
+	if maxCommitteeSize == 0 {
+		maxCommitteeSize = 100 // Default value
+	}
+	writeGenesisFromIdentities(chainDir, chainCfg.ID, chainCfg.RootChain, genesisValidators, accountsPath, maxCommitteeSize)
 
 	// Beautify genesis.json if configured
 	if jsonBeautify {

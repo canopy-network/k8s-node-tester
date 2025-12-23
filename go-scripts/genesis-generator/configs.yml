@@ -64,6 +64,7 @@ one-chain-1000:
     chain_1:
       id: 1
       rootChain: 1
+      maxCommitteeSize: 1000
       validators:
         count: 1000
         stakedAmount: 1000000000

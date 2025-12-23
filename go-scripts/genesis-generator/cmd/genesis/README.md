@@ -52,6 +52,7 @@ default:
       id: 1                   # Unique chain ID
       rootChain: 1            # Root chain ID (can be itself for root chains)
       sleepUntil: 1734567890  # Optional: epoch timestamp for sleepUntil
+      maxCommitteeSize: 100   # Optional: max committee size for genesis (default: 100)
       validators:
         count: 2
         stakedAmount: 1000000000
@@ -401,6 +402,9 @@ Note: Both root and nested chains have a single entry in `rootChain` pointing to
 ### genesis.json
 
 Chain genesis file containing validators, accounts, and parameters. Validators from other chains that participate in this chain's committee are included with only this chain's committee in their committees list.
+
+**Configurable Parameters:**
+- `maxCommitteeSize` - Set via chain config's `maxCommitteeSize` field (default: 100)
 
 ### keystore.json
 
