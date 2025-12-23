@@ -36,12 +36,17 @@ var (
 	ErrNotValidator      = errors.New("not a validator")
 )
 
+// TxType is the type of transaction
+type TxType string
+
 // Tx is the interface to represent a transaction
 type Tx interface {
 	// Kind returns the type of the transaction that is being represented
 	Kind() TxType
 	// Do executes the transaction
 	Do(ctx context.Context, request *TxRequest, baseURL string) (string, error)
+	// Validate makes sure the transaction is valid under its own rules
+	Validate(ctx context.Context, req *TxRequest) error
 	Sender() int   // Idx of the account to use to send
 	Receiver() int // Idx of the account to receive
 }
@@ -93,6 +98,74 @@ func (tx ChangeParamTx) Receiver() int { return tx.To }
 func (tx DaoTransferTx) Receiver() int { return tx.To }
 func (tx SubsidyTx) Receiver() int     { return tx.To }
 
+// Validate implementation
+func (tx SendTx) Validate(ctx context.Context, req *TxRequest) error        { return nil }
+func (tx ChangeParamTx) Validate(ctx context.Context, req *TxRequest) error { return nil }
+func (tx DaoTransferTx) Validate(ctx context.Context, req *TxRequest) error { return nil }
+func (tx SubsidyTx) Validate(ctx context.Context, req *TxRequest) error     { return nil }
+
+// Validate ensures that the sender is not already staked
+func (tx StakeTx) Validate(ctx context.Context, req *TxRequest) error {
+	staked, _, err := isStaked(req.From.String())
+	if err != nil {
+		return err
+	}
+	if staked {
+		return ErrAlreadyStaked
+	}
+	return nil
+}
+
+// Validate ensures that the sender is already staked and the new stake is higher than the
+// current stake
+func (tx EditStakeTx) Validate(ctx context.Context, req *TxRequest) error {
+	// validate that is staked
+	staked, _, err := isStaked(req.From.String())
+	if err != nil {
+		return err
+	}
+	if !staked {
+		return ErrNotStaked
+	}
+	// confirm new stake is higher than the current stake
+	val, err := cnpyClient.Validator(0, req.From.String())
+	if err != nil {
+		return err
+	}
+	if tx.Amount <= val.StakedAmount {
+		return fmt.Errorf("%w [current: %d]", ErrInsufficientStake, val.StakedAmount)
+	}
+	return nil
+}
+
+// Validate ensures that the sender is staked
+func (tx UnstakeTx) Validate(ctx context.Context, req *TxRequest) error {
+	staked, _, err := isStaked(req.From.String())
+	if err != nil {
+		return err
+	}
+	if !staked {
+		return ErrNotStaked
+	}
+
+	return nil
+}
+
+// Validate ensures that the sender is stake and not a delegator
+func (tx PauseTx) Validate(ctx context.Context, req *TxRequest) error {
+	staked, delegator, err := isStaked(req.From.String())
+	if err != nil {
+		return err
+	}
+	if !staked {
+		return ErrNotStaked
+	}
+	if delegator {
+		return ErrNotValidator
+	}
+	return nil
+}
+
 // Do sends a send transaction
 func (tx SendTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
 	from := rpc.AddrOrNickname{Address: req.From.String()}
@@ -102,13 +175,8 @@ func (tx SendTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string
 
 // Do sends a stake transaction
 func (tx StakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	// validate that is staked
-	staked, _, err := isStaked(req.From.String())
-	if err != nil {
-		return "", fmt.Errorf("stake: %w", err)
-	}
-	if staked {
-		return "", fmt.Errorf("stake: [%s] %w", req.From, ErrAlreadyStaked)
+	if err := tx.Validate(ctx, req); err != nil {
+		return "", fmt.Errorf("stake: [%s] %w", req.From, err)
 	}
 	from := rpc.AddrOrNickname{Address: req.From.String()}
 	hash, _, err := cnpyClient.TxStake(from,
@@ -130,22 +198,8 @@ func (tx StakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (strin
 
 // Do sends an edit stake transaction
 func (tx EditStakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	// validate that is staked
-	staked, _, err := isStaked(req.From.String())
-	if err != nil {
-		return "", fmt.Errorf("stake: %w", err)
-	}
-	if !staked {
-		return "", fmt.Errorf("stake: [%s] %w", req.From, ErrNotStaked)
-	}
-	// confirm new stake is higher than the current stake
-	val, err := cnpyClient.Validator(0, req.From.String())
-	if err != nil {
-		return "", fmt.Errorf("stake: [%s] %w", req.From, err)
-	}
-	if tx.Amount <= val.StakedAmount {
-		return "", fmt.Errorf("stake: [%s] %w [current: %d]", req.From,
-			ErrInsufficientStake, val.StakedAmount)
+	if err := tx.Validate(ctx, req); err != nil {
+		return "", fmt.Errorf("edit stake: [%s] %w", req.From, err)
 	}
 	// send transaction
 	from := rpc.AddrOrNickname{Address: req.From.String()}
@@ -161,23 +215,15 @@ func (tx EditStakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (s
 		true,
 		req.Fee)
 	if err != nil {
-		return "", fmt.Errorf("stake: [%s] %w", req.From, err)
+		return "", fmt.Errorf("edit stake: [%s] %w", req.From, err)
 	}
 	return *hash, nil
 }
 
 // Do sends a pause transaction
 func (tx PauseTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	// validate that is staked and not a delegator
-	staked, delegator, err := isStaked(req.From.String())
-	if err != nil {
-		return "", fmt.Errorf("stake: %w", err)
-	}
-	if !staked {
-		return "", fmt.Errorf("stake: [%s] %w", req.From, ErrNotStaked)
-	}
-	if delegator {
-		return "", fmt.Errorf("stake: [%s] %w", req.From, ErrNotValidator)
+	if err := tx.Validate(ctx, req); err != nil {
+		return "", fmt.Errorf("pause: [%s] %w", req.From, err)
 	}
 	// send transaction
 	from := rpc.AddrOrNickname{Address: req.From.String()}
@@ -187,16 +233,8 @@ func (tx PauseTx) Do(ctx context.Context, req *TxRequest, baseURL string) (strin
 
 // Do sends an unstake transaction
 func (tx UnstakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	// validate that is staked and not a delegator
-	staked, delegator, err := isStaked(req.From.String())
-	if err != nil {
-		return "", fmt.Errorf("stake: %w", err)
-	}
-	if !staked {
-		return "", fmt.Errorf("stake: [%s] %w", req.From, ErrNotStaked)
-	}
-	if delegator {
-		return "", fmt.Errorf("stake: [%s] %w", req.From, ErrNotValidator)
+	if err := tx.Validate(ctx, req); err != nil {
+		return "", fmt.Errorf("unstake: [%s] %w", req.From, err)
 	}
 	// send transaction
 	from := rpc.AddrOrNickname{Address: req.From.String()}

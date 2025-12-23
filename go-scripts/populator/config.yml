@@ -23,8 +23,8 @@ default:
         committees: [1, 2]
         delegate: true
         height: 1
-        netAddress: "fake.com"
         earlyWithdrawal: true
+        # netAddress: "fake.com"
     # editStake:
     #   - from: 1
     #     amount: 10000

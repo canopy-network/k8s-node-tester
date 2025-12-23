@@ -9,10 +9,8 @@ import (
 	"github.com/canopy-network/canopy/cmd/rpc"
 )
 
-type TxType string
-
 var (
-	// default http client for making requests
+	// default http/canopy client for making requests
 	httpClient = &http.Client{}
 	cnpyClient *rpc.Client
 )
