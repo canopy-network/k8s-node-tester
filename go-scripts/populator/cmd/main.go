@@ -230,7 +230,7 @@ func NotifyNewBlock(log *slog.Logger, profile *Profile, timeout time.Duration,
 		}
 		// check for new heights on each tick
 		for range time.Tick(checkInterval) {
-			resp, err := canopyClient.Height()
+			resp, err := cnpyClient.Height()
 			if err != nil {
 				if !handleErr("wait block: get height:", err) {
 					return

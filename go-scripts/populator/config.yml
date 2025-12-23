@@ -6,7 +6,7 @@ default:
     accounts: 3
     fee: 10001
     chains: [1, 2]
-    password: "pablito"
+    password: "test"
     incremental: true
     maxHeight: 3
     waitForNewBlock: false
@@ -21,9 +21,9 @@ default:
         to: 1
         amount: 1000
         committees: [1, 2]
-        delegate: true
-        height: 0
-        netAddress: "tcp://fake.com"
+        delegate: false
+        height: 1
+        netAddress: "fake.com"
         earlyWithdrawal: true
     editStake:
       - from: 1
@@ -31,17 +31,17 @@ default:
         amount: 10000
         committees: [1, 2]
         delegate: true
-        height: 1
-        netAddress: "tcp://fake.com"
+        height: 2
+        netAddress: "fake.com"
         earlyWithdrawal: true
-    # pause:
-    #   - from: 1
-    #     to: 2
-    #     height: 3
-    # unstake:
-    #   - from: 1
-    #     to: 2
-    #     height: 4
+    pause:
+      - from: 1
+        to: 1
+        height: 3
+    unstake:
+      - from: 1
+        to: 2
+        height: 4
     # changeParam:
     #   - from: 1
     #     paramSpace: "fee"

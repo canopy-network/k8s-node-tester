@@ -27,7 +27,7 @@ data:
       "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 0,
-      "id": 199,
+      "id": 0,
       "links": [],
       "panels": [
         {
@@ -1656,7 +1656,7 @@ data:
           },
           "gridPos": {
             "h": 4,
-            "w": 3,
+            "w": 4,
             "x": 0,
             "y": 20
           },
@@ -1693,85 +1693,6 @@ data:
             }
           ],
           "title": "Block Size",
-          "type": "stat"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${Datasource}"
-          },
-          "description": "The number of transactions in the last block",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "color": "text",
-                      "index": 0,
-                      "text": "Unstaked"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
-              "noValue": "Unstaked",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": 0
-                  }
-                ]
-              },
-              "unit": "locale"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 4,
-            "w": 3,
-            "x": 3,
-            "y": 20
-          },
-          "id": 20,
-          "options": {
-            "colorMode": "value",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "percentChangeColorMode": "standard",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "showPercentChange": false,
-            "textMode": "auto",
-            "wideLayout": true
-          },
-          "pluginVersion": "12.3.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${Datasource}"
-              },
-              "editorMode": "builder",
-              "expr": "canopy_block_num_txs{pod=~\"$node\"}",
-              "legendFormat": "__auto",
-              "range": true,
-              "refId": "A"
-            }
-          ],
-          "title": "Last Block TXs",
           "type": "stat"
         },
         {
@@ -1822,8 +1743,8 @@ data:
           },
           "gridPos": {
             "h": 4,
-            "w": 3,
-            "x": 6,
+            "w": 4,
+            "x": 4,
             "y": 20
           },
           "id": 21,
@@ -1901,8 +1822,8 @@ data:
           },
           "gridPos": {
             "h": 4,
-            "w": 3,
-            "x": 9,
+            "w": 4,
+            "x": 8,
             "y": 20
           },
           "id": 25,
@@ -2658,6 +2579,115 @@ data:
             "type": "prometheus",
             "uid": "${Datasource}"
           },
+          "description": "The number of transactions in the last block",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "showValues": false,
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [
+                {
+                  "options": {
+                    "match": "null",
+                    "result": {
+                      "color": "text",
+                      "index": 0,
+                      "text": "Unstaked"
+                    }
+                  },
+                  "type": "special"
+                }
+              ],
+              "noValue": "Unstaked",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "locale"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 6,
+            "x": 0,
+            "y": 32
+          },
+          "id": 20,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "12.3.0",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${Datasource}"
+              },
+              "editorMode": "builder",
+              "expr": "canopy_block_num_txs{pod=~\"$node\"}",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Last Block TXs",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${Datasource}"
+          },
           "description": "Chain wide non signers count",
           "fieldConfig": {
             "defaults": {
@@ -2727,8 +2757,8 @@ data:
           },
           "gridPos": {
             "h": 8,
-            "w": 8,
-            "x": 0,
+            "w": 6,
+            "x": 6,
             "y": 32
           },
           "id": 50,
@@ -2836,8 +2866,8 @@ data:
           },
           "gridPos": {
             "h": 8,
-            "w": 8,
-            "x": 8,
+            "w": 6,
+            "x": 12,
             "y": 32
           },
           "id": 51,
@@ -2946,8 +2976,8 @@ data:
           },
           "gridPos": {
             "h": 8,
-            "w": 8,
-            "x": 16,
+            "w": 6,
+            "x": 18,
             "y": 32
           },
           "id": 52,
@@ -4410,8 +4440,8 @@ data:
           {
             "allowCustomValue": true,
             "current": {
-              "text": "node-103",
-              "value": "node-103"
+              "text": "node-1",
+              "value": "node-1"
             },
             "datasource": {
               "type": "prometheus",
@@ -4440,5 +4470,5 @@ data:
       "timezone": "browser",
       "title": "Canopy Dashboard Reloaded",
       "uid": "bed86e86-4772-45e5-9436-9f942fcbf2ca",
-      "version": 2
+      "version": 3
     }

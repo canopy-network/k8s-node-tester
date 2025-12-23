@@ -22,13 +22,13 @@ const (
 
 var (
 	// default http client for making requests
-	httpClient   = &http.Client{}
-	canopyClient *rpc.Client
+	httpClient = &http.Client{}
+	cnpyClient *rpc.Client
 )
 
 // SetCanopyClient sets the canopy global client for making requests
 func SetCanopyClient(rpcURL, adminRPCURL string) {
-	canopyClient = rpc.NewClient(rpcURL, adminRPCURL)
+	cnpyClient = rpc.NewClient(rpcURL, adminRPCURL)
 }
 
 // Profile is a configuration for a single profile
@@ -121,7 +121,7 @@ type StakeTx struct {
 	committees      `yaml:",inline"`
 	Delegate        bool   `yaml:"delegate"`
 	EarlyWithdrawal bool   `yaml:"earlyWithdrawal"`
-	NetAddr         string `yaml:"netAddr"`
+	NetAddr         string `yaml:"netAddress"`
 }
 
 // EditStakeTx represents a transaction to edit a validator/delegator's stake
@@ -147,7 +147,7 @@ type ChangeParamTx struct {
 	height     `yaml:",inline"`
 	ParamSpace string `yaml:"paramSpace"`
 	ParamKey   string `yaml:"paramKey"`
-	ParamValue any    `yaml:"paramValue"`
-	StartBlock int    `yaml:"startBlock"`
-	EndBlock   int    `yaml:"endBlock"`
+	ParamValue string `yaml:"paramValue"`
+	StartBlock uint64 `yaml:"startBlock"`
+	EndBlock   uint64 `yaml:"endBlock"`
 }

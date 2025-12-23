@@ -1,13 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 
 	"github.com/canopy-network/canopy/cmd/rpc"
@@ -20,6 +17,7 @@ var (
 	ErrAlreadyStaked     = errors.New("validator already staked")
 	ErrNotStaked         = errors.New("validator not staked")
 	ErrInsufficientStake = errors.New("insufficient stake")
+	ErrNotValidator      = errors.New("not a validator")
 )
 
 // Tx is the interface to represent a transaction
@@ -86,7 +84,7 @@ func (tx ChangeParamTx) Receiver() int { return tx.To }
 // Do sends a send transaction
 func (tx SendTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
 	from := rpc.AddrOrNickname{Address: req.From.String()}
-	hash, _, err := canopyClient.TxSend(from, req.To.String(), tx.Amount, req.Password, true, req.Fee)
+	hash, _, err := cnpyClient.TxSend(from, req.To.String(), tx.Amount, req.Password, true, req.Fee)
 	return *hash, err
 }
 
@@ -101,7 +99,7 @@ func (tx StakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (strin
 		return "", fmt.Errorf("stake: [%s] %w", req.From, ErrAlreadyStaked)
 	}
 	from := rpc.AddrOrNickname{Address: req.From.String()}
-	hash, _, err := canopyClient.TxStake(from,
+	hash, _, err := cnpyClient.TxStake(from,
 		tx.NetAddr,
 		tx.Amount,
 		tx.committees.String(),
@@ -129,7 +127,7 @@ func (tx EditStakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (s
 		return "", fmt.Errorf("stake: [%s] %w", req.From, ErrNotStaked)
 	}
 	// confirm new stake is higher than the current stake
-	val, err := canopyClient.Validator(0, req.From.String())
+	val, err := cnpyClient.Validator(0, req.From.String())
 	if err != nil {
 		return "", fmt.Errorf("stake: [%s] %w", req.From, err)
 	}
@@ -139,7 +137,7 @@ func (tx EditStakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (s
 	}
 	// send transaction
 	from := rpc.AddrOrNickname{Address: req.From.String()}
-	hash, _, err := canopyClient.TxEditStake(from,
+	hash, _, err := cnpyClient.TxEditStake(from,
 		tx.NetAddr,
 		tx.Amount,
 		tx.committees.String(),
@@ -158,17 +156,56 @@ func (tx EditStakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (s
 
 // Do sends a pause transaction
 func (tx PauseTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	return postTx(ctx, tx.Route(baseURL), txRequest{})
+	// validate that is staked and not a delegator
+	staked, delegator, err := isStaked(req.From.String())
+	if err != nil {
+		return "", fmt.Errorf("stake: %w", err)
+	}
+	if !staked {
+		return "", fmt.Errorf("stake: [%s] %w", req.From, ErrNotStaked)
+	}
+	if delegator {
+		return "", fmt.Errorf("stake: [%s] %w", req.From, ErrNotValidator)
+	}
+	// send transaction
+	from := rpc.AddrOrNickname{Address: req.From.String()}
+	hash, _, err := cnpyClient.TxPause(from, from, req.Password, true, req.Fee)
+	return *hash, err
 }
 
 // Do sends an unstake transaction
 func (tx UnstakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	return postTx(ctx, tx.Route(baseURL), txRequest{})
+	// validate that is staked and not a delegator
+	staked, delegator, err := isStaked(req.From.String())
+	if err != nil {
+		return "", fmt.Errorf("stake: %w", err)
+	}
+	if !staked {
+		return "", fmt.Errorf("stake: [%s] %w", req.From, ErrNotStaked)
+	}
+	if delegator {
+		return "", fmt.Errorf("stake: [%s] %w", req.From, ErrNotValidator)
+	}
+	// send transaction
+	from := rpc.AddrOrNickname{Address: req.From.String()}
+	hash, _, err := cnpyClient.TxUnstake(from, from, req.Password, true, req.Fee)
+	return *hash, err
 }
 
 // Do sends a change parameter transaction
 func (tx ChangeParamTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	return postTx(ctx, tx.Route(baseURL), txRequest{})
+	from := rpc.AddrOrNickname{Address: req.From.String()}
+	hash, _, err := cnpyClient.TxChangeParam(
+		from,
+		tx.ParamSpace,
+		tx.ParamKey,
+		tx.ParamValue,
+		tx.StartBlock,
+		tx.EndBlock,
+		req.Password,
+		true,
+		req.Fee)
+	return *hash, err
 }
 
 // BuildTxRequest constructs a TxRequest with the required fields
@@ -192,45 +229,6 @@ func BuildTxRequest(from, to shared.Account, config General) (*TxRequest, error)
 		To:       toAddr,
 	}
 	return &req, nil
-}
-
-func postTx(ctx context.Context, url string, obj any) (string, error) {
-	// marshal the tx
-	bz, e := json.Marshal(obj)
-	if e != nil {
-		return "", fmt.Errorf("post tx: marshalling: %w", e)
-	}
-	// send the tx
-	hash, e := post(ctx, url, bz)
-	if e != nil {
-		return "", fmt.Errorf("post tx: posting: %w", e)
-	}
-	return strings.Trim(string(hash), "\""), nil
-}
-
-func post(ctx context.Context, url string, bz []byte) ([]byte, error) {
-	// generate the request
-	request, e := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(bz))
-	if e != nil {
-		return nil, fmt.Errorf("post: request %s:%s", url, e.Error())
-	}
-	// execute the request
-	resp, e := httpClient.Do(request)
-	if e != nil {
-		return nil, fmt.Errorf("post: do %s:%s", url, e.Error())
-	}
-	defer resp.Body.Close()
-	// check the status code
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("post: non 200 status code (%s): %d", url, resp.StatusCode)
-	}
-	// read the request bytes
-	respBz, e := io.ReadAll(resp.Body)
-	if e != nil {
-		return nil, fmt.Errorf("post: reading response %s:%s", url, e.Error())
-	}
-	// return
-	return respBz, nil
 }
 
 // TxRequest is the public struct for the arguments for a transaction request
@@ -281,7 +279,7 @@ func isStaked(address string) (staked, delegator bool, err error) {
 	if address == "" {
 		return false, false, errors.New("address is empty")
 	}
-	validator, err := canopyClient.Validator(0, address)
+	validator, err := cnpyClient.Validator(0, address)
 	if err != nil {
 		// client error handling is broken, need to handle errors by looking at the error message string
 		if strings.Contains(err.Error(), "validator does not exist") {
