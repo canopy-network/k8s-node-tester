@@ -1,16 +1,30 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 
 	"github.com/canopy-network/canopy/cmd/rpc"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/k8s-node-tester/go-scripts/shared"
+)
+
+const (
+	TxSend        TxType = "send"
+	TxStake       TxType = "stake"
+	TxEditStake   TxType = "editStake"
+	TxPause       TxType = "pause"
+	TxUnstake     TxType = "unstake"
+	TxChangeParam TxType = "changeParam"
+	TxDaoTransfer TxType = "daoTransfer"
+	TxSubsidy     TxType = "subsidy"
 )
 
 var (
@@ -45,6 +59,8 @@ func (EditStakeTx) Kind() TxType   { return TxEditStake }
 func (PauseTx) Kind() TxType       { return TxPause }
 func (UnstakeTx) Kind() TxType     { return TxUnstake }
 func (ChangeParamTx) Kind() TxType { return TxChangeParam }
+func (DaoTransferTx) Kind() TxType { return TxDaoTransfer }
+func (SubsidyTx) Kind() TxType     { return TxSubsidy }
 
 // Due returns true if the height is due
 func (s height) Due(h uint64) bool { return s.Height == h }
@@ -54,8 +70,10 @@ func (tx StakeTx) Due(h uint64) bool { return tx.height.Due(h) }
 func (tx EditStakeTx) Due(h uint64) bool {
 	return tx.height.Due(h)
 }
-func (tx PauseTx) Due(h uint64) bool   { return tx.height.Due(h) }
-func (tx UnstakeTx) Due(h uint64) bool { return tx.height.Due(h) }
+func (tx PauseTx) Due(h uint64) bool       { return tx.height.Due(h) }
+func (tx UnstakeTx) Due(h uint64) bool     { return tx.height.Due(h) }
+func (tx DaoTransferTx) Due(h uint64) bool { return tx.height.Due(h) }
+func (tx SubsidyTx) Due(h uint64) bool     { return tx.height.Due(h) }
 
 // Routes implementations
 func (tx SendTx) Route(baseURL string) string        { return baseURL + "/v1/admin/tx-send" }
@@ -64,6 +82,8 @@ func (tx EditStakeTx) Route(baseURL string) string   { return baseURL + "/v1/adm
 func (tx PauseTx) Route(baseURL string) string       { return baseURL + "/v1/admin/tx-pause" }
 func (tx UnstakeTx) Route(baseURL string) string     { return baseURL + "/v1/admin/tx-unstake" }
 func (tx ChangeParamTx) Route(baseURL string) string { return baseURL + "/v1/admin/tx-change-param" }
+func (tx DaoTransferTx) Route(baseURL string) string { return baseURL + "/v1/admin/tx-dao-transfer" }
+func (tx SubsidyTx) Route(baseURL string) string     { return baseURL + "/v1/admin/tx-subsidy" }
 
 // Sender implementation
 func (tx SendTx) Sender() int        { return 0 } // does not have a fixed sender
@@ -72,6 +92,8 @@ func (tx EditStakeTx) Sender() int   { return tx.From }
 func (tx PauseTx) Sender() int       { return tx.From }
 func (tx UnstakeTx) Sender() int     { return tx.From }
 func (tx ChangeParamTx) Sender() int { return tx.From }
+func (tx DaoTransferTx) Sender() int { return tx.From }
+func (tx SubsidyTx) Sender() int     { return tx.From }
 
 // Receiver implementation
 func (tx SendTx) Receiver() int        { return 0 } // does not have a fixed receiver
@@ -80,6 +102,8 @@ func (tx EditStakeTx) Receiver() int   { return tx.To }
 func (tx PauseTx) Receiver() int       { return tx.To }
 func (tx UnstakeTx) Receiver() int     { return tx.To }
 func (tx ChangeParamTx) Receiver() int { return tx.To }
+func (tx DaoTransferTx) Receiver() int { return tx.To }
+func (tx SubsidyTx) Receiver() int     { return tx.To }
 
 // Do sends a send transaction
 func (tx SendTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
@@ -208,6 +232,32 @@ func (tx ChangeParamTx) Do(ctx context.Context, req *TxRequest, baseURL string) 
 	return *hash, err
 }
 
+// Do sends a DAO transfer transaction
+func (tx DaoTransferTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
+	from := rpc.AddrOrNickname{Address: req.From.String()}
+	hash, _, err := cnpyClient.TxDaoTransfer(
+		from,
+		tx.Amount,
+		tx.StartBlock,
+		tx.EndBlock,
+		req.Password,
+		true,
+		req.Fee)
+	return *hash, err
+}
+
+// Do sends a subsidy transaction
+func (tx SubsidyTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
+	return postTx(ctx, tx.Route(baseURL), txRequest{
+		Address:    req.From.String(),
+		Amount:     tx.Amount,
+		Committees: tx.committees.String(),
+		Password:   req.Password,
+		Fee:        req.Fee,
+		OpCode:     lib.HexBytes(tx.OpCode),
+	})
+}
+
 // BuildTxRequest constructs a TxRequest with the required fields
 func BuildTxRequest(from, to shared.Account, config General) (*TxRequest, error) {
 	fromAddr, err := crypto.NewAddressFromString(from.Address)
@@ -229,6 +279,48 @@ func BuildTxRequest(from, to shared.Account, config General) (*TxRequest, error)
 		To:       toAddr,
 	}
 	return &req, nil
+}
+
+// postTx sends a transaction to the node, used for transactions that are not implemented by the
+// client
+func postTx(ctx context.Context, url string, obj txRequest) (string, error) {
+	// marshal the tx
+	bz, e := json.Marshal(obj)
+	if e != nil {
+		return "", fmt.Errorf("post tx: marshalling: %w", e)
+	}
+	// send the tx
+	hash, e := post(ctx, url, bz)
+	if e != nil {
+		return "", fmt.Errorf("post tx: posting: %w", e)
+	}
+	return strings.Trim(string(hash), "\""), nil
+}
+
+// post sends a POST request to the node
+func post(ctx context.Context, url string, bz []byte) ([]byte, error) {
+	// generate the request
+	request, e := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(bz))
+	if e != nil {
+		return nil, fmt.Errorf("post: request %s:%s", url, e.Error())
+	}
+	// execute the request
+	resp, e := httpClient.Do(request)
+	if e != nil {
+		return nil, fmt.Errorf("post: do %s:%s", url, e.Error())
+	}
+	defer resp.Body.Close()
+	// check the status code
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("post: non 200 status code (%s): %d", url, resp.StatusCode)
+	}
+	// read the request bytes
+	respBz, e := io.ReadAll(resp.Body)
+	if e != nil {
+		return nil, fmt.Errorf("post: reading response %s:%s", url, e.Error())
+	}
+	// return
+	return respBz, nil
 }
 
 // TxRequest is the public struct for the arguments for a transaction request

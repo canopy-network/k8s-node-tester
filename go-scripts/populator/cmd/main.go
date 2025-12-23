@@ -168,6 +168,8 @@ func GatherAtHeight(p *Profile, height uint64) []Tx {
 	out = append(out, filterDue(p.Transactions.Pause, height)...)
 	out = append(out, filterDue(p.Transactions.Unstake, height)...)
 	out = append(out, filterDue(p.Transactions.ChangeParam, height)...)
+	out = append(out, filterDue(p.Transactions.DaoTransfer, height)...)
+	out = append(out, filterDue(p.Transactions.Subsidy, height)...)
 	return out
 }
 

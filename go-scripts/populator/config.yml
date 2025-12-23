@@ -27,7 +27,6 @@ default:
         earlyWithdrawal: true
     editStake:
       - from: 1
-        to: 1
         amount: 10000
         committees: [1, 2]
         delegate: true
@@ -36,11 +35,9 @@ default:
         earlyWithdrawal: true
     pause:
       - from: 1
-        to: 1
         height: 3
     unstake:
       - from: 1
-        to: 2
         height: 4
     # changeParam:
     #   - from: 1
@@ -50,3 +47,17 @@ default:
     #     height: 5
     #     startBlock: 10
     #     endBlock: 100
+    # dao-transfer:
+    #   - from: 1
+    #     to: 2
+    #     amount: 1000
+    #     height: 6
+    #     startBlock: 10
+    #     endBlock: 100
+    # subsidy:
+    #   - from: 1
+    #     to: 1
+    #     amount: 1000
+    #     height: 6
+    #     opCode: "test"
+    #     committees: [1, 2]

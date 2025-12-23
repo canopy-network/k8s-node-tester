@@ -11,15 +11,6 @@ import (
 
 type TxType string
 
-const (
-	TxSend        TxType = "send"
-	TxStake       TxType = "stake"
-	TxEditStake   TxType = "editStake"
-	TxPause       TxType = "pause"
-	TxUnstake     TxType = "unstake"
-	TxChangeParam TxType = "changeParam"
-)
-
 var (
 	// default http client for making requests
 	httpClient = &http.Client{}
@@ -61,6 +52,8 @@ type Transactions struct {
 	Pause       []PauseTx       `yaml:"pause"`
 	Unstake     []UnstakeTx     `yaml:"unstake"`
 	ChangeParam []ChangeParamTx `yaml:"changeParam"`
+	DaoTransfer []DaoTransferTx `yaml:"daoTransfer"`
+	Subsidy     []SubsidyTx     `yaml:"subsidy"`
 }
 
 // General populator configuration
@@ -103,6 +96,13 @@ func (c committees) String() string {
 	return strings.Join(strSlice, ",")
 }
 
+type delimitedBlock struct {
+	StartBlock uint64 `yaml:"startBlock"`
+	EndBlock   uint64 `yaml:"endBlock"`
+}
+
+// Transaction types
+
 // SendTx Tx is handled separately
 type SendTx struct {
 	amount      `yaml:",inline"`
@@ -143,11 +143,25 @@ type UnstakeTx struct {
 
 // ChangeParam represents a transaction to change a parameter
 type ChangeParamTx struct {
+	account        `yaml:",inline"`
+	height         `yaml:",inline"`
+	ParamSpace     string `yaml:"paramSpace"`
+	ParamKey       string `yaml:"paramKey"`
+	ParamValue     string `yaml:"paramValue"`
+	delimitedBlock `yaml:",inline"`
+}
+
+type DaoTransferTx struct {
+	account        `yaml:",inline"`
+	amount         `yaml:",inline"`
+	height         `yaml:",inline"`
+	delimitedBlock `yaml:",inline"`
+}
+
+type SubsidyTx struct {
 	account    `yaml:",inline"`
+	amount     `yaml:",inline"`
 	height     `yaml:",inline"`
-	ParamSpace string `yaml:"paramSpace"`
-	ParamKey   string `yaml:"paramKey"`
-	ParamValue string `yaml:"paramValue"`
-	StartBlock uint64 `yaml:"startBlock"`
-	EndBlock   uint64 `yaml:"endBlock"`
+	committees `yaml:",inline"`
+	OpCode     string `yaml:"opCode"`
 }
