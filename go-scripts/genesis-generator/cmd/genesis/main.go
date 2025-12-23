@@ -99,7 +99,7 @@ type ChainConfig struct {
 	Accounts   AccountsConfig        `yaml:"accounts"`
 	Delegators DelegatorsConfig      `yaml:"delegators"`
 	Committees []CommitteeAssignment `yaml:"committees"`
-	SleepUntil int                   `yaml:"sleepUntil,omitempty"` // Optional: seconds to add to current time for sleepUntil epoch
+	SleepUntil int                   `yaml:"sleepUntil,omitempty"` // Optional: epoch timestamp for sleepUntil
 }
 
 // AppConfig represents the configuration structure
@@ -830,7 +830,7 @@ func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, v
 	}
 }
 
-func createTemplateConfig(chainID int, rootChainID int, sleepUntilSeconds int) *lib.Config {
+func createTemplateConfig(chainID int, rootChainID int, sleepUntilEpoch int) *lib.Config {
 	var rootChain []lib.RootChain
 
 	if chainID == rootChainID {
@@ -851,11 +851,8 @@ func createTemplateConfig(chainID int, rootChainID int, sleepUntilSeconds int) *
 		}
 	}
 
-	// Calculate sleepUntil epoch if configured
-	var sleepUntilEpoch uint64
-	if sleepUntilSeconds != 0 {
-		sleepUntilEpoch = uint64(time.Now().Unix() + int64(sleepUntilSeconds))
-	}
+	// Convert sleepUntil epoch to uint64
+	sleepUntil := uint64(sleepUntilEpoch)
 
 	// Set ProposeVoteTimeoutMS based on chain type
 	proposeVoteTimeoutMS := 4000 // Root chain default
@@ -869,7 +866,7 @@ func createTemplateConfig(chainID int, rootChainID int, sleepUntilSeconds int) *
 			ChainId:    uint64(chainID),
 			RootChain:  rootChain,
 			RunVDF:     false,
-			SleepUntil: sleepUntilEpoch,
+			SleepUntil: sleepUntil,
 		},
 		RPCConfig: lib.RPCConfig{
 			WalletPort:   "50000",
