@@ -27,7 +27,7 @@ data:
       "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 0,
-      "id": 0,
+      "id": 199,
       "links": [],
       "panels": [
         {
@@ -482,7 +482,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "builder",
-              "expr": "canopy_chain_id{pod=~\"$node\"}",
+              "expr": "canopy_root_chain_id{pod=~\"$node\"}",
               "legendFormat": "__auto",
               "range": true,
               "refId": "A"
@@ -4410,8 +4410,8 @@ data:
           {
             "allowCustomValue": true,
             "current": {
-              "text": "node-1",
-              "value": "node-1"
+              "text": "node-103",
+              "value": "node-103"
             },
             "datasource": {
               "type": "prometheus",
@@ -4440,5 +4440,5 @@ data:
       "timezone": "browser",
       "title": "Canopy Dashboard Reloaded",
       "uid": "bed86e86-4772-45e5-9436-9f942fcbf2ca",
-      "version": 6
+      "version": 2
     }

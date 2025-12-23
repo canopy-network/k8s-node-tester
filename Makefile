@@ -156,6 +156,11 @@ ansible/cluster-setup:
 	ansible-playbook -i ansible/inventory.yml ansible/playbooks/4-monitoring.yml \
 	  -e @./ansible/secrets.yml
 
+## ansible/ping: ping all nodes in the inventory
+.PHONY: ansible/ping
+ansible/ping:
+	ansible k3s_cluster -m ping
+
 ## --- util ---
 # ==================================================================================== #
 # UTIL
