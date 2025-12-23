@@ -25,14 +25,13 @@ var (
 )
 
 const (
-	baseFee = uint64(10_000) // Base fee for transactions
+	baseFee = uint64(10_000) // base fee for transactions
 	// TODO: should this be configurable?
-	retries            = 5                      // Number of retries for failed requests
-	timeout            = 5 * time.Second        // Timeout for each request
-	blockCheckInterval = 500 * time.Millisecond // Interval to check for new blocks
+	retries            = 5                      // number of retries for failed requests
+	timeout            = 5 * time.Second        // timeout for each request
+	blockCheckInterval = 500 * time.Millisecond // interval to check for new blocks
 )
 
-// go run *.go --accounts ../../genesis-generator/artifacts/default/ids.json
 func main() {
 	// parse flags
 	flag.Parse()
@@ -48,13 +47,13 @@ func main() {
 	// set the client urls
 	SetCanopyClient(profile.General.RpcURL, profile.General.AdminRpcURL)
 	// setup the block notifier
-	notifier := BlockNotifier(log, profile, timeout, blockCheckInterval, retries)
+	notifier := BlockNotifier(log, profile.General, timeout, blockCheckInterval, retries)
 	// fan-out: listen for new blocks to broadcast
 	b := NewBroadcaster(notifier, 2)
-	// start the send tx handlers
+	// start the tx handlers
 	wg := sync.WaitGroup{}
 	wg.Go(func() {
-		HandleTxSends(log, b.Channels()[0], profile, accounts)
+		HandleSendTxs(log, b.Channels()[0], profile, accounts)
 	})
 	wg.Go(func() {
 		HandleTxs(log, b.Channels()[1], profile, accounts)
@@ -63,8 +62,8 @@ func main() {
 	log.Info("finished running populator")
 }
 
-// HandleTxSends handles the sending of bulk `send` transactions per block
-func HandleTxSends(log *slog.Logger, notifier <-chan uint64, profile *Profile, accounts []shared.Account) {
+// HandleSendTxs handles the sending of bulk `send` transactions per block
+func HandleSendTxs(log *slog.Logger, notifier <-chan uint64, profile *Profile, accounts []shared.Account) {
 	for height := range notifier {
 		if profile.Send.Count == 0 {
 			continue

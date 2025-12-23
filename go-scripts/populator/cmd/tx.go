@@ -25,6 +25,8 @@ const (
 	TxChangeParam TxType = "changeParam"
 	TxDaoTransfer TxType = "daoTransfer"
 	TxSubsidy     TxType = "subsidy"
+
+	subsidyRoute = "/v1/admin/tx-subsidy"
 )
 
 var (
@@ -38,8 +40,6 @@ var (
 type Tx interface {
 	// Kind returns the type of the transaction that is being represented
 	Kind() TxType
-	// Route returns the full URL for the transaction
-	Route(baseURL string) string
 	// Do executes the transaction
 	Do(ctx context.Context, request *TxRequest, baseURL string) (string, error)
 	Sender() int   // Idx of the account to use to send
@@ -66,27 +66,15 @@ func (SubsidyTx) Kind() TxType     { return TxSubsidy }
 func (s height) Due(h uint64) bool { return s.Height == h }
 
 // Due implementations
-func (tx StakeTx) Due(h uint64) bool { return tx.height.Due(h) }
-func (tx EditStakeTx) Due(h uint64) bool {
-	return tx.height.Due(h)
-}
+func (tx StakeTx) Due(h uint64) bool       { return tx.height.Due(h) }
+func (tx EditStakeTx) Due(h uint64) bool   { return tx.height.Due(h) }
 func (tx PauseTx) Due(h uint64) bool       { return tx.height.Due(h) }
 func (tx UnstakeTx) Due(h uint64) bool     { return tx.height.Due(h) }
 func (tx DaoTransferTx) Due(h uint64) bool { return tx.height.Due(h) }
 func (tx SubsidyTx) Due(h uint64) bool     { return tx.height.Due(h) }
 
-// Routes implementations
-func (tx SendTx) Route(baseURL string) string        { return baseURL + "/v1/admin/tx-send" }
-func (tx StakeTx) Route(baseURL string) string       { return baseURL + "/v1/admin/tx-stake" }
-func (tx EditStakeTx) Route(baseURL string) string   { return baseURL + "/v1/admin/tx-edit-stake" }
-func (tx PauseTx) Route(baseURL string) string       { return baseURL + "/v1/admin/tx-pause" }
-func (tx UnstakeTx) Route(baseURL string) string     { return baseURL + "/v1/admin/tx-unstake" }
-func (tx ChangeParamTx) Route(baseURL string) string { return baseURL + "/v1/admin/tx-change-param" }
-func (tx DaoTransferTx) Route(baseURL string) string { return baseURL + "/v1/admin/tx-dao-transfer" }
-func (tx SubsidyTx) Route(baseURL string) string     { return baseURL + "/v1/admin/tx-subsidy" }
-
 // Sender implementation
-func (tx SendTx) Sender() int        { return 0 } // does not have a fixed sender
+func (tx SendTx) Sender() int        { return -1 } // does not have a fixed sender
 func (tx StakeTx) Sender() int       { return tx.From }
 func (tx EditStakeTx) Sender() int   { return tx.From }
 func (tx PauseTx) Sender() int       { return tx.From }
@@ -96,7 +84,7 @@ func (tx DaoTransferTx) Sender() int { return tx.From }
 func (tx SubsidyTx) Sender() int     { return tx.From }
 
 // Receiver implementation
-func (tx SendTx) Receiver() int        { return 0 } // does not have a fixed receiver
+func (tx SendTx) Receiver() int        { return -1 } // does not have a fixed receiver
 func (tx StakeTx) Receiver() int       { return tx.To }
 func (tx EditStakeTx) Receiver() int   { return tx.To }
 func (tx PauseTx) Receiver() int       { return tx.To }
@@ -248,7 +236,7 @@ func (tx DaoTransferTx) Do(ctx context.Context, req *TxRequest, baseURL string) 
 
 // Do sends a subsidy transaction
 func (tx SubsidyTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	return postTx(ctx, tx.Route(baseURL), txRequest{
+	return postTx(ctx, baseURL+subsidyRoute, txRequest{
 		Address:    req.From.String(),
 		Amount:     tx.Amount,
 		Committees: tx.committees.String(),

@@ -12,7 +12,7 @@ default:
     waitForNewBlock: false
   send:
     chains: [1, 2]
-    count: 0 # per block
+    count: 10 # per block
     amount: 10
     concurrency: 10
   transactions:
@@ -21,24 +21,24 @@ default:
         to: 1
         amount: 1000
         committees: [1, 2]
-        delegate: false
+        delegate: true
         height: 1
         netAddress: "fake.com"
         earlyWithdrawal: true
-    editStake:
-      - from: 1
-        amount: 10000
-        committees: [1, 2]
-        delegate: true
-        height: 2
-        netAddress: "fake.com"
-        earlyWithdrawal: true
-    pause:
-      - from: 1
-        height: 3
-    unstake:
-      - from: 1
-        height: 4
+    # editStake:
+    #   - from: 1
+    #     amount: 10000
+    #     committees: [1, 2]
+    #     delegate: true
+    #     height: 2
+    #     netAddress: "fake.com"
+    #     earlyWithdrawal: true
+    # pause:
+    #   - from: 1
+    #     height: 3
+    # unstake:
+    #   - from: 1
+    #     height: 4
     # changeParam:
     #   - from: 1
     #     paramSpace: "fee"

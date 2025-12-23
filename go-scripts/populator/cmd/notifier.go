@@ -11,7 +11,7 @@ type HeightResp struct {
 
 type newBlockNotifier struct {
 	log           *slog.Logger
-	profile       *Profile
+	config        General
 	checkInterval time.Duration
 	maxRetries    int
 
@@ -23,17 +23,17 @@ type newBlockNotifier struct {
 }
 
 // newNotifier creates a new block notifier
-func newNotifier(log *slog.Logger, profile *Profile, checkInterval time.Duration, maxRetries int) *newBlockNotifier {
+func newNotifier(log *slog.Logger, config General, checkInterval time.Duration, maxRetries int) *newBlockNotifier {
 	return &newBlockNotifier{
 		log:           log,
-		profile:       profile,
+		config:        config,
 		checkInterval: checkInterval,
 		maxRetries:    maxRetries,
 		heightCh:      make(chan uint64),
 		// avoid sending data to genesis blocks
 		lastHeight:  uint64(1),
 		retries:     0,
-		initialized: !profile.General.WaitForNewBlock,
+		initialized: !config.WaitForNewBlock,
 		counter:     0,
 	}
 }
@@ -41,15 +41,14 @@ func newNotifier(log *slog.Logger, profile *Profile, checkInterval time.Duration
 // handleHeight handles the height of a new block depending on the profile settings
 func (n *newBlockNotifier) handleHeight(height uint64) (stop bool, h uint64) {
 	// emit actual chain height until it exceeds MaxHeight
-	max := n.profile.General.MaxHeight
-	if !n.profile.General.Incremental {
+	max := n.config.MaxHeight
+	if !n.config.Incremental {
 		if height <= max {
 			return false, height
 		}
 		return true, height
 	}
 	// incremental mode: height becomes a 0 based counter, incremented by 1 per block
-	// emit the counter value
 	n.counter++
 	if n.counter <= max {
 		return false, n.counter
@@ -96,9 +95,9 @@ func (n *newBlockNotifier) run() {
 }
 
 // BlockNotifier creates a new block notifier that emits the height of every new block
-func BlockNotifier(log *slog.Logger, profile *Profile, timeout time.Duration,
+func BlockNotifier(log *slog.Logger, config General, timeout time.Duration,
 	checkInterval time.Duration, maxRetries int) <-chan uint64 {
-	n := newNotifier(log, profile, checkInterval, maxRetries)
+	n := newNotifier(log, config, checkInterval, maxRetries)
 	go n.run()
 	return n.heightCh
 }
