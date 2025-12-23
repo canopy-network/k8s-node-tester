@@ -99,8 +99,9 @@ type ChainConfig struct {
 	Accounts         AccountsConfig        `yaml:"accounts"`
 	Delegators       DelegatorsConfig      `yaml:"delegators"`
 	Committees       []CommitteeAssignment `yaml:"committees"`
-	SleepUntil       int                   `yaml:"sleepUntil,omitempty"`       // Optional: epoch timestamp for sleepUntil
-	MaxCommitteeSize int                   `yaml:"maxCommitteeSize,omitempty"` // Optional: max committee size (default: 100)
+	SleepUntil          int                   `yaml:"sleepUntil,omitempty"`          // Optional: epoch timestamp for sleepUntil
+	MaxCommitteeSize    int                   `yaml:"maxCommitteeSize,omitempty"`    // Optional: max committee size (default: 100)
+	MinimumPeersToStart int                   `yaml:"minimumPeersToStart,omitempty"` // Optional: minimum peers to start (default: 0)
 }
 
 // AppConfig represents the configuration structure
@@ -450,17 +451,17 @@ func addFullNodes(count int, amount uint64, startIdx int, chainID int, rootChain
 				Amount:  amount,
 			}
 
-		identity := NodeIdentity{
-			ID:              startIdx + i,
-			ChainID:         chainID,
-			RootChainID:     rootChainID,
-			Address:         hex.EncodeToString(pk.PublicKey().Address().Bytes()),
-			PublicKey:       hex.EncodeToString(pk.PublicKey().Bytes()),
-			PrivateKey:      hex.EncodeToString(pk.Bytes()),
-			NodeType:        "fullnode",
-			PrivateKeyBytes: pk.Bytes(),
-			GenesisChainID:  chainID,
-		}
+			identity := NodeIdentity{
+				ID:              startIdx + i,
+				ChainID:         chainID,
+				RootChainID:     rootChainID,
+				Address:         hex.EncodeToString(pk.PublicKey().Address().Bytes()),
+				PublicKey:       hex.EncodeToString(pk.PublicKey().Bytes()),
+				PrivateKey:      hex.EncodeToString(pk.Bytes()),
+				NodeType:        "fullnode",
+				PrivateKeyBytes: pk.Bytes(),
+				GenesisChainID:  chainID,
+			}
 
 			gsync.Lock()
 			*identities = append(*identities, identity)
@@ -525,23 +526,23 @@ func addValidators(count int, isDelegate bool, startIdx int, stakedAmount uint64
 				}
 			}
 
-		identity := NodeIdentity{
-			ID:                  nodeID,
-			ChainID:             chainID,
-			RootChainID:         rootChainID,
-			Address:             hex.EncodeToString(pk.PublicKey().Address().Bytes()),
-			PublicKey:           hex.EncodeToString(pk.PublicKey().Bytes()),
-			PrivateKey:          hex.EncodeToString(pk.Bytes()),
-			NodeType:            nodeType,
-			Committees:          committees,
-			ExpandingCommittees: identityExpandingCommittees,
-			PrivateKeyBytes:     pk.Bytes(),
-			StakedAmount:        stakedAmount,
-			Amount:              amount,
-			IsDelegate:          isDelegate,
-			NetAddress:          netAddress,
-			GenesisChainID:      chainID,
-		}
+			identity := NodeIdentity{
+				ID:                  nodeID,
+				ChainID:             chainID,
+				RootChainID:         rootChainID,
+				Address:             hex.EncodeToString(pk.PublicKey().Address().Bytes()),
+				PublicKey:           hex.EncodeToString(pk.PublicKey().Bytes()),
+				PrivateKey:          hex.EncodeToString(pk.Bytes()),
+				NodeType:            nodeType,
+				Committees:          committees,
+				ExpandingCommittees: identityExpandingCommittees,
+				PrivateKeyBytes:     pk.Bytes(),
+				StakedAmount:        stakedAmount,
+				Amount:              amount,
+				IsDelegate:          isDelegate,
+				NetAddress:          netAddress,
+				GenesisChainID:      chainID,
+			}
 
 			gsync.Lock()
 			*identities = append(*identities, identity)
@@ -831,7 +832,7 @@ func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, v
 	}
 }
 
-func createTemplateConfig(chainID int, rootChainID int, sleepUntilEpoch int) *lib.Config {
+func createTemplateConfig(chainID int, rootChainID int, sleepUntilEpoch int, minimumPeersToStart int) *lib.Config {
 	var rootChain []lib.RootChain
 
 	if chainID == rootChainID {
@@ -884,15 +885,16 @@ func createTemplateConfig(chainID int, rootChainID int, sleepUntilEpoch int) *li
 			InMemory:    false,
 		},
 		P2PConfig: lib.P2PConfig{
-			NetworkID:       1,
-			ListenAddress:   fmt.Sprintf("0.0.0.0:%d", 9000+chainID),
-			ExternalAddress: "NODE_ID",
-			MaxInbound:      21,
-			MaxOutbound:     7,
-			TrustedPeerIDs:  nil,
-			DialPeers:       []string{},
-			BannedPeerIDs:   nil,
-			BannedIPs:       nil,
+			NetworkID:           1,
+			ListenAddress:       fmt.Sprintf("0.0.0.0:%d", 9000+chainID),
+			ExternalAddress:     "NODE_ID",
+			MaxInbound:          21,
+			MaxOutbound:         7,
+			TrustedPeerIDs:      nil,
+			DialPeers:           []string{},
+			BannedPeerIDs:       nil,
+			BannedIPs:           nil,
+			MinimumPeersToStart: minimumPeersToStart,
 		},
 		ConsensusConfig: lib.ConsensusConfig{
 			NewHeightTimeoutMs:      4500,
@@ -1134,7 +1136,7 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 	}
 
 	// Write config.json for this chain
-	templateConfig := createTemplateConfig(chainCfg.ID, chainCfg.RootChain, chainCfg.SleepUntil)
+	templateConfig := createTemplateConfig(chainCfg.ID, chainCfg.RootChain, chainCfg.SleepUntil, chainCfg.MinimumPeersToStart)
 	mustSaveAsJSON(filepath.Join(chainDir, "config.json"), templateConfig)
 
 	// Create keystore.json for this chain

@@ -51,8 +51,9 @@ default:
     chain_1:
       id: 1                   # Unique chain ID
       rootChain: 1            # Root chain ID (can be itself for root chains)
-      sleepUntil: 1734567890  # Optional: epoch timestamp for sleepUntil
-      maxCommitteeSize: 100   # Optional: max committee size for genesis (default: 100)
+      sleepUntil: 1734567890    # Optional: epoch timestamp for sleepUntil
+      maxCommitteeSize: 100     # Optional: max committee size for genesis (default: 100)
+      minimumPeersToStart: 0    # Optional: minimum peers to start (default: 0)
       validators:
         count: 2
         stakedAmount: 1000000000
@@ -376,6 +377,7 @@ Node configuration with placeholders for dynamic values:
 
 **Optional Fields:**
 - `sleepUntil` - Unix epoch timestamp. If `sleepUntil` is set in the chain config, this value is used directly as the epoch timestamp. The node will sleep until this time before starting. Omitted if not configured or set to 0.
+- `minimumPeersToStart` - Minimum number of peers required before starting. Set via chain config's `minimumPeersToStart` field (default: 0).
 
 **Root vs Nested Chain Config:**
 
