@@ -96,6 +96,11 @@ spec:
               name: {{ .Values.volumes.configMaps.keystore }}
           - configMap:
               name: {{ .Values.volumes.configMaps.ids }}
+      {{- if not .Values.storage.usePVC }}
+      - name: data
+        emptyDir: {}
+      {{- end }}
+  {{- if .Values.storage.usePVC }}
   volumeClaimTemplates:
   - metadata:
       name: data
@@ -105,3 +110,4 @@ spec:
       resources:
         requests:
           storage: {{ .Values.storage.size }}
+  {{- end }}
