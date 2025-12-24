@@ -10,12 +10,17 @@ type Broadcaster[T any] struct {
 func NewBroadcaster[T any](src <-chan T, subscribers int) *Broadcaster[T] {
 	b := &Broadcaster[T]{subs: make([]chan T, subscribers)}
 	for i := range subscribers {
-		b.subs[i] = make(chan T) // unbuffered
+		b.subs[i] = make(chan T)
 	}
 	go func() {
 		for v := range src {
 			for _, ch := range b.subs {
-				ch <- v // blocking send to ensure strict delivery
+				select {
+				case ch <- v:
+					// sent successfully
+				default:
+					// channel full or not ready, skip
+				}
 			}
 		}
 		for _, ch := range b.subs {

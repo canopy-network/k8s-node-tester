@@ -64,10 +64,10 @@ func main() {
 
 // HandleSendTxs handles the sending of bulk `send` transactions per block
 func HandleSendTxs(log *slog.Logger, notifier <-chan uint64, profile *Profile, accounts []shared.Account) {
+	if profile.Send.Count == 0 {
+		return
+	}
 	for height := range notifier {
-		if profile.Send.Count == 0 {
-			continue
-		}
 		send := func() (string, error) { return sendTx(profile.Send, accounts[0], accounts[1], profile.General) }
 		success, errors := RunConcurrentTxs(context.Background(),
 			profile.Send.Count, profile.Send.Concurrency, send, log)

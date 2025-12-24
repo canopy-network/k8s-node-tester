@@ -76,17 +76,17 @@ func (n *newBlockNotifier) run() {
 		// reset retries on success
 		n.retries = 0
 		// ignore genesis or non-increasing heights
-		if resp.Height == 0 || uint64(resp.Height) <= n.lastHeight {
+		if resp.Height == 0 || resp.Height <= n.lastHeight {
 			continue
 		}
-		n.lastHeight = uint64(resp.Height)
+		n.lastHeight = resp.Height
 		// wait for the next block on the very first iteration so is always notified on a "new block"
 		if !n.initialized {
 			n.initialized = true
 			continue
 		}
 		// handle the new height
-		stop, height := n.handleHeight(uint64(resp.Height))
+		stop, height := n.handleHeight(resp.Height)
 		if stop {
 			return
 		}
