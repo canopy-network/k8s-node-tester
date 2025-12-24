@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/canopy-network/canopy/cmd/rpc"
+	"github.com/canopy-network/canopy/fsm"
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/k8s-node-tester/go-scripts/shared"
@@ -25,15 +26,23 @@ const (
 	TxChangeParam TxType = "changeParam"
 	TxDaoTransfer TxType = "daoTransfer"
 	TxSubsidy     TxType = "subsidy"
+	TxCreateOrder TxType = "createOrder"
+	TxEditOrder   TxType = "editOrder"
+	TxDeleteOrder TxType = "deleteOrder"
+	TxLockOrder   TxType = "lockOrder"
+	TxCloseOrder  TxType = "closeOrder"
+	TxStartPoll   TxType = "startPoll"
 
 	subsidyRoute = "/v1/admin/tx-subsidy"
 )
 
 var (
-	ErrAlreadyStaked     = errors.New("validator already staked")
-	ErrNotStaked         = errors.New("validator not staked")
-	ErrInsufficientStake = errors.New("insufficient stake")
-	ErrNotValidator      = errors.New("not a validator")
+	ErrAlreadyStaked        = errors.New("validator already staked")
+	ErrNotStaked            = errors.New("validator not staked")
+	ErrInsufficientStake    = errors.New("insufficient stake")
+	ErrNotValidator         = errors.New("not a validator")
+	ErrInvalidJSON          = errors.New("invalid JSON")
+	ErrInvalidPollEndHeight = errors.New("invalid poll end height")
 )
 
 // TxType is the type of transaction
@@ -66,6 +75,12 @@ func (UnstakeTx) Kind() TxType     { return TxUnstake }
 func (ChangeParamTx) Kind() TxType { return TxChangeParam }
 func (DaoTransferTx) Kind() TxType { return TxDaoTransfer }
 func (SubsidyTx) Kind() TxType     { return TxSubsidy }
+func (CreateOrderTx) Kind() TxType { return TxCreateOrder }
+func (EditOrderTx) Kind() TxType   { return TxEditOrder }
+func (DeleteOrderTx) Kind() TxType { return TxDeleteOrder }
+func (LockOrderTx) Kind() TxType   { return TxLockOrder }
+func (CloseOrderTx) Kind() TxType  { return TxCloseOrder }
+func (StartPollTx) Kind() TxType   { return TxStartPoll }
 
 // Due returns true if the height is due
 func (s height) Due(h uint64) bool { return s.Height == h }
@@ -77,6 +92,12 @@ func (tx PauseTx) Due(h uint64) bool       { return tx.height.Due(h) }
 func (tx UnstakeTx) Due(h uint64) bool     { return tx.height.Due(h) }
 func (tx DaoTransferTx) Due(h uint64) bool { return tx.height.Due(h) }
 func (tx SubsidyTx) Due(h uint64) bool     { return tx.height.Due(h) }
+func (tx CreateOrderTx) Due(h uint64) bool { return tx.height.Due(h) }
+func (tx EditOrderTx) Due(h uint64) bool   { return tx.height.Due(h) }
+func (tx DeleteOrderTx) Due(h uint64) bool { return tx.height.Due(h) }
+func (tx LockOrderTx) Due(h uint64) bool   { return tx.height.Due(h) }
+func (tx CloseOrderTx) Due(h uint64) bool  { return tx.height.Due(h) }
+func (tx StartPollTx) Due(h uint64) bool   { return tx.height.Due(h) }
 
 // Sender implementation
 func (tx SendTx) Sender() int        { return -1 } // does not have a fixed sender
@@ -87,6 +108,12 @@ func (tx UnstakeTx) Sender() int     { return tx.From }
 func (tx ChangeParamTx) Sender() int { return tx.From }
 func (tx DaoTransferTx) Sender() int { return tx.From }
 func (tx SubsidyTx) Sender() int     { return tx.From }
+func (tx CreateOrderTx) Sender() int { return tx.From }
+func (tx EditOrderTx) Sender() int   { return tx.From }
+func (tx DeleteOrderTx) Sender() int { return tx.From }
+func (tx LockOrderTx) Sender() int   { return tx.From }
+func (tx CloseOrderTx) Sender() int  { return tx.From }
+func (tx StartPollTx) Sender() int   { return tx.From }
 
 // Receiver implementation
 func (tx SendTx) Receiver() int        { return -1 } // does not have a fixed receiver
@@ -97,12 +124,23 @@ func (tx UnstakeTx) Receiver() int     { return tx.To }
 func (tx ChangeParamTx) Receiver() int { return tx.To }
 func (tx DaoTransferTx) Receiver() int { return tx.To }
 func (tx SubsidyTx) Receiver() int     { return tx.To }
+func (tx CreateOrderTx) Receiver() int { return tx.To }
+func (tx EditOrderTx) Receiver() int   { return tx.To }
+func (tx DeleteOrderTx) Receiver() int { return tx.To }
+func (tx LockOrderTx) Receiver() int   { return tx.To }
+func (tx CloseOrderTx) Receiver() int  { return tx.To }
+func (tx StartPollTx) Receiver() int   { return tx.To }
 
 // Validate implementation
 func (tx SendTx) Validate(ctx context.Context, req *TxRequest) error        { return nil }
 func (tx ChangeParamTx) Validate(ctx context.Context, req *TxRequest) error { return nil }
 func (tx DaoTransferTx) Validate(ctx context.Context, req *TxRequest) error { return nil }
 func (tx SubsidyTx) Validate(ctx context.Context, req *TxRequest) error     { return nil }
+func (tx CreateOrderTx) Validate(ctx context.Context, req *TxRequest) error { return nil }
+func (tx EditOrderTx) Validate(ctx context.Context, req *TxRequest) error   { return nil }
+func (tx DeleteOrderTx) Validate(ctx context.Context, req *TxRequest) error { return nil }
+func (tx LockOrderTx) Validate(ctx context.Context, req *TxRequest) error   { return nil }
+func (tx CloseOrderTx) Validate(ctx context.Context, req *TxRequest) error  { return nil }
 
 // Validate ensures that the sender is not already staked
 func (tx StakeTx) Validate(ctx context.Context, req *TxRequest) error {
@@ -166,6 +204,18 @@ func (tx PauseTx) Validate(ctx context.Context, req *TxRequest) error {
 	return nil
 }
 
+// Validate ensures that the poll has the valid JSON structure
+func (tx StartPollTx) Validate(ctx context.Context, req *TxRequest) error {
+	var poll fsm.StartPoll
+	if err := json.Unmarshal([]byte(tx.PollJSON), &poll); err != nil {
+		return err
+	}
+	if poll.EndHeight == 0 {
+		return ErrInvalidPollEndHeight
+	}
+	return nil
+}
+
 // Do sends a send transaction
 func (tx SendTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
 	from := rpc.AddrOrNickname{Address: req.From.String()}
@@ -225,7 +275,6 @@ func (tx PauseTx) Do(ctx context.Context, req *TxRequest, baseURL string) (strin
 	if err := tx.Validate(ctx, req); err != nil {
 		return "", fmt.Errorf("pause: [%s] %w", req.From, err)
 	}
-	// send transaction
 	from := rpc.AddrOrNickname{Address: req.From.String()}
 	hash, _, err := cnpyClient.TxPause(from, from, req.Password, true, req.Fee)
 	return *hash, err
@@ -236,7 +285,6 @@ func (tx UnstakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (str
 	if err := tx.Validate(ctx, req); err != nil {
 		return "", fmt.Errorf("unstake: [%s] %w", req.From, err)
 	}
-	// send transaction
 	from := rpc.AddrOrNickname{Address: req.From.String()}
 	hash, _, err := cnpyClient.TxUnstake(from, from, req.Password, true, req.Fee)
 	return *hash, err
@@ -282,6 +330,91 @@ func (tx SubsidyTx) Do(ctx context.Context, req *TxRequest, baseURL string) (str
 		Fee:        req.Fee,
 		OpCode:     lib.HexBytes(tx.OpCode),
 	})
+}
+
+// CreateOrderTx sends a create order transaction
+func (tx CreateOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
+	from := rpc.AddrOrNickname{Address: req.From.String()}
+	hash, _, err := cnpyClient.TxCreateOrder(
+		from,
+		tx.SellAmount,
+		tx.ReceiveAmount,
+		tx.ChainId,
+		req.To.String(),
+		req.Password,
+		lib.HexBytes(tx.Data),
+		true,
+		req.Fee)
+	return *hash, err
+}
+
+// EditOrderTx sends an edit order transaction
+func (tx EditOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
+	from := rpc.AddrOrNickname{Address: req.From.String()}
+	hash, _, err := cnpyClient.TxEditOrder(
+		from,
+		tx.SellAmount,
+		tx.ReceiveAmount,
+		tx.OrderId,
+		tx.ChainId,
+		req.To.String(),
+		req.Password,
+		true,
+		req.Fee)
+	return *hash, err
+}
+
+// DeleteOrderTx sends a delete order transaction
+func (tx DeleteOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
+	from := rpc.AddrOrNickname{Address: req.From.String()}
+	hash, _, err := cnpyClient.TxDeleteOrder(
+		from,
+		tx.OrderId,
+		tx.ChainId,
+		req.To.String(),
+		true,
+		req.Fee)
+	return *hash, err
+}
+
+// LockOrderTx sends a lock order transaction
+func (tx LockOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
+	from := rpc.AddrOrNickname{Address: req.From.String()}
+	hash, _, err := cnpyClient.TxLockOrder(
+		from,
+		req.To.String(),
+		tx.OrderId,
+		req.Password,
+		true,
+		req.Fee)
+	return *hash, err
+}
+
+// CloseOrderTx sends a close order transaction
+func (tx CloseOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
+	from := rpc.AddrOrNickname{Address: req.From.String()}
+	hash, _, err := cnpyClient.TxCloseOrder(
+		from,
+		tx.OrderId,
+		req.Password,
+		true,
+		req.Fee)
+	return *hash, err
+}
+
+// StartPollTx sends a start poll transaction
+func (tx StartPollTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
+	if err := tx.Validate(ctx, req); err != nil {
+		return "", err
+	}
+	from := rpc.AddrOrNickname{Address: req.From.String()}
+	hash, _, err := cnpyClient.TxStartPoll(
+		from,
+		json.RawMessage(tx.PollJSON),
+		req.Password,
+		true,
+		req.Fee)
+	return *hash, err
 }
 
 // BuildTxRequest constructs a TxRequest with the required fields
@@ -405,5 +538,5 @@ func isStaked(address string) (staked, delegator bool, err error) {
 		}
 		return false, false, err
 	}
-	return true, validator.Delegate, nil
+	return validator.UnstakingHeight == 0, validator.Delegate, nil
 }

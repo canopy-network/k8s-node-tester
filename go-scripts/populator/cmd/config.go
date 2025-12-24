@@ -52,6 +52,12 @@ type Transactions struct {
 	ChangeParam []ChangeParamTx `yaml:"changeParam"`
 	DaoTransfer []DaoTransferTx `yaml:"daoTransfer"`
 	Subsidy     []SubsidyTx     `yaml:"subsidy"`
+	CreateOrder []CreateOrderTx `yaml:"createOrder"`
+	EditOrder   []EditOrderTx   `yaml:"editOrder"`
+	DeleteOrder []DeleteOrderTx `yaml:"deleteOrder"`
+	LockOrder   []LockOrderTx   `yaml:"lockOrder"`
+	CloseOrder  []CloseOrderTx  `yaml:"closeOrder"`
+	StartPoll   []StartPollTx   `yaml:"startPoll"`
 }
 
 // General populator configuration
@@ -162,4 +168,49 @@ type SubsidyTx struct {
 	height     `yaml:",inline"`
 	committees `yaml:",inline"`
 	OpCode     string `yaml:"opCode"`
+}
+
+type order struct {
+	OrderId       string `yaml:"orderId"`
+	SellAmount    uint64 `yaml:"sellAmount"`
+	ReceiveAmount uint64 `yaml:"receiveAmount"`
+	ChainId       uint64 `yaml:"chainID"`
+	committees    `yaml:",inline"`
+}
+
+type CreateOrderTx struct {
+	account `yaml:",inline"`
+	order   `yaml:",inline"`
+	height  `yaml:",inline"`
+	Data    string `yaml:"data"`
+}
+
+type EditOrderTx struct {
+	order   `yaml:",inline"`
+	account `yaml:",inline"`
+	height  `yaml:",inline"`
+}
+
+type DeleteOrderTx struct {
+	order   `yaml:",inline"`
+	account `yaml:",inline"`
+	height  `yaml:",inline"`
+}
+
+type LockOrderTx struct {
+	order   `yaml:",inline"`
+	account `yaml:",inline"`
+	height  `yaml:",inline"`
+}
+
+type CloseOrderTx struct {
+	order   `yaml:",inline"`
+	account `yaml:",inline"`
+	height  `yaml:",inline"`
+}
+
+type StartPollTx struct {
+	height   `yaml:",inline"`
+	account  `yaml:",inline"`
+	PollJSON string `yaml:"pollJSON"`
 }

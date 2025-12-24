@@ -169,6 +169,12 @@ func GatherAtHeight(p *Profile, height uint64) []Tx {
 	out = append(out, filterDue(p.Transactions.ChangeParam, height)...)
 	out = append(out, filterDue(p.Transactions.DaoTransfer, height)...)
 	out = append(out, filterDue(p.Transactions.Subsidy, height)...)
+	out = append(out, filterDue(p.Transactions.CreateOrder, height)...)
+	out = append(out, filterDue(p.Transactions.EditOrder, height)...)
+	out = append(out, filterDue(p.Transactions.DeleteOrder, height)...)
+	out = append(out, filterDue(p.Transactions.LockOrder, height)...)
+	out = append(out, filterDue(p.Transactions.CloseOrder, height)...)
+	out = append(out, filterDue(p.Transactions.StartPoll, height)...)
 	return out
 }
 
