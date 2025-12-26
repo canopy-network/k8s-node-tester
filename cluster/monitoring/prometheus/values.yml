@@ -1,4 +1,6 @@
 prometheus:
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: "true"
   prometheusSpec:
     # enable local-path persistence for prometheus
     storageSpec:
@@ -9,9 +11,12 @@ prometheus:
           resources:
             requests:
               storage: 50Gi
+
 grafana:
   enabled: true
   namespaceOverride: ""
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: "true"
   # enable local-path persistence for grafana
   adminUser: testuser # should be overridden
   adminPassword: testPassword123 # should be overridden

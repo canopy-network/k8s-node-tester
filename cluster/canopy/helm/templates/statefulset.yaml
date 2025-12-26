@@ -81,6 +81,22 @@ spec:
         {{- end }}
         resources:
           {{ toYaml .Values.resources | nindent 10 }}
+        # livenessProbe:
+        #   httpGet:
+        #     path: /v1/
+        #     port: 50002
+        #   initialDelaySeconds: 30
+        #   timeoutSeconds: 5
+        #   periodSeconds: 10
+        #   failureThreshold: 3
+        # readinessProbe:
+        #   httpGet:
+        #     path: /v1/
+        #     port: 50002
+        #   initialDelaySeconds: 10
+        #   timeoutSeconds: 5
+        #   periodSeconds: 5
+        #   failureThreshold: 3
         volumeMounts:
         - name: data
           mountPath: /root/.canopy
