@@ -19,9 +19,13 @@ name: node
 # namespace
 namespace: canopy
 
+# service account
+serviceAccount:
+  name: node-sa
+
 # container image
 image:
-  repository: canopynetwork/canopy
+  repository: canopynetwork/canopy-test
   tag: latest
   pullPolicy: IfNotPresent
 
@@ -46,16 +50,24 @@ storage:
   storageClassName: local-path
 
 # resources per pod
-resources:
-  requests:
-    memory: "1Gi"
-    # cpu: "1000m"
-  limits:
-    memory: "1Gi"
-    # cpu: "1000m"
+# resources:
+# requests:
+# memory: "1Gi"
+# cpu: "1000m"
+# limits:
+# memory: "1Gi"
+# cpu: "1000m"
 
 # even distribution across servers
 topologySpreadConstraints:
   enabled: true
   maxSkew: 1
   whenUnsatisfiable: DoNotSchedule
+
+# avoid scheduling pods on control plane nodes
+notScheduleInControlPlane: false
+# select nodes with specific labels
+# nodeSelector:
+#   type: dd
+#   disktype: ssd
+#   kubernetes.io/arch: amd64

@@ -25,11 +25,18 @@ test/start:
 	$(call check_vars, NODES)
 	helm upgrade --install canopy ./cluster/canopy/helm -n canopy --create-namespace --set replicaCount=$(NODES)
 
+## test/load: runs the populator load test
+.PHONY: test/load
+test/load:
+	$(call check_vars, CONFIG PROFILE)
+	$(MAKE) populator/load
+
 ## test/destroy: destroy the load-test-related resources in the canopy namespace
 .PHONY: test/destroy
 test/destroy:
 	helm uninstall canopy -n canopy
 	kubectl delete configmap config genesis ids keystore -n canopy
+	kubectl delete svc -l type=chain -n canopy
 
 ## --- manual setup ---
 # ==================================================================================== #
@@ -87,6 +94,8 @@ monitoring:
 go-scripts/build:
 	cd ./go-scripts/genesis-generator && go build -o ../bin/genesis_apply ./cmd/k8s-applier/main.go
 	cd ./go-scripts/genesis-generator && go build -o ../bin/genesis_generate ./cmd/genesis/main.go
+	cd ./go-scripts/populator && go build -o ../bin/populator ./cmd/*.go
+
 
 ## genesis/generate: generates the genesis config files based on the given config
 .PHONY: genesis/generate
@@ -99,7 +108,16 @@ genesis/generate:
 .PHONY: genesis/apply
 genesis/apply:
 	$(call check_vars, CONFIG)
-	./go-scripts/bin/genesis_apply --path ./go-scripts/genesis-generator/artifacts --config $(CONFIG)
+	$(eval CHAIN_LB ?= false)
+	./go-scripts/bin/genesis_apply --path ./go-scripts/genesis-generator/artifacts \
+		--config $(CONFIG) $(if $(filter true,$(CHAIN_LB)),--chainLB)
+
+## populator/load: runs the populator load test
+.PHONY: populator/load
+populator/load:
+	$(call check_vars, CONFIG PROFILE)
+	./go-scripts/bin/populator --path ./go-scripts/populator/config.yml \
+	--accounts ./go-scripts/genesis-generator/artifacts/$(CONFIG)/ids.json --profile $(PROFILE)
 
 ## --- ansible ---
 # ==================================================================================== #
@@ -138,14 +156,19 @@ ansible/cluster-setup:
 	ansible-playbook -i ansible/inventory.yml ansible/playbooks/4-monitoring.yml \
 	  -e @./ansible/secrets.yml
 
-## --- helpers ---
+## ansible/ping: ping all nodes in the inventory
+.PHONY: ansible/ping
+ansible/ping:
+	ansible k3s_cluster -m ping
+
+## --- util ---
 # ==================================================================================== #
-# HELPERS
+# UTIL
 # ==================================================================================== #
 
-## helpers/brew-install-requirements: installs kubectl, ansible and helm with brew
-.PHONY: helpers/brew-install-requirements
-helpers/brew-install-requirements:
+## util/brew-install-requirements: installs kubectl, ansible and helm with brew
+.PHONY: util/brew-install-requirements
+util/brew-install-requirements:
 	@command -v brew >/dev/null 2>&1 || { echo "Homebrew not found. Install from https://brew.sh and re-run."; exit 1; }
 	@brew list kubernetes-cli >/dev/null 2>&1 || brew install kubernetes-cli
 	@brew list helm >/dev/null 2>&1 || brew install helm
@@ -153,3 +176,10 @@ helpers/brew-install-requirements:
 	@echo "kubectl: $$(kubectl version --client 2>/dev/null | grep 'Client Version' | awk '{print $$3}' || echo not installed)"
 	@echo "helm:    $$(helm version --short 2>/dev/null || echo not installed)"
 	@echo "ansible: $$(ansible --version 2>/dev/null | head -n1 | grep -o '\[core [^]]*\]' || echo not installed)"
+
+
+## util/build-deploy: builds and deploys the given script using the tag, requires docker buildx
+.PHONY: util/build-deploy
+util/build-deploy:
+	$(call check_vars, TAG)
+	docker buildx build --push --platform linux/amd64,linux/arm64 -t $(TAG) -f ./go-scripts/Dockerfile ./go-scripts/

@@ -13,19 +13,20 @@ can create/add nodes, update the cluster, and configure TLS/monitoring end-to-en
 - Debian-based OS (e.g., Ubuntu)
 - Non-root user with sudo privileges
 - SSH access (public key authentication)
-- Firewall allowances:
+- [Firewall allowances](https://docs.k3s.io/installation/requirements#inbound-rules-for-k3s-nodes):
   - Inbound TCP 22 from your IP (SSH)
   - Inbound TCP 80 from 0.0.0.0/0 (HTTP for apps/Let’s Encrypt)
   - Inbound TCP 443 from 0.0.0.0/0 (HTTPS for apps)
   - Inbound TCP 6443 between cluster nodes (K3s API server)
   - Inbound TCP 10250 between cluster nodes (Kubelet API)
   - Inbound UDP 8472 between cluster nodes (Flannel VXLAN)
+  - Inbound TCP 2379-2380 for embedded etcd (required for HA embedded etcd)
   - Optional: Inbound TCP 6443 from your local IP (kubectl access)
 
 ### DNS
 
 - Domain using Hetzner DNS nameservers
-- Wildcard A record pointing to the cluster’s public IP (e.g., *.example.com)
+- Wildcard A record pointing to the cluster's public IPs (e.g., A *.example.com -> 192.168.0.1, 192.168.0.2)
 - Hetzner read/write API token (for cert-manager DNS01)
 
 ### Local/remote machine (controller)

@@ -27,7 +27,7 @@ data:
       "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 0,
-      "id": 0,
+      "id": 229,
       "links": [],
       "panels": [
         {
@@ -482,7 +482,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "builder",
-              "expr": "canopy_chain_id{pod=~\"$node\"}",
+              "expr": "canopy_root_chain_id{pod=~\"$node\"}",
               "legendFormat": "__auto",
               "range": true,
               "refId": "A"
@@ -998,7 +998,7 @@ data:
           },
           "gridPos": {
             "h": 4,
-            "w": 3,
+            "w": 2,
             "x": 15,
             "y": 7
           },
@@ -1075,8 +1075,8 @@ data:
           },
           "gridPos": {
             "h": 4,
-            "w": 3,
-            "x": 18,
+            "w": 2,
+            "x": 17,
             "y": 7
           },
           "id": 13,
@@ -1152,8 +1152,8 @@ data:
           },
           "gridPos": {
             "h": 4,
-            "w": 3,
-            "x": 21,
+            "w": 2,
+            "x": 19,
             "y": 7
           },
           "id": 54,
@@ -1189,6 +1189,96 @@ data:
             }
           ],
           "title": "Total Peers",
+          "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${Datasource}"
+          },
+          "description": "Current software's version",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "displayName": "${__field.labels.version}",
+              "mappings": [
+                {
+                  "options": {
+                    "match": "null",
+                    "result": {
+                      "color": "text",
+                      "index": 0,
+                      "text": "Unstaked"
+                    }
+                  },
+                  "type": "special"
+                }
+              ],
+              "noValue": "Unstaked",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": 0
+                  }
+                ]
+              },
+              "unit": "string"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 3,
+            "x": 21,
+            "y": 7
+          },
+          "id": 55,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "percentChangeColorMode": "standard",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "/^version$/",
+              "values": false
+            },
+            "showPercentChange": false,
+            "textMode": "value",
+            "wideLayout": true
+          },
+          "pluginVersion": "12.3.0",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${Datasource}"
+              },
+              "editorMode": "code",
+              "expr": "label_replace(\n  canopy_software_version{pod=\"$node\"} * 0 + 1,\n  \"metric_value\", \"$1\", \"version\", \"(.*)\"\n)",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Software Version",
+          "transformations": [
+            {
+              "id": "labelsToFields",
+              "options": {
+                "keepLabels": [
+                  "version"
+                ]
+              }
+            }
+          ],
           "type": "stat"
         },
         {
@@ -1566,7 +1656,7 @@ data:
           },
           "gridPos": {
             "h": 4,
-            "w": 3,
+            "w": 4,
             "x": 0,
             "y": 20
           },
@@ -1603,85 +1693,6 @@ data:
             }
           ],
           "title": "Block Size",
-          "type": "stat"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${Datasource}"
-          },
-          "description": "The number of transactions in the last block",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "mappings": [
-                {
-                  "options": {
-                    "match": "null",
-                    "result": {
-                      "color": "text",
-                      "index": 0,
-                      "text": "Unstaked"
-                    }
-                  },
-                  "type": "special"
-                }
-              ],
-              "noValue": "Unstaked",
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": 0
-                  }
-                ]
-              },
-              "unit": "locale"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 4,
-            "w": 3,
-            "x": 3,
-            "y": 20
-          },
-          "id": 20,
-          "options": {
-            "colorMode": "value",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "percentChangeColorMode": "standard",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "showPercentChange": false,
-            "textMode": "auto",
-            "wideLayout": true
-          },
-          "pluginVersion": "12.3.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${Datasource}"
-              },
-              "editorMode": "builder",
-              "expr": "canopy_block_num_txs{pod=~\"$node\"}",
-              "legendFormat": "__auto",
-              "range": true,
-              "refId": "A"
-            }
-          ],
-          "title": "Last Block TXs",
           "type": "stat"
         },
         {
@@ -1732,8 +1743,8 @@ data:
           },
           "gridPos": {
             "h": 4,
-            "w": 3,
-            "x": 6,
+            "w": 4,
+            "x": 4,
             "y": 20
           },
           "id": 21,
@@ -1811,8 +1822,8 @@ data:
           },
           "gridPos": {
             "h": 4,
-            "w": 3,
-            "x": 9,
+            "w": 4,
+            "x": 8,
             "y": 20
           },
           "id": 25,
@@ -2237,7 +2248,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "builder",
-              "expr": "sum by(pod) (rate(canopy_block_processing_time_sum{pod=~\"$node\"}[$__rate_interval])) / (sum by(pod) (rate(canopy_block_processing_time_count{pod=~\"$node\"}[$__rate_interval])))",
+              "expr": "rate(canopy_block_processing_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_block_processing_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -2340,8 +2351,8 @@ data:
                 "type": "prometheus",
                 "uid": "${Datasource}"
               },
-              "editorMode": "builder",
-              "expr": "rate(canopy_root_chain_info_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "editorMode": "code",
+              "expr": "rate(canopy_root_chain_info_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_root_chain_info_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -2991,7 +3002,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "builder",
-              "expr": "rate(canopy_bft_election_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_election_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_election_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "__auto",
               "range": true,
               "refId": "A"
@@ -3087,7 +3098,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "builder",
-              "expr": "rate(canopy_bft_election_vote_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_election_vote_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_election_vote_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -3183,7 +3194,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "builder",
-              "expr": "rate(canopy_bft_propose_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_propose_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_propose_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -3279,7 +3290,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "code",
-              "expr": "rate(canopy_bft_propose_vote_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_propose_vote_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_propose_vote_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -3375,7 +3386,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "code",
-              "expr": "rate(canopy_bft_precommit_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_precommit_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_precommit_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -3471,7 +3482,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "builder",
-              "expr": "rate(canopy_bft_precommit_vote_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_precommit_vote_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_precommit_vote_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -3567,7 +3578,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "code",
-              "expr": "rate(canopy_bft_commit_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_commit_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_commit_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -3663,7 +3674,7 @@ data:
                 "uid": "${Datasource}"
               },
               "editorMode": "code",
-              "expr": "rate(canopy_bft_commit_process_time_sum{pod=\"$node\"}[$__rate_interval])",
+              "expr": "rate(canopy_bft_commit_process_time_sum{pod=\"$node\"}[$__rate_interval]) / rate(canopy_bft_commit_process_time_count{pod=\"$node\"}[$__rate_interval])",
               "legendFormat": "{{instance}}",
               "range": true,
               "refId": "A"
@@ -4320,8 +4331,8 @@ data:
           {
             "allowCustomValue": true,
             "current": {
-              "text": "node-1",
-              "value": "node-1"
+              "text": "node-3",
+              "value": "node-3"
             },
             "datasource": {
               "type": "prometheus",
@@ -4343,12 +4354,12 @@ data:
         ]
       },
       "time": {
-        "from": "now-1h",
+        "from": "now-3h",
         "to": "now"
       },
       "timepicker": {},
       "timezone": "browser",
       "title": "Canopy Dashboard Reloaded",
       "uid": "bed86e86-4772-45e5-9436-9f942fcbf2ca",
-      "version": 12
+      "version": 2
     }

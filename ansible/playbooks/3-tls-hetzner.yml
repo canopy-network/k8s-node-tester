@@ -51,13 +51,13 @@
         release_state: deployed
 
     - name: apply TLS manifests from cluster/tls/hetzner-tls.yml
+      vars:
+        HETZNER_API_TOKEN: "{{ tls.hetzner_api_token }}"
+        EMAIL: "{{ tls.email }}"
+        DOMAIN: "{{ tls.domain }}"
       kubernetes.core.k8s:
         state: present
-        definition: "{{ lookup('template', playbook_dir ~ '/../../cluster/tls/hetzner-tls.yml') | from_yaml_all }}"
-        vars:
-        HETZNER_API_TOKEN: "{{ hetzner_api_token }}"
-        EMAIL: "{{ email }}"
-        DOMAIN: "{{ domain }}"
+        definition: "{{ lookup('template', playbook_dir ~ '/../../cluster/tls/hetzner-tls.yml') | from_yaml_all | list }}"
 
     - name: wait for cert-manager pods to be ready
       kubernetes.core.k8s_info:

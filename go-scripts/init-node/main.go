@@ -1,21 +1,29 @@
 package main
 
 // init-node is a Kubernetes init container script that prepares canopy node configuration files.
-// it reads the pod's hostname to determine its index, looks up the corresponding node key from a keys.json file,
+// It reads the pod's hostname to determine its index, looks up the corresponding node key from an ids.json file,
 // then copies and configures the appropriate genesis, keystore, config, and validator_key files for that specific node.
-// the script performs template substitution in the config file, replacing placeholders like |NODE_ID|, |ROOT_NODE_ID|,
-// and |ROOT_NODE_PUBLIC_KEY| with actual values based on the node's chain configuration and root chain node information.
-// all configuration files are written to /root/.canopy for the main canopy container to use.
+// The script unmarshals the config file into a Config struct and programmatically modifies it by setting root chain URLs,
+// external addresses, and dial peers based on the node's chain configuration and peer information.
+// After modification, the config is marshaled back to JSON and written to /root/.canopy for the main canopy container to use.
+// Finally, the script uses the Kubernetes API to label the pod with its chain ID for service targeting.
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 const (
@@ -30,7 +38,8 @@ const (
 
 	serviceSuffix = ".p2p" // suffix for the service name in order for the node to be discoverable
 
-	configFilePerms = 0644 // writable file permissions [readable by everyone, writable by owner]
+	configFilePerms = 0644              // writable file permissions [readable by everyone, writable by owner]
+	chainIdLabel    = "canopy/chain-id" // pod label for the chain id, required to make chain ID service targets
 )
 
 // Keys is the map of node keys
@@ -54,6 +63,9 @@ type NodeKey struct {
 func main() {
 	// create a default logger
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	// cancellable context
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	// obtain the pod index from the hostname
 	hostname, podPrefix, podId, err := getPodId()
 	if err != nil {
@@ -68,15 +80,15 @@ func main() {
 		os.Exit(1)
 	}
 	defer idsFile.Close()
-	// load the keys file into memory
-	var keys Keys
-	err = json.NewDecoder(idsFile).Decode(&keys)
+	// load the nodes file into memory
+	var nodes Keys
+	err = json.NewDecoder(idsFile).Decode(&nodes)
 	if err != nil {
 		log.Error("failed to decode keys file", slog.String("err", err.Error()))
 		os.Exit(1)
 	}
 	// get the node key for the pod index
-	node, ok := keys.Keys[hostname]
+	node, ok := nodes.Keys[hostname]
 	if !ok {
 		log.Error("node key not found for hostname", slog.String("hostname", hostname))
 		os.Exit(1)
@@ -124,14 +136,14 @@ func main() {
 	}
 	// obtain the root node full key by splitting the hostname by "-" and obtaining the identifier
 	rootNodeKey := fmt.Sprintf("%s%d", podPrefix, node.RootChainNode)
-	rootNode, ok := keys.Keys[rootNodeKey]
+	rootNode, ok := nodes.Keys[rootNodeKey]
 	if !ok {
 		log.Error("failed to find root node", slog.String("rootNodeKey", rootNodeKey))
 		os.Exit(1)
 	}
 	// do the same for the peer node
 	peerNodeKey := fmt.Sprintf("%s%d", podPrefix, node.PeerNode)
-	peerNode, ok := keys.Keys[peerNodeKey]
+	peerNode, ok := nodes.Keys[peerNodeKey]
 	if !ok {
 		log.Error("failed to find peer node", slog.String("peerNodeKey", peerNodeKey))
 		os.Exit(1)
@@ -158,6 +170,17 @@ func main() {
 		[]byte(validatorKeyFile), configFilePerms); err != nil {
 		log.Error("failed to copy validator key file", slog.String("err", err.Error()),
 			slog.String("dst", dst))
+		os.Exit(1)
+	}
+	// get the clientset for the current cluster
+	clientSet, err := getClientSet()
+	if err != nil {
+		log.Error("failed to get clientset", slog.String("err", err.Error()))
+		os.Exit(1)
+	}
+	// apply the chain label to the pod
+	if err := applyChainLabel(ctx, clientSet, hostname, node.ChainID); err != nil {
+		log.Error("failed to apply chain label", slog.String("err", err.Error()))
 		os.Exit(1)
 	}
 	log.Info("finished setting up the config for the node " + hostname)
@@ -238,6 +261,45 @@ func buildNodeAddress(http bool, nodePrefix string, node *NodeKey, port string) 
 		httpPrefix = ""
 	}
 	return fmt.Sprintf("%s%s%d%s%s", httpPrefix, nodePrefix, node.Id, serviceSuffix, port)
+}
+
+// applyChainLabel applies a label to the pod to indicate the chain ID
+func applyChainLabel(ctx context.Context, clientset *kubernetes.Clientset, podName string, chainID int) error {
+	// get current namespace, requires to be supplied by the pod
+	namespace := os.Getenv("NAMESPACE")
+	if namespace == "" {
+		return fmt.Errorf("namespace not found")
+	}
+	// get the pod
+	pod, err := clientset.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		fmt.Printf("get pod: %v\n", err)
+		os.Exit(1)
+	}
+	// add label
+	if pod.Labels == nil {
+		pod.Labels = make(map[string]string)
+	}
+	pod.Labels[chainIdLabel] = strconv.Itoa(chainID)
+	// update pod
+	_, err = clientset.CoreV1().Pods(namespace).Update(ctx, pod, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("update pod: %v", err)
+	}
+	return nil
+}
+
+// getClientSet returns a Kubernetes clientset for the current cluster
+func getClientSet() (*kubernetes.Clientset, error) {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, err
+	}
+	clientConfig, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	return clientConfig, nil
 }
 
 // Config is an excerpt of the config file with all the required fields
