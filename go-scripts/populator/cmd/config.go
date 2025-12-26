@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/canopy-network/canopy/cmd/rpc"
@@ -31,11 +32,11 @@ type Profile struct {
 func (p *Profile) Validate() error {
 	var errs error
 	required := func(field string) error { return fmt.Errorf("%s is required", field) }
-	if p.General.RpcURL == "" {
-		errs = errors.Join(errs, required("baseURL"))
+	if _, err := url.Parse(p.General.RpcURL); err != nil {
+		errs = errors.Join(errs, fmt.Errorf("rpcURL: %w", err))
 	}
-	if p.General.AdminRpcURL == "" {
-		errs = errors.Join(errs, required("adminURL"))
+	if _, err := url.Parse(p.General.AdminRpcURL); err != nil {
+		errs = errors.Join(errs, fmt.Errorf("adminRpcURL: %w", err))
 	}
 	if len(p.General.Chains) == 0 {
 		errs = errors.Join(errs, required("chains"))
@@ -155,6 +156,7 @@ type ChangeParamTx struct {
 	delimitedBlock `yaml:",inline"`
 }
 
+// DaoTransferTx represents a transaction to transfer DAO tokens
 type DaoTransferTx struct {
 	account        `yaml:",inline"`
 	amount         `yaml:",inline"`
@@ -162,6 +164,7 @@ type DaoTransferTx struct {
 	delimitedBlock `yaml:",inline"`
 }
 
+// SubsidyTx represents a transaction to subsidy a nested chain
 type SubsidyTx struct {
 	account    `yaml:",inline"`
 	amount     `yaml:",inline"`
@@ -170,6 +173,7 @@ type SubsidyTx struct {
 	OpCode     string `yaml:"opCode"`
 }
 
+// order is the set of fields that are used to work with order-related transactions
 type order struct {
 	OrderId       string `yaml:"orderId"`
 	SellAmount    uint64 `yaml:"sellAmount"`
@@ -178,6 +182,7 @@ type order struct {
 	committees    `yaml:",inline"`
 }
 
+// CreateOrderTx represents a transaction to create an order
 type CreateOrderTx struct {
 	account `yaml:",inline"`
 	order   `yaml:",inline"`
@@ -185,30 +190,35 @@ type CreateOrderTx struct {
 	Data    string `yaml:"data"`
 }
 
+// EditOrderTx represents a transaction to edit an order
 type EditOrderTx struct {
 	order   `yaml:",inline"`
 	account `yaml:",inline"`
 	height  `yaml:",inline"`
 }
 
+// DeleteOrderTx represents a transaction to delete an order
 type DeleteOrderTx struct {
 	order   `yaml:",inline"`
 	account `yaml:",inline"`
 	height  `yaml:",inline"`
 }
 
+// LockOrderTx represents a transaction to lock an order
 type LockOrderTx struct {
 	order   `yaml:",inline"`
 	account `yaml:",inline"`
 	height  `yaml:",inline"`
 }
 
+// CloseOrderTx represents a transaction to close an order
 type CloseOrderTx struct {
 	order   `yaml:",inline"`
 	account `yaml:",inline"`
 	height  `yaml:",inline"`
 }
 
+// StartPollTx represents a transaction to start a poll
 type StartPollTx struct {
 	height   `yaml:",inline"`
 	account  `yaml:",inline"`

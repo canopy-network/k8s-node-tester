@@ -185,7 +185,6 @@ func (tx UnstakeTx) Validate(ctx context.Context, req *TxRequest) error {
 	if !staked {
 		return ErrNotStaked
 	}
-
 	return nil
 }
 
