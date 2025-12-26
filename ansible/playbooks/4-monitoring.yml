@@ -7,6 +7,8 @@
     # these should be defined in inventory or passed via --extra-vars
     domain: "{{ tls.domain }}"
     discord_webhook_url: "{{ monitoring.webhooks.discord }}"
+    grafana_user: "{{ monitoring.grafana_user }}"
+    grafana_password: "{{ monitoring.grafana_password }}"
 
   tasks:
     - name: create monitoring namespace
@@ -91,6 +93,10 @@
         set_values:
           - value: "grafana.alerting.contactpoints\\.yml.secret.contactPoints[0].receivers[0].settings.url={{ discord_webhook_url }}"
             value_type: string
+          - value: "grafana.adminUser={{ grafana_user }}"
+            value_type: string
+          - value: "grafana.adminPassword={{ grafana_password }}"
+            value_type: string
         state: present
 
     - name: wait for prometheus operator to be ready
@@ -123,6 +129,11 @@
       kubernetes.core.k8s:
         state: present
         definition: "{{ lookup('template', playbook_dir ~ '/../../cluster/monitoring/prometheus/ingress-routes.yml') | from_yaml_all }}"
+
+    - name: apply glances daemonset
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('template', playbook_dir ~ '/../../cluster/monitoring/glances/manifest.yml') | from_yaml_all }}"
 
     - name: cleanup temporary files
       ansible.builtin.file:

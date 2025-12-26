@@ -92,16 +92,18 @@ type CommitteeAssignment struct {
 
 // ChainConfig represents a single chain's configuration
 type ChainConfig struct {
-	ID               int                   `yaml:"id"`
-	RootChain        int                   `yaml:"rootChain"`
-	Validators       ValidatorsConfig      `yaml:"validators"`
-	FullNodes        FullNodesConfig       `yaml:"fullNodes"`
-	Accounts         AccountsConfig        `yaml:"accounts"`
-	Delegators       DelegatorsConfig      `yaml:"delegators"`
-	Committees       []CommitteeAssignment `yaml:"committees"`
+	ID                  int                   `yaml:"id"`
+	RootChain           int                   `yaml:"rootChain"`
+	Validators          ValidatorsConfig      `yaml:"validators"`
+	FullNodes           FullNodesConfig       `yaml:"fullNodes"`
+	Accounts            AccountsConfig        `yaml:"accounts"`
+	Delegators          DelegatorsConfig      `yaml:"delegators"`
+	Committees          []CommitteeAssignment `yaml:"committees"`
 	SleepUntil          int                   `yaml:"sleepUntil,omitempty"`          // Optional: epoch timestamp for sleepUntil
 	MaxCommitteeSize    int                   `yaml:"maxCommitteeSize,omitempty"`    // Optional: max committee size (default: 100)
 	MinimumPeersToStart int                   `yaml:"minimumPeersToStart,omitempty"` // Optional: minimum peers to start (default: 0)
+	MaxInbound          int                   `yaml:"maxInbound,omitempty"`          // Optional: max inbound connections (default: 100)
+	MaxOutbound         int                   `yaml:"maxOutbound,omitempty"`         // Optional: max outbound connections (default: 100)
 }
 
 // AppConfig represents the configuration structure
@@ -832,7 +834,7 @@ func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, v
 	}
 }
 
-func createTemplateConfig(chainID int, rootChainID int, sleepUntilEpoch int, minimumPeersToStart int) *lib.Config {
+func createTemplateConfig(chainID int, rootChainID int, sleepUntilEpoch int, minimumPeersToStart int, maxInbound int, maxOutbound int) *lib.Config {
 	var rootChain []lib.RootChain
 
 	if chainID == rootChainID {
@@ -862,6 +864,13 @@ func createTemplateConfig(chainID int, rootChainID int, sleepUntilEpoch int, min
 		proposeVoteTimeoutMS = 3000 // Nested chain
 	}
 
+	if maxInbound == 0 {
+		maxInbound = 21
+	}
+	if maxOutbound == 0 {
+		maxOutbound = 7
+	}
+
 	return &lib.Config{
 		MainConfig: lib.MainConfig{
 			LogLevel:   "debug",
@@ -888,8 +897,8 @@ func createTemplateConfig(chainID int, rootChainID int, sleepUntilEpoch int, min
 			NetworkID:           1,
 			ListenAddress:       fmt.Sprintf("0.0.0.0:%d", 9000+chainID),
 			ExternalAddress:     "NODE_ID",
-			MaxInbound:          21,
-			MaxOutbound:         7,
+			MaxInbound:          maxInbound,
+			MaxOutbound:         maxOutbound,
 			TrustedPeerIDs:      nil,
 			DialPeers:           []string{},
 			BannedPeerIDs:       nil,
@@ -1136,7 +1145,7 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 	}
 
 	// Write config.json for this chain
-	templateConfig := createTemplateConfig(chainCfg.ID, chainCfg.RootChain, chainCfg.SleepUntil, chainCfg.MinimumPeersToStart)
+	templateConfig := createTemplateConfig(chainCfg.ID, chainCfg.RootChain, chainCfg.SleepUntil, chainCfg.MinimumPeersToStart, chainCfg.MaxInbound, chainCfg.MaxOutbound)
 	mustSaveAsJSON(filepath.Join(chainDir, "config.json"), templateConfig)
 
 	// Create keystore.json for this chain
