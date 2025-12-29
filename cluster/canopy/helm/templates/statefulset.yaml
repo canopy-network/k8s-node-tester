@@ -4,7 +4,7 @@ metadata:
   name: {{ .Values.name }}
   namespace: {{ .Values.namespace }}
 spec:
-  podManagementPolicy: {{ .Values.podManagementPolicy}}
+  podManagementPolicy: {{ .Values.podManagementPolicy }}
   persistentVolumeClaimRetentionPolicy:
     whenDeleted: {{ .Values.persistentVolumeClaimRetentionPolicy.whenDeleted }}
     whenScaled: {{ .Values.persistentVolumeClaimRetentionPolicy.whenScaled }}

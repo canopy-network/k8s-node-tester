@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health
+        ready
+        kubernetes {{ CLUSTER_DOMAIN }} in-addr.arpa ip6.arpa {
+          pods insecure
+          fallthrough in-addr.arpa ip6.arpa
+        }
+        hosts /etc/coredns/NodeHosts {
+          ttl 60
+          reload 15s
+          fallthrough
+        }
+        prometheus :9153
+
+        # Use host resolvers via TCP, with sane timeouts and concurrency
+        forward . /etc/resolv.conf {
+          force_tcp
+        }
+
+        cache 300
+        loop
+        reload
+        loadbalance
+        import /etc/coredns/custom/*.override
+    }
+    import /etc/coredns/custom/*.server
+
+# .:53 {
+#     errors
+#     health
+#     ready
+#     kubernetes {{ CLUSTER_DOMAIN }} in-addr.arpa ip6.arpa {
+#       pods insecure
+#       fallthrough in-addr.arpa ip6.arpa
+#     }
+#     hosts /etc/coredns/NodeHosts {
+#       ttl 60
+#       reload 15s
+#       fallthrough
+#     }
+#     prometheus :9153
+
+#     # keep using the node's /etc/resolv.conf for upstream DNS
+#     forward . /etc/resolv.conf
+
+#     # increase cache ttl to reduce upstream DNS load
+#     cache 300
+
+#     loop
+#     reload
+#     loadbalance
+#     import /etc/coredns/custom/*.override
+# }
+# import /etc/coredns/custom/*.server

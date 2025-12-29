@@ -1,0 +1,64 @@
+# Local DNS cache Setup Playbook
+# This playbook sets a daemonset for local DNS caching on the cluster nodes
+# Following the guidelines from: https://kubernetes.io/docs/tasks/administer-cluster/nodelocaldns/
+- name: set local dns cache
+  hosts: server[0]
+  gather_facts: false
+  vars:
+    # these should be defined in the secrets file or passed via --extra-vars
+    listen_ip: "{{ dns.listen_ip }}"
+  tasks:
+    - name: get CoreDNS service cluster IP
+      ansible.builtin.command: kubectl -n kube-system get svc kube-dns -o jsonpath='{.spec.clusterIP}'
+      register: coredns_ip_result
+      changed_when: false
+      failed_when: coredns_ip_result.rc != 0 or coredns_ip_result.stdout == ""
+
+    - name: set CoreDNS service IP variable
+      ansible.builtin.set_fact:
+        coredns_svc_ip: "{{ coredns_ip_result.stdout }}"
+
+    - name: get k3s cluster domain
+      ansible.builtin.shell: |
+        kubectl get configmap coredns -n kube-system -o jsonpath='{.data.Corefile}' \
+          | grep -o 'kubernetes [^ ]*' \
+          | awk '{print $2}'
+      register: cluster_domain_result
+      changed_when: false
+      failed_when: cluster_domain_result.rc != 0 or cluster_domain_result.stdout == ""
+
+    - name: set k3s cluster domain variable
+      ansible.builtin.set_fact:
+        cluster_domain: "{{ cluster_domain_result.stdout }}"
+
+    - name: apply TLS manifests from cluster/dns/nodelocaldns.yml
+      vars:
+        PILLAR__DNS__SERVER: ""
+        PILLAR__LOCAL__DNS: "{{ listen_ip }}"
+        PILLAR__CLUSTER__DNS: "{{ coredns_svc_ip }}"
+        PILLAR__DNS__DOMAIN: "{{ cluster_domain }}"
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('template', playbook_dir ~ '/../../cluster/dns/nodelocaldns.yml') | from_yaml_all | list }}"
+
+    - name: update CoreDNS Corefile configuration
+      vars:
+        CLUSTER_DOMAIN: "{{ cluster_domain }}"
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('template', playbook_dir ~ '/../../cluster/dns/coredns-corefile.yml') | from_yaml }}"
+
+    - name: scale CoreDNS to 2 replicas
+      ansible.builtin.command: kubectl scale deployment coredns -n kube-system --replicas=2
+      register: scale_result
+      changed_when: "'scaled' in scale_result.stdout"
+      failed_when: scale_result.rc != 0
+
+    - name: display local DNS info
+      ansible.builtin.debug:
+        msg:
+          - "Local DNS setup complete"
+          - "Last step to do is to update the k3s cluster DNS configuration to use the local DNS by default"
+          - "Update the inventory file with the local DNS IP address by adding to each server:"
+          - '--kubelet-arg "cluster-dns={{ listen_ip }}"'
+          - "and running `make ansible/site` to update the cluster configuration"

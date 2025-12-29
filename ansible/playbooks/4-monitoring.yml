@@ -4,12 +4,11 @@
   hosts: server[0]
   gather_facts: false
   vars:
-    # these should be defined in inventory or passed via --extra-vars
+    # these should be defined in the secrets file or passed via --extra-vars
     domain: "{{ tls.domain }}"
     discord_webhook_url: "{{ monitoring.webhooks.discord }}"
     grafana_user: "{{ monitoring.grafana_user }}"
     grafana_password: "{{ monitoring.grafana_password }}"
-
   tasks:
     - name: create monitoring namespace
       kubernetes.core.k8s:
