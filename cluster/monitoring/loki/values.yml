@@ -19,6 +19,8 @@ loki:
     retention_period: 72h
 singleBinary:
   replicas: 1
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: "true"
   # TODO: Need to fully measure required resources
   # resources:
   #   requests:
@@ -27,6 +29,9 @@ singleBinary:
   #   limits:
   #     cpu: 1
   #     memory: 512Mi
+gateway:
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: "true"
 # disable caches in SingleBinary mode - the single process already caches in memory
 # and using filesystem storage is fast enough for short-term deployments
 chunksCache:

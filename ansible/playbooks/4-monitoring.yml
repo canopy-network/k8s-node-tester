@@ -164,4 +164,4 @@
           - "Monitoring stack setup complete"
           - "Access Prometheus at: https://prometheus.{{ domain }}"
           - "Access Grafana at: https://grafana.{{ domain }}"
-          - "Grafana credentials: admin/{{ grafana_password }}"
+          - "Grafana credentials: {{ grafana_user }}/{{ grafana_password }}"

@@ -1,7 +1,7 @@
 prometheus:
-  nodeSelector:
-    node-role.kubernetes.io/control-plane: "true"
   prometheusSpec:
+    nodeSelector:
+      node-role.kubernetes.io/control-plane: "true"
     # enable local-path persistence for prometheus
     storageSpec:
       volumeClaimTemplate:
@@ -98,3 +98,11 @@ grafana:
                 disableResolveMessage: false
 alertmanager:
   enabled: false
+
+prometheusOperator:
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: "true"
+
+kube-state-metrics:
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: "true"
