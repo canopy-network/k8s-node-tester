@@ -35,9 +35,10 @@ test/load:
 ## test/destroy: destroy the load-test-related resources in the canopy namespace
 .PHONY: test/destroy
 test/destroy:
-	helm uninstall canopy -n canopy
-	kubectl delete configmap config genesis ids keystore -n canopy
-	kubectl delete svc -l type=chain -n canopy
+	$(eval NAMESPACE ?= canopy)
+	helm uninstall canopy -n $(NAMESPACE)
+	kubectl delete configmap config genesis ids keystore -n $(NAMESPACE)
+	kubectl delete svc -l type=chain -n $(NAMESPACE)
 
 ## --- manual setup ---
 # ==================================================================================== #
