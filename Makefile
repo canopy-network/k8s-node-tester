@@ -23,7 +23,8 @@ test/prepare:
 .PHONY: test/start
 test/start:
 	$(call check_vars, NODES)
-	helm upgrade --install canopy ./cluster/canopy/helm -n canopy --create-namespace --set replicaCount=$(NODES)
+	$(eval NAMESPACE ?= canopy)
+	helm upgrade --install canopy ./cluster/canopy/helm -n $(NAMESPACE) --create-namespace --set replicaCount=$(NODES)
 
 ## test/load: runs the populator load test
 .PHONY: test/load
@@ -109,8 +110,9 @@ genesis/generate:
 genesis/apply:
 	$(call check_vars, CONFIG)
 	$(eval CHAIN_LB ?= false)
+	$(eval NAMESPACE ?= canopy)
 	./go-scripts/bin/genesis_apply --path ./go-scripts/genesis-generator/artifacts \
-		--config $(CONFIG) $(if $(filter true,$(CHAIN_LB)),--chainLB)
+		--config $(CONFIG) $(if $(filter true,$(CHAIN_LB)),--chainLB) --namespace $(NAMESPACE)
 
 ## populator/load: runs the populator load test
 .PHONY: populator/load
