@@ -46,6 +46,7 @@ volumes:
 
 # storage per pod
 storage:
+  usePVC: false
   size: 1Gi
   storageClassName: local-path
 
@@ -64,8 +65,13 @@ topologySpreadConstraints:
   maxSkew: 1
   whenUnsatisfiable: DoNotSchedule
 
+# maximum pods per node (hard limit)
+maxPodsPerNode:
+  enabled: false
+  limit: 25
+
 # avoid scheduling pods on control plane nodes
-notScheduleInControlPlane: false
+notScheduleInControlPlane: true
 # select nodes with specific labels
 # nodeSelector:
 #   type: dd

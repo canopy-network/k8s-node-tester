@@ -25,8 +25,9 @@ spec:
       nodeSelector:
         {{ toYaml .Values.nodeSelector | nindent 8 }}
       {{- end }}
-      {{- if .Values.notScheduleInControlPlane }}
+      {{- if or .Values.notScheduleInControlPlane .Values.maxPodsPerNode.enabled }}
       affinity:
+        {{- if .Values.notScheduleInControlPlane }}
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
@@ -35,6 +36,21 @@ spec:
                 operator: DoesNotExist
               - key: node-role.kubernetes.io/master
                 operator: DoesNotExist
+        {{- end }}
+        {{- if .Values.maxPodsPerNode.enabled }}
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - node
+            topologyKey: kubernetes.io/hostname
+            namespaces:
+            - {{ .Values.namespace }}
+            maxPodsPerTopology: {{ .Values.maxPodsPerNode.limit }}
+        {{- end }}
       {{- end }}
       {{- if .Values.topologySpreadConstraints.enabled }}
       topologySpreadConstraints:
