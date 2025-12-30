@@ -71,6 +71,25 @@ one-chain-1000:
         stakedAmount: 1000000000
         amount: 1000000
 
+one-chain-40:
+  general:
+    concurrency: 10
+    password: "pablito"
+    buffer: 1000
+    netAddressSuffix: ".p2p"
+    jsonBeautify: true
+  nodes:
+    count: 40
+  chains:
+    chain_1:
+      id: 1
+      rootChain: 1
+      minimumPeersToStart: 27
+      validators:
+        count: 40
+        stakedAmount: 1000000000
+        amount: 1000000
+
 100-subchains:
   general:
     concurrency: 100
