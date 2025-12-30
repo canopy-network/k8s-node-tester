@@ -1,0 +1,24 @@
+- name: copy container image to all k3s nodes and import into containerd
+  hosts: k3s_cluster
+  become: true
+  gather_facts: false
+  vars:
+    image_tar_source: "{{ playbook_dir }}/../../artifacts/{{ image_tar_name }}"
+    image_tar_dest: /tmp/image.tar
+  tasks:
+    - name: copy image tar to node
+      ansible.builtin.copy:
+        src: "{{ image_tar_source }}"
+        dest: "{{ image_tar_dest }}"
+        mode: "0644"
+
+    - name: import image into k3s containerd
+      ansible.builtin.command:
+        cmd: "ctr -n k8s.io images import {{ image_tar_dest }}"
+      register: ctr_import_result
+      changed_when: "'unpacking' in ctr_import_result.stdout or 'imported' in ctr_import_result.stdout"
+
+    - name: remove image tar from node
+      ansible.builtin.file:
+        path: "{{ image_tar_dest }}"
+        state: absent

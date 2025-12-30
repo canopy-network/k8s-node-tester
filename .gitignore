@@ -45,3 +45,6 @@ go-scripts/bin/
 # ansible files
 ansible/inventory.yml
 ansible/secrets.yml
+
+# artifacts
+artifacts/

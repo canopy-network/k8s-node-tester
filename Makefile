@@ -164,6 +164,13 @@ ansible/cluster-setup:
 ansible/ping:
 	ansible k3s_cluster -m ping
 
+## ansible/copy-image: copy container image to all k3s nodes and import into containerd
+.PHONY: ansible/copy-image
+ansible/copy-image:
+	$(eval IMAGE ?= canopy_image.tar)
+	ansible-playbook -i ansible/inventory.yml ansible/playbooks/6-copy-image.yml \
+	  -e "image_tar_name=$(IMAGE)"
+
 ## --- util ---
 # ==================================================================================== #
 # UTIL
