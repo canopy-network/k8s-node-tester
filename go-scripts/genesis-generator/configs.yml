@@ -1,12 +1,12 @@
 default:
   general:
     concurrency: 100
-    password: "pablito"
+    password: "test"
     buffer: 1000
     netAddressSuffix: ".p2p"
     jsonBeautify: true
   nodes:
-    count: 5
+    count: 25
   chains:
     chain_1:
       id: 1
@@ -26,35 +26,55 @@ default:
         count: 0
         stakedAmount: 100
         amount: 100
-      committees:
-        - id: 2
-          repeatedIdentityValidatorCount: 1
-          repeatedIdentityDelegatorCount: 0
-          validatorCount: 0
-          delegatorCount: 0
-    chain_2:
-      id: 2
+#      committees:
+#        - id: 2
+#          repeatedIdentityValidatorCount: 1
+#          repeatedIdentityDelegatorCount: 0
+#          validatorCount: 0
+#          delegatorCount: 0
+#    chain_2:
+#      id: 2
+#      rootChain: 1
+#      validators:
+#        count: 1
+#        stakedAmount: 1000000000
+#        amount: 1000000
+#      fullNodes:
+#        count: 0
+#        amount: 1000000
+#      accounts:
+#        count: 2
+#        amount: 99898
+#      delegators:
+#        count: 0
+#        stakedAmount: 100
+#        amount: 100
+#      committees: []
+
+one-chain-25:
+  general:
+    concurrency: 10
+    password: "test"
+    buffer: 1000
+    netAddressSuffix: ".p2p"
+    jsonBeautify: true
+  nodes:
+    count: 25
+  chains:
+    chain_1:
+      id: 1
       rootChain: 1
+      maxCommitteeSize: 1000
+      minimumPeersToStart: 23
       validators:
-        count: 1
+        count: 25
         stakedAmount: 1000000000
         amount: 1000000
-      fullNodes:
-        count: 0
-        amount: 1000000
-      accounts:
-        count: 2
-        amount: 99898
-      delegators:
-        count: 0
-        stakedAmount: 100
-        amount: 100
-      committees: []
 
 one-chain-1000:
   general:
     concurrency: 10
-    password: "pablito"
+    password: "test"
     buffer: 1000
     netAddressSuffix: ".p2p"
     jsonBeautify: true
