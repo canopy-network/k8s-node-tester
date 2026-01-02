@@ -75,7 +75,7 @@ notScheduleInControlPlane: false
 # Chaos Mesh NetworkChaos (optional). Requires Chaos Mesh installed in the cluster.
 # Targets pods by label selector (defaults to app=node).
 networkChaos:
-  enabled: true
+  enabled: false
   # When set, one NetworkChaos (or Schedule) object is rendered per experiment entry.
   # If empty, the single config below is used.
   experiments:
