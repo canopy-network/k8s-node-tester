@@ -149,9 +149,13 @@ Available profiles include `default`, `min`, `medium`, `max`, and `mature`. Chec
 Install Chaos Mesh (one-time):
 
 ```bash
+make chaos/mesh
+
+# or manually:
 helm repo add chaos-mesh https://charts.chaos-mesh.org
 helm repo update
-helm install chaos-mesh chaos-mesh/chaos-mesh -n chaos-mesh --create-namespace
+helm upgrade --install chaos-mesh chaos-mesh/chaos-mesh -n chaos-mesh --create-namespace \
+  -f ./cluster/chaos-mesh/values.yaml
 ```
 
 Then configure `networkChaos` in `cluster/canopy/helm/values.yaml`. You can define multiple

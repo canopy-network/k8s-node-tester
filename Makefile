@@ -84,6 +84,14 @@ monitoring:
 	$(MAKE) monitoring/loki
 	$(MAKE) monitoring/promtail
 
+## chaos/mesh: installs or upgrades Chaos Mesh with k3s containerd settings
+.PHONY: chaos/mesh
+chaos/mesh:
+	helm repo add chaos-mesh https://charts.chaos-mesh.org
+	helm repo update
+	helm upgrade --install chaos-mesh chaos-mesh/chaos-mesh -n chaos-mesh --create-namespace \
+		-f ./cluster/chaos-mesh/values.yaml
+
 ## --- scripts ---
 # ==================================================================================== #
 # GO SCRIPTS
