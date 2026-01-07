@@ -1,0 +1,212 @@
+{{- if .Values.networkChaos.enabled }}
+{{- $global := .Values.networkChaos }}
+{{- $experiments := $global.experiments }}
+{{- if not $experiments }}
+{{- $experiments = list (dict "name" $global.name) }}
+{{- end }}
+{{- $expCount := len $experiments }}
+{{- range $index, $exp := $experiments }}
+{{- $baseName := "" }}
+{{- if $exp.name }}
+{{- $baseName = $exp.name }}
+{{- else if $global.name }}
+{{- $baseName = $global.name }}
+{{- else }}
+{{- $baseName = printf "%s-network-chaos" $.Values.name }}
+{{- end }}
+{{- $name := $baseName }}
+{{- if and (gt $expCount 1) (not $exp.name) }}
+{{- $name = printf "%s-%d" $baseName (add1 $index) }}
+{{- end }}
+{{- $action := default $global.action $exp.action }}
+{{- $mode := default $global.mode $exp.mode }}
+{{- $value := default $global.value $exp.value }}
+{{- $direction := default $global.direction $exp.direction }}
+{{- $selector := $global.selector }}
+{{- if $exp.selector }}
+{{- $selector = $exp.selector }}
+{{- end }}
+{{- $target := $global.target }}
+{{- if $exp.target }}
+{{- $target = $exp.target }}
+{{- end }}
+{{- $duration := default $global.duration $exp.duration }}
+{{- $schedule := default $global.schedule $exp.schedule }}
+{{- $delayLatency := $global.delay.latency }}
+{{- $delayJitter := $global.delay.jitter }}
+{{- $delayCorrelation := $global.delay.correlation }}
+{{- with $exp.delay }}
+{{- if .latency }}
+{{- $delayLatency = .latency }}
+{{- end }}
+{{- if .jitter }}
+{{- $delayJitter = .jitter }}
+{{- end }}
+{{- if .correlation }}
+{{- $delayCorrelation = .correlation }}
+{{- end }}
+{{- end }}
+{{- $lossLoss := $global.loss.loss }}
+{{- $lossCorrelation := $global.loss.correlation }}
+{{- with $exp.loss }}
+{{- if .loss }}
+{{- $lossLoss = .loss }}
+{{- end }}
+{{- if .correlation }}
+{{- $lossCorrelation = .correlation }}
+{{- end }}
+{{- end }}
+{{- $dupValue := $global.duplicate.duplicate }}
+{{- $dupCorrelation := $global.duplicate.correlation }}
+{{- with $exp.duplicate }}
+{{- if .duplicate }}
+{{- $dupValue = .duplicate }}
+{{- end }}
+{{- if .correlation }}
+{{- $dupCorrelation = .correlation }}
+{{- end }}
+{{- end }}
+{{- $corruptValue := $global.corrupt.corrupt }}
+{{- $corruptCorrelation := $global.corrupt.correlation }}
+{{- with $exp.corrupt }}
+{{- if .corrupt }}
+{{- $corruptValue = .corrupt }}
+{{- end }}
+{{- if .correlation }}
+{{- $corruptCorrelation = .correlation }}
+{{- end }}
+{{- end }}
+{{- if $schedule }}
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  schedule: {{ $schedule | quote }}
+  type: NetworkChaos
+  networkChaos:
+    action: {{ $action | quote }}
+    mode: {{ $mode | quote }}
+    {{- if $value }}
+    value: {{ $value | quote }}
+    {{- end }}
+    direction: {{ $direction | quote }}
+    selector:
+      namespaces:
+        {{- if $selector.namespaces }}
+        {{- toYaml $selector.namespaces | nindent 8 }}
+        {{- else }}
+        - {{ $.Values.namespace }}
+        {{- end }}
+      {{- if $selector.labelSelectors }}
+      labelSelectors:
+        {{- toYaml $selector.labelSelectors | nindent 8 }}
+      {{- end }}
+    {{- if $duration }}
+    duration: {{ $duration | quote }}
+    {{- end }}
+    {{- if eq $action "delay" }}
+    delay:
+      latency: {{ $delayLatency | quote }}
+      jitter: {{ $delayJitter | quote }}
+      correlation: {{ $delayCorrelation | quote }}
+    {{- end }}
+    {{- if eq $action "loss" }}
+    loss:
+      loss: {{ $lossLoss | quote }}
+      correlation: {{ $lossCorrelation | quote }}
+    {{- end }}
+    {{- if eq $action "duplicate" }}
+    duplicate:
+      duplicate: {{ $dupValue | quote }}
+      correlation: {{ $dupCorrelation | quote }}
+    {{- end }}
+    {{- if eq $action "corrupt" }}
+    corrupt:
+      corrupt: {{ $corruptValue | quote }}
+      correlation: {{ $corruptCorrelation | quote }}
+    {{- end }}
+    {{- if $target.enabled }}
+    target:
+      mode: {{ $target.mode | quote }}
+      selector:
+        namespaces:
+          {{- if $target.selector.namespaces }}
+          {{- toYaml $target.selector.namespaces | nindent 10 }}
+          {{- else }}
+          - {{ $.Values.namespace }}
+          {{- end }}
+        {{- if $target.selector.labelSelectors }}
+        labelSelectors:
+          {{- toYaml $target.selector.labelSelectors | nindent 10 }}
+        {{- end }}
+    {{- end }}
+{{- else }}
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  action: {{ $action | quote }}
+  mode: {{ $mode | quote }}
+  {{- if $value }}
+  value: {{ $value | quote }}
+  {{- end }}
+  direction: {{ $direction | quote }}
+  selector:
+    namespaces:
+      {{- if $selector.namespaces }}
+      {{- toYaml $selector.namespaces | nindent 6 }}
+      {{- else }}
+      - {{ $.Values.namespace }}
+      {{- end }}
+    {{- if $selector.labelSelectors }}
+    labelSelectors:
+      {{- toYaml $selector.labelSelectors | nindent 6 }}
+    {{- end }}
+  {{- if $duration }}
+  duration: {{ $duration | quote }}
+  {{- end }}
+  {{- if eq $action "delay" }}
+  delay:
+    latency: {{ $delayLatency | quote }}
+    jitter: {{ $delayJitter | quote }}
+    correlation: {{ $delayCorrelation | quote }}
+  {{- end }}
+  {{- if eq $action "loss" }}
+  loss:
+    loss: {{ $lossLoss | quote }}
+    correlation: {{ $lossCorrelation | quote }}
+  {{- end }}
+  {{- if eq $action "duplicate" }}
+  duplicate:
+    duplicate: {{ $dupValue | quote }}
+    correlation: {{ $dupCorrelation | quote }}
+  {{- end }}
+  {{- if eq $action "corrupt" }}
+  corrupt:
+    corrupt: {{ $corruptValue | quote }}
+    correlation: {{ $corruptCorrelation | quote }}
+  {{- end }}
+  {{- if $target.enabled }}
+  target:
+    mode: {{ $target.mode | quote }}
+    selector:
+      namespaces:
+        {{- if $target.selector.namespaces }}
+        {{- toYaml $target.selector.namespaces | nindent 8 }}
+        {{- else }}
+        - {{ $.Values.namespace }}
+        {{- end }}
+      {{- if $target.selector.labelSelectors }}
+      labelSelectors:
+        {{- toYaml $target.selector.labelSelectors | nindent 8 }}
+      {{- end }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

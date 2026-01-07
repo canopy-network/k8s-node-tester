@@ -144,6 +144,54 @@ Available profiles include `default`, `min`, `medium`, `max`, and `mature`. Chec
    - Must Set `NODES` to match or align with the config's `nodes.count` in the selected profile for
      correct scaling.
 
+## Optional: Network chaos (Chaos Mesh)
+
+Install Chaos Mesh (one-time):
+
+```bash
+make chaos/mesh
+
+# or manually:
+helm repo add chaos-mesh https://charts.chaos-mesh.org
+helm repo update
+helm upgrade --install chaos-mesh chaos-mesh/chaos-mesh -n chaos-mesh --create-namespace \
+  -f ./cluster/chaos-mesh/values.yaml
+```
+
+Then configure `networkChaos` in `cluster/canopy/helm/values.yaml`. You can define multiple
+faults at once via `networkChaos.experiments`. Each experiment renders a separate
+NetworkChaos resource, or a Schedule resource if `schedule` is set for periodic runs.
+By default the selector targets only the canopy pods (`app=node`).
+
+Example:
+
+```yaml
+networkChaos:
+  enabled: true
+  experiments:
+    - name: canopy-latency
+      action: delay
+      delay:
+        latency: "150ms"
+        jitter: "20ms"
+        correlation: "25"
+    - name: canopy-loss
+      action: loss
+      loss:
+        loss: "2"
+        correlation: "0"
+    - name: canopy-egress-blackhole
+      action: loss
+      mode: random-max-percent
+      value: "30"
+      direction: to
+      duration: "5s"
+      schedule: "@every 1m"
+      loss:
+        loss: "100"
+        correlation: "0"
+```
+
 Cleanup
 
 - Remove Helm release and ConfigMaps used by tests:

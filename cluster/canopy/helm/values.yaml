@@ -26,7 +26,7 @@ serviceAccount:
 # container image
 image:
   repository: canopynetwork/canopy-test
-  tag: latest
+  tag: main-1266098e
   pullPolicy: IfNotPresent
 
 # container ports
@@ -77,3 +77,61 @@ notScheduleInControlPlane: true
 #   type: dd
 #   disktype: ssd
 #   kubernetes.io/arch: amd64
+
+# Chaos Mesh NetworkChaos (optional). Requires Chaos Mesh installed in the cluster.
+# Targets pods by label selector (defaults to app=node).
+networkChaos:
+  enabled: false
+  # When set, one NetworkChaos (or Schedule) object is rendered per experiment entry.
+  # If empty, the single config below is used.
+  experiments:
+    - name: canopy-latency
+      action: delay
+      delay:
+        latency: "150ms"
+        jitter: "20ms"
+        correlation: "25"
+    - name: canopy-loss
+      action: loss
+      loss:
+        loss: "2"
+        correlation: "0"
+    - name: canopy-egress-blackhole
+      action: loss
+      mode: random-max-percent
+      value: "30"
+      direction: to
+      duration: "5s"
+      schedule: "@every 1m"
+      loss:
+        loss: "100"
+        correlation: "0"
+  # name: canopy-network-chaos
+  action: delay
+  mode: all
+  direction: to
+  # duration: "5m"
+  # scheduler: "@every 10m"
+  selector:
+    namespaces: []
+    labelSelectors:
+      app: node
+  target:
+    enabled: false
+    mode: all
+    selector:
+      namespaces: []
+      labelSelectors: {}
+  delay:
+    latency: "100ms"
+    jitter: "0ms"
+    correlation: "0"
+  loss:
+    loss: "0"
+    correlation: "0"
+  duplicate:
+    duplicate: "0"
+    correlation: "0"
+  corrupt:
+    corrupt: "0"
+    correlation: "0"

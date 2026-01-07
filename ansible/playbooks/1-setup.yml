@@ -12,6 +12,28 @@
         update_cache: yes
         upgrade: dist
 
+    - name: Install iptables utilities for Chaos Mesh
+      ansible.builtin.apt:
+        name:
+          - iptables
+          - ipset
+          - arptables
+          - ebtables
+        state: present
+
+    - name: Force legacy iptables alternatives for Chaos Mesh
+      ansible.builtin.command: "update-alternatives --set {{ item.name }} {{ item.path }}"
+      loop:
+        - name: iptables
+          path: /usr/sbin/iptables-legacy
+        - name: ip6tables
+          path: /usr/sbin/ip6tables-legacy
+        - name: arptables
+          path: /usr/sbin/arptables-legacy
+        - name: ebtables
+          path: /usr/sbin/ebtables-legacy
+      changed_when: false
+
     - name: install python3 and pip
       ansible.builtin.apt:
         name:
