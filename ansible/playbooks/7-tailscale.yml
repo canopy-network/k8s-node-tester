@@ -1,0 +1,40 @@
+- name: set up tailscale
+  hosts: k3s_cluster
+  roles:
+    - role: artis3n.tailscale.machine
+      vars:
+        # inventory should define this per host, for example:
+        #   tailscale_advertise_routes: "10.42.0.0/16" or "10.42.1.0/24"
+        tailscale_authkey: "{{ tailscale.auth_key }}"
+        # tag used for ACL auto-approval
+        # tailscale_tag: "tag:k3s-node"
+        # arguments passed directly to `tailscale up`
+        tailscale_args: >
+          --accept-routes
+    # commented out as the tag can be automatically provisioned from the auth key
+    # --advertise-tags={{ tailscale_tag }}
+
+# ACL auto-approval format:
+# {
+#   "acls": [
+#     {
+#       "action": "accept",
+#       "src": ["tag:k3s-node"],
+#       "dst": ["10.42.0.0/16:*"]
+#     }
+#   ],
+
+#   "autoApprovers": {
+#     "routes": {
+#       "10.42.0.0/16": ["tag:k3s-node"]  // any device with tag:k3s-node auto-approves this route
+#     }
+#   },
+
+#   "tagOwners": {
+#     "tag:k3s-node": ["group:ops", "you@example.com"]
+#   },
+
+#   "groups": {
+#     "group:ops": ["you@example.com"]
+#   }
+# }
