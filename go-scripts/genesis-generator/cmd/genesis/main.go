@@ -104,6 +104,7 @@ type ChainConfig struct {
 	MinimumPeersToStart int                   `yaml:"minimumPeersToStart,omitempty"` // Optional: minimum peers to start (default: 0)
 	MaxInbound          int                   `yaml:"maxInbound,omitempty"`          // Optional: max inbound connections (default: 100)
 	MaxOutbound         int                   `yaml:"maxOutbound,omitempty"`         // Optional: max outbound connections (default: 100)
+	InMemory            bool                  `yaml:"inMemory,omitempty"`            // Optional: in-memory mode (default: false)
 }
 
 // AppConfig represents the configuration structure
@@ -834,7 +835,7 @@ func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, v
 	}
 }
 
-func createTemplateConfig(chainID int, rootChainID int, sleepUntilEpoch int, minimumPeersToStart int, maxInbound int, maxOutbound int) *lib.Config {
+func createTemplateConfig(chainID int, rootChainID int, sleepUntilEpoch int, minimumPeersToStart int, maxInbound int, maxOutbound int, inMemory bool) *lib.Config {
 	var rootChain []lib.RootChain
 
 	if chainID == rootChainID {
@@ -891,7 +892,7 @@ func createTemplateConfig(chainID int, rootChainID int, sleepUntilEpoch int, min
 		StoreConfig: lib.StoreConfig{
 			DataDirPath: "/root/.canopy",
 			DBName:      "canopy",
-			InMemory:    false,
+			InMemory:    inMemory,
 		},
 		P2PConfig: lib.P2PConfig{
 			NetworkID:           1,
@@ -1145,7 +1146,7 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 	}
 
 	// Write config.json for this chain
-	templateConfig := createTemplateConfig(chainCfg.ID, chainCfg.RootChain, chainCfg.SleepUntil, chainCfg.MinimumPeersToStart, chainCfg.MaxInbound, chainCfg.MaxOutbound)
+	templateConfig := createTemplateConfig(chainCfg.ID, chainCfg.RootChain, chainCfg.SleepUntil, chainCfg.MinimumPeersToStart, chainCfg.MaxInbound, chainCfg.MaxOutbound, chainCfg.InMemory)
 	mustSaveAsJSON(filepath.Join(chainDir, "config.json"), templateConfig)
 
 	// Create keystore.json for this chain
