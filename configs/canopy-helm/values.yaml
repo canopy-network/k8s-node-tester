@@ -1,0 +1,137 @@
+# number of nodes to deploy
+replicaCount: 4
+
+# launch behavior of statefulset
+# Parallel: launch all pods in parallel
+# OrderedReady: launch pods in order, wait for each to be ready before launching the next
+podManagementPolicy: Parallel
+
+# persistent volume claim retention policy
+# default: delete pvc when pod is deleted,
+# retain pvc when pod is scaled
+persistentVolumeClaimRetentionPolicy:
+  whenDeleted: Delete
+  whenScaled: Retain
+
+# name of the statefulset
+name: node
+
+# namespace
+namespace: canopy
+
+# service account
+serviceAccount:
+  name: node-sa
+
+# container image
+image:
+  repository: canopynetwork/canopy-test
+  tag: main-1266098e
+  pullPolicy: IfNotPresent
+
+# container ports
+ports:
+  p2p:
+    start: 9001
+    # not inclusive
+    end: 9003
+
+# volume mounts
+volumes:
+  configMaps:
+    genesis: genesis
+    config: config
+    keystore: keystore
+    ids: ids
+
+# storage per pod
+storage:
+  usePVC: false
+  size: 1Gi
+  storageClassName: local-path
+
+# resources per pod
+# resources:
+# requests:
+# memory: "1Gi"
+# cpu: "1000m"
+# limits:
+# memory: "1Gi"
+# cpu: "1000m"
+
+# even distribution across servers
+topologySpreadConstraints:
+  enabled: true
+  maxSkew: 1
+  whenUnsatisfiable: DoNotSchedule
+
+# maximum pods per node (hard limit)
+maxPodsPerNode:
+  enabled: false
+  limit: 25
+
+# avoid scheduling pods on control plane nodes
+notScheduleInControlPlane: true
+# select nodes with specific labels
+# nodeSelector:
+#   type: dd
+#   disktype: ssd
+#   kubernetes.io/arch: amd64
+
+# Chaos Mesh NetworkChaos (optional). Requires Chaos Mesh installed in the cluster.
+# Targets pods by label selector (defaults to app=node).
+networkChaos:
+  enabled: false
+  # When set, one NetworkChaos (or Schedule) object is rendered per experiment entry.
+  # If empty, the single config below is used.
+  experiments:
+    - name: canopy-latency
+      action: delay
+      delay:
+        latency: "150ms"
+        jitter: "20ms"
+        correlation: "25"
+    - name: canopy-loss
+      action: loss
+      loss:
+        loss: "2"
+        correlation: "0"
+    - name: canopy-egress-blackhole
+      action: loss
+      mode: random-max-percent
+      value: "30"
+      direction: to
+      duration: "5s"
+      schedule: "@every 1m"
+      loss:
+        loss: "100"
+        correlation: "0"
+  # name: canopy-network-chaos
+  action: delay
+  mode: all
+  direction: to
+  # duration: "5m"
+  # scheduler: "@every 10m"
+  selector:
+    namespaces: []
+    labelSelectors:
+      app: node
+  target:
+    enabled: false
+    mode: all
+    selector:
+      namespaces: []
+      labelSelectors: {}
+  delay:
+    latency: "100ms"
+    jitter: "0ms"
+    correlation: "0"
+  loss:
+    loss: "0"
+    correlation: "0"
+  duplicate:
+    duplicate: "0"
+    correlation: "0"
+  corrupt:
+    corrupt: "0"
+    correlation: "0"

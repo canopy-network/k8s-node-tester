@@ -6,7 +6,7 @@ default:
     netAddressSuffix: ".p2p"
     jsonBeautify: true
   nodes:
-    count: 25
+    count: 3
   chains:
     chain_1:
       id: 1
@@ -85,9 +85,11 @@ one-chain-1000:
       id: 1
       rootChain: 1
       maxCommitteeSize: 1000
-      minimumPeersToStart: 667
+      minimumPeersToStart: 800
+      sleepUntil: 0
+      inMemory: true
       validators:
-        count: 1000
+        count: 100
         stakedAmount: 1000000000
         amount: 1000000
 

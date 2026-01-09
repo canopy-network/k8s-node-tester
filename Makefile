@@ -24,7 +24,7 @@ test/prepare:
 test/start:
 	$(call check_vars, NODES)
 	$(eval NAMESPACE ?= canopy)
-	helm upgrade --install canopy ./cluster/canopy/helm -n $(NAMESPACE) --create-namespace --set replicaCount=$(NODES)
+	helm upgrade --install canopy ./cluster/canopy/helm -n $(NAMESPACE) --create-namespace --set replicaCount=$(NODES) -f configs/canopy-helm/values.yaml
 
 ## test/load: runs the populator load test
 .PHONY: test/load
@@ -111,8 +111,8 @@ go-scripts/build:
 .PHONY: genesis/generate
 genesis/generate:
 	$(call check_vars, CONFIG)
-	./go-scripts/bin/genesis_generate --path ./go-scripts/genesis-generator/ \
-	  --output ./go-scripts/genesis-generator/artifacts --config $(CONFIG)
+	./go-scripts/bin/genesis_generate --path ./configs/genesis \
+	  --output ./configs/genesis/artifacts --config $(CONFIG)
 
 ## genesis/apply: applies the config files created by the generator into the cluster
 .PHONY: genesis/apply
@@ -120,15 +120,15 @@ genesis/apply:
 	$(call check_vars, CONFIG)
 	$(eval CHAIN_LB ?= false)
 	$(eval NAMESPACE ?= canopy)
-	./go-scripts/bin/genesis_apply --path ./go-scripts/genesis-generator/artifacts \
+	./go-scripts/bin/genesis_apply --path ./configs/genesis/artifacts \
 		--config $(CONFIG) $(if $(filter true,$(CHAIN_LB)),--chainLB) --namespace $(NAMESPACE)
 
 ## populator/load: runs the populator load test
 .PHONY: populator/load
 populator/load:
 	$(call check_vars, CONFIG PROFILE)
-	./go-scripts/bin/populator --path ./go-scripts/populator/config.yml \
-	--accounts ./go-scripts/genesis-generator/artifacts/$(CONFIG)/ids.json --profile $(PROFILE)
+	./go-scripts/bin/populator --path ./configs/populator/config.yml \
+	--accounts ./configs/genesis/artifacts/$(CONFIG)/ids.json --profile $(PROFILE)
 
 ## --- ansible ---
 # ==================================================================================== #
