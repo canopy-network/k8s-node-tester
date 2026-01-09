@@ -41,12 +41,12 @@
         state: present
         definition: "{{ lookup('template', playbook_dir ~ '/../../cluster/dns/nodelocaldns.yml') | from_yaml_all | list }}"
 
-    - name: update CoreDNS Corefile configuration
-      vars:
-        CLUSTER_DOMAIN: "{{ cluster_domain }}"
-      kubernetes.core.k8s:
-        state: present
-        definition: "{{ lookup('template', playbook_dir ~ '/../../cluster/dns/coredns-corefile.yml') | from_yaml }}"
+    # - name: update CoreDNS Corefile configuration
+    #   vars:
+    #     CLUSTER_DOMAIN: "{{ cluster_domain }}"
+    #   kubernetes.core.k8s:
+    #     state: present
+    #     definition: "{{ lookup('template', playbook_dir ~ '/../../cluster/dns/coredns-corefile.yml') | from_yaml }}"
 
     - name: scale CoreDNS to 2 replicas
       ansible.builtin.command: kubectl scale deployment coredns -n kube-system --replicas=2
@@ -54,11 +54,33 @@
       changed_when: "'scaled' in scale_result.stdout"
       failed_when: scale_result.rc != 0
 
+    - name: patch CoreDNS deployment to increase resources
+      ansible.builtin.command: |
+        kubectl patch deployment coredns -n kube-system --type=json -p='[
+          {
+            "op": "replace",
+            "path": "/spec/template/spec/containers/0/resources",
+            "value": {
+              "requests": {
+                "cpu": "500m",
+                "memory": "1Gi"
+              },
+              "limits": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              }
+            }
+          }
+        ]'
+      register: patch_result
+      changed_when: "'patched' in patch_result.stdout"
+      failed_when: patch_result.rc != 0
+
     - name: display local DNS info
       ansible.builtin.debug:
         msg:
           - "Local DNS setup complete"
-          - "Last step to do is to update the k3s cluster DNS configuration to use the local DNS by default"
+          - "If using kube-proxy in IPVS mode, you need to update the k3s cluster DNS configuration."
           - "Update the inventory file with the local DNS IP address by adding to each server:"
           - '--kubelet-arg "cluster-dns={{ listen_ip }}"'
           - "and running `make ansible/site` to update the cluster configuration"

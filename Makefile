@@ -161,10 +161,11 @@ ansible/setup:
 ansible/cluster-setup:
 	$(MAKE) ansible/setup
 	ansible-playbook -i ansible/inventory.yml ansible/playbooks/1-setup.yml
-	ansible-playbook -i ansible/inventory.yml ansible/playbooks/2-helm.yml
-	ansible-playbook -i ansible/inventory.yml ansible/playbooks/3-tls-hetzner.yml \
+	ansible-playbook -i ansible/inventory.yml ansible/playbooks/2-cilium.yml
+	ansible-playbook -i ansible/inventory.yml ansible/playbooks/3-helm.yml
+	ansible-playbook -i ansible/inventory.yml ansible/playbooks/4-tls-hetzner.yml \
 	  -e @./ansible/secrets.yml
-	ansible-playbook -i ansible/inventory.yml ansible/playbooks/4-monitoring.yml \
+	ansible-playbook -i ansible/inventory.yml ansible/playbooks/5-monitoring.yml \
 	  -e @./ansible/secrets.yml
 
 ## ansible/ping: ping all nodes in the inventory
@@ -184,17 +185,18 @@ ansible/copy-image:
 # UTIL
 # ==================================================================================== #
 
-## util/brew-install-requirements: installs kubectl, ansible and helm with brew
+## util/brew-install-requirements: installs kubectl, ansible, cilium and helm with brew
 .PHONY: util/brew-install-requirements
 util/brew-install-requirements:
 	@command -v brew >/dev/null 2>&1 || { echo "Homebrew not found. Install from https://brew.sh and re-run."; exit 1; }
 	@brew list kubernetes-cli >/dev/null 2>&1 || brew install kubernetes-cli
 	@brew list helm >/dev/null 2>&1 || brew install helm
 	@brew list ansible >/dev/null 2>&1 || brew install ansible
+	@brew list cilium-cli >/dev/null 2>&1 || brew install cilium-cli
 	@echo "kubectl: $$(kubectl version --client 2>/dev/null | grep 'Client Version' | awk '{print $$3}' || echo not installed)"
 	@echo "helm:    $$(helm version --short 2>/dev/null || echo not installed)"
 	@echo "ansible: $$(ansible --version 2>/dev/null | head -n1 | grep -o '\[core [^]]*\]' || echo not installed)"
-
+	@echo "cilium:  $$(cilium version --client 2>/dev/null | grep 'cilium image (stable):' | awk '{print $$4}' || echo not installed)"
 
 ## util/build-deploy: builds and deploys the given script using the tag, requires docker buildx
 .PHONY: util/build-deploy

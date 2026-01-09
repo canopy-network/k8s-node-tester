@@ -1,0 +1,24 @@
+- name: install Cilium on the cluster
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Install Cilium using CLI
+      ansible.builtin.command:
+        cmd: >
+          cilium install \
+            --set ipam.operator.clusterPoolIPv4PodCIDRList="10.42.0.0/16" \
+            --set ingressController.enabled=false \
+            --set l7Proxy=false \
+            --set hubble.relay.enabled=false \
+            --set hubble.ui.enabled=false \
+            --set routingMode=native \
+            --set ipv4NativeRoutingCIDR="10.42.0.0/16" \
+            --set autoDirectNodeRoutes=true
+      delegate_to: localhost
+      run_once: true
+
+    - name: wait for Cilium to be ready
+      ansible.builtin.command:
+        cmd: >
+          cilium status --wait
+      run_once: true
