@@ -106,9 +106,9 @@ prometheusOperator:
 kube-state-metrics:
   nodeSelector:
     node-role.kubernetes.io/control-plane: "true"
-
-prometheus-node-exporter:
-  hostNetwork: false
-  hostPID: true
-  hostRootFsMount:
-    enabled: true
+# To bypass networks with no direct access to the node
+# prometheus-node-exporter:
+#   hostNetwork: false
+#   hostPID: true
+#   hostRootFsMount:
+#     enabled: true

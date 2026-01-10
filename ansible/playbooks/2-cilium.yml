@@ -11,9 +11,7 @@
             --set l7Proxy=false \
             --set hubble.relay.enabled=false \
             --set hubble.ui.enabled=false \
-            --set routingMode=native \
-            --set ipv4NativeRoutingCIDR="10.42.0.0/16" \
-            --set autoDirectNodeRoutes=true
+            --set tunnelProtocol=vxlan
       delegate_to: localhost
       run_once: true
 

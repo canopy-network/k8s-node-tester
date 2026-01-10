@@ -31,7 +31,7 @@ can create/add nodes, update the cluster, and configure TLS/monitoring end-to-en
 
 ### Local/remote machine (controller)
 
-- Required packages: `make`, `kubectl`, `helm`, `ansible`, `go` (to build the tools)
+- Required packages: `make`, `kubectl`, `helm`, `ansible`, `cilium`, `go` (to build the tools)
 - With Homebrew installed, the others can be installed via:
   - `make helpers/brew-install-requirements`
 - SSH access from this machine to all cluster servers
