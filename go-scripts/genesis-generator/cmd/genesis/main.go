@@ -438,7 +438,7 @@ func addAccounts(count int, amount uint64, wg *sync.WaitGroup, semaphoreChan cha
 
 // addFullNodes concurrently creates full nodes (not staked, but with identities)
 func addFullNodes(count int, amount uint64, startIdx int, chainID int, rootChainID int,
-	identities *[]NodeIdentity, gsync *sync.Mutex, wg *sync.WaitGroup, semaphoreChan chan struct{},
+	netAddressSuffix string, identities *[]NodeIdentity, gsync *sync.Mutex, wg *sync.WaitGroup, semaphoreChan chan struct{},
 	accountChan chan *fsm.Account) {
 
 	for i := range count {
@@ -455,6 +455,8 @@ func addFullNodes(count int, amount uint64, startIdx int, chainID int, rootChain
 				Amount:  amount,
 			}
 
+			netAddress := fmt.Sprintf("tcp://node-%d%s", startIdx+i, netAddressSuffix)
+
 			identity := NodeIdentity{
 				ID:              startIdx + i,
 				ChainID:         chainID,
@@ -463,6 +465,7 @@ func addFullNodes(count int, amount uint64, startIdx int, chainID int, rootChain
 				PublicKey:       hex.EncodeToString(pk.PublicKey().Bytes()),
 				PrivateKey:      hex.EncodeToString(pk.Bytes()),
 				NodeType:        "fullnode",
+				NetAddress:      netAddress,
 				PrivateKeyBytes: pk.Bytes(),
 				GenesisChainID:  chainID,
 			}
@@ -840,7 +843,8 @@ func createTemplateConfig(
 	maxInbound int,
 	maxOutbound int,
 	inMemory bool,
-	gossipThreshold uint) *lib.Config {
+	gossipThreshold uint,
+	dialPeers []string) *lib.Config {
 	var rootChain []lib.RootChain
 
 	if chainID == rootChainID {
@@ -906,7 +910,7 @@ func createTemplateConfig(
 			MaxInbound:          maxInbound,
 			MaxOutbound:         maxOutbound,
 			TrustedPeerIDs:      nil,
-			DialPeers:           []string{},
+			DialPeers:           dialPeers,
 			BannedPeerIDs:       nil,
 			BannedIPs:           nil,
 			MinimumPeersToStart: minimumPeersToStart,
@@ -1041,7 +1045,7 @@ func generateChainIdentities(chainName string, chainCfg *ChainConfig, startIdx i
 	}
 
 	addFullNodes(chainCfg.FullNodes.Count, chainCfg.FullNodes.Amount, fullNodeStartIdx, chainCfg.ID, chainCfg.RootChain,
-		&chainIdentities, &chainSync, &wg, semaphoreChan, accountChan)
+		netAddressSuffix, &chainIdentities, &chainSync, &wg, semaphoreChan, accountChan)
 	addAccounts(chainCfg.Accounts.Count, chainCfg.Accounts.Amount, &wg, semaphoreChan, accountChan)
 
 	wg.Wait()
@@ -1061,7 +1065,7 @@ func generateChainIdentities(chainName string, chainCfg *ChainConfig, startIdx i
 // writeChainFiles writes genesis.json, config.json, and keystore.json for a chain
 // expandedValidators contains validators/delegators with correct IDs for this chain (including cross-chain)
 func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []NodeIdentity,
-	genesisValidators []NodeIdentity, keystoreValidators []NodeIdentity,
+	genesisValidators []NodeIdentity, keystoreValidators []NodeIdentity, dialPeers []string,
 	accounts []*fsm.Account, mainAccounts map[string]*MainAccount, password string, jsonBeautify bool, outputBaseDir string) {
 
 	chainDir := filepath.Join(outputBaseDir, chainName)
@@ -1161,6 +1165,7 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 		chainCfg.MaxOutbound,
 		chainCfg.InMemory,
 		chainCfg.GossipThreshold,
+		dialPeers,
 	)
 	mustSaveAsJSON(filepath.Join(chainDir, "config.json"), templateConfig)
 
@@ -1323,6 +1328,7 @@ func main() {
 	fmt.Println("Phase 1: Generating identities...")
 	chainIdentitiesMap := make(map[string][]NodeIdentity)
 	chainAccountsMap := make(map[string][]*fsm.Account)
+	chainDialPeers := make(map[int][]string)
 	var allIdentities []NodeIdentity
 
 	for _, chainName := range chainNames {
@@ -1478,6 +1484,15 @@ func main() {
 				entry.identity,
 			)
 		}
+
+		// Build dial peers list for each chain
+		// Include all validators and full nodes (exclude delegators)
+		if !entry.identity.IsDelegate {
+			// Format: publicKey@netAddress
+			// Example: 90703...@tcp://node-1.p2p
+			peer := fmt.Sprintf("%s@%s", entry.identity.PublicKey, entry.identity.NetAddress)
+			chainDialPeers[entry.identity.ChainID] = append(chainDialPeers[entry.identity.ChainID], peer)
+		}
 	}
 
 	// Phase 2: Write files for all chains
@@ -1490,6 +1505,7 @@ func main() {
 			chainIdentitiesMap[chainName],
 			chainGenesisValidators[chainID],
 			chainKeystoreValidators[chainID],
+			chainDialPeers[chainID],
 			chainAccountsMap[chainName],
 			mainAccounts,
 			cfg.General.Password,
