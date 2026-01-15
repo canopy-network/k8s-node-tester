@@ -330,6 +330,7 @@ type Config struct {
 	DialPeers               []string    `json:"dialPeers"`
 	BannedPeerIDs           any         `json:"bannedPeerIDs"`
 	BannedIPs               any         `json:"bannedIPs"`
+	GossipThreshold         int         `json:"gossipThreshold"`
 	MinimumPeersToStart     int         `json:"minimumPeersToStart"`
 	NewHeightTimeoutMS      int         `json:"newHeightTimeoutMS"`
 	ElectionTimeoutMS       int         `json:"electionTimeoutMS"`

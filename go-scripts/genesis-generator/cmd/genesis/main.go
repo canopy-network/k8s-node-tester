@@ -99,6 +99,7 @@ type ChainConfig struct {
 	Accounts            AccountsConfig        `yaml:"accounts"`
 	Delegators          DelegatorsConfig      `yaml:"delegators"`
 	Committees          []CommitteeAssignment `yaml:"committees"`
+	GossipThreshold     uint                  `yaml:"gossipThreshold"`               // Optional: gossip threshold (default: 0)
 	SleepUntil          int                   `yaml:"sleepUntil,omitempty"`          // Optional: epoch timestamp for sleepUntil
 	MaxCommitteeSize    int                   `yaml:"maxCommitteeSize,omitempty"`    // Optional: max committee size (default: 100)
 	MinimumPeersToStart int                   `yaml:"minimumPeersToStart,omitempty"` // Optional: minimum peers to start (default: 0)
@@ -569,9 +570,7 @@ func addCommitteeOnlyValidator(nodeID int, stakedAmount uint64, amount uint64,
 	identities *[]NodeIdentity, gsync *sync.Mutex, wg *sync.WaitGroup,
 	semaphoreChan chan struct{}, accountChan chan *fsm.Account) {
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		semaphoreChan <- struct{}{}
 		defer func() { <-semaphoreChan }()
 
@@ -610,7 +609,7 @@ func addCommitteeOnlyValidator(nodeID int, stakedAmount uint64, amount uint64,
 		gsync.Unlock()
 
 		nickNames <- validatorNick
-	}()
+	})
 }
 
 // addCommitteeOnlyDelegator creates a delegator staked ONLY for a specific committee
@@ -622,9 +621,7 @@ func addCommitteeOnlyDelegator(nodeID int, stakedAmount uint64, amount uint64,
 	identities *[]NodeIdentity, gsync *sync.Mutex, wg *sync.WaitGroup,
 	semaphoreChan chan struct{}, accountChan chan *fsm.Account) {
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		semaphoreChan <- struct{}{}
 		defer func() { <-semaphoreChan }()
 
@@ -663,7 +660,7 @@ func addCommitteeOnlyDelegator(nodeID int, stakedAmount uint64, amount uint64,
 		gsync.Unlock()
 
 		nickNames <- delegatorNick
-	}()
+	})
 }
 
 func mustSetDirectory(dir string) {
@@ -835,7 +832,15 @@ func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, v
 	}
 }
 
-func createTemplateConfig(chainID int, rootChainID int, sleepUntilEpoch int, minimumPeersToStart int, maxInbound int, maxOutbound int, inMemory bool) *lib.Config {
+func createTemplateConfig(
+	chainID int,
+	rootChainID int,
+	sleepUntilEpoch int,
+	minimumPeersToStart int,
+	maxInbound int,
+	maxOutbound int,
+	inMemory bool,
+	gossipThreshold uint) *lib.Config {
 	var rootChain []lib.RootChain
 
 	if chainID == rootChainID {
@@ -905,6 +910,7 @@ func createTemplateConfig(chainID int, rootChainID int, sleepUntilEpoch int, min
 			BannedPeerIDs:       nil,
 			BannedIPs:           nil,
 			MinimumPeersToStart: minimumPeersToStart,
+			GossipThreshold:     gossipThreshold,
 		},
 		ConsensusConfig: lib.ConsensusConfig{
 			NewHeightTimeoutMs:      4500,
@@ -1146,7 +1152,16 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 	}
 
 	// Write config.json for this chain
-	templateConfig := createTemplateConfig(chainCfg.ID, chainCfg.RootChain, chainCfg.SleepUntil, chainCfg.MinimumPeersToStart, chainCfg.MaxInbound, chainCfg.MaxOutbound, chainCfg.InMemory)
+	templateConfig := createTemplateConfig(
+		chainCfg.ID,
+		chainCfg.RootChain,
+		chainCfg.SleepUntil,
+		chainCfg.MinimumPeersToStart,
+		chainCfg.MaxInbound,
+		chainCfg.MaxOutbound,
+		chainCfg.InMemory,
+		chainCfg.GossipThreshold,
+	)
 	mustSaveAsJSON(filepath.Join(chainDir, "config.json"), templateConfig)
 
 	// Create keystore.json for this chain
