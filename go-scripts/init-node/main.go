@@ -248,20 +248,18 @@ func modifyConfig(config *Config, nodePrefix string, node, rootNode, peerNode *N
 	}
 	// change the external address to itself so it can be discovered by the network
 	config.ExternalAddress = buildNodeAddress(false, nodePrefix, node, "")
-	// a node should not connect to itself
-	var peerToDial string
-	if peerNode.Id != node.Id {
-		// update the peer address to the peer node
-		peerToDial = fmt.Sprintf("%s@tcp://%s%d%s", peerNode.PublicKey, nodePrefix, peerNode.Id, serviceSuffix)
-	}
 	// Randomize current dial peers
 	rand.Shuffle(len(config.DialPeers), func(i, j int) {
 		config.DialPeers[i], config.DialPeers[j] = config.DialPeers[j], config.DialPeers[i]
 	})
 	// keep up to maxOutbound peers on the dial peers list
 	config.DialPeers = config.DialPeers[:min(config.MaxOutbound, len(config.DialPeers))]
-	// add the peer to the dial peers list
-	config.DialPeers = append(config.DialPeers, peerToDial)
+	// a node should not connect to itself
+	if peerNode.Id != node.Id {
+		// update the peer address to the peer node
+		peerToDial := fmt.Sprintf("%s@tcp://%s%d%s", peerNode.PublicKey, nodePrefix, peerNode.Id, serviceSuffix)
+		config.DialPeers = append(config.DialPeers, peerToDial)
+	}
 
 }
 
