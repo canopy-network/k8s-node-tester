@@ -37,3 +37,6 @@ ip route add ${NETWORK_PREFIX}.0.0/16 via ${GATEWAY} dev ${INTERFACE}.${VLAN_ID}
 echo "VLAN interface configured successfully"
 echo "Interface status:"
 ip -brief link show ${INTERFACE}.${VLAN_ID}
+
+# Delete the interface
+# ip link delete <interface-name>.4000

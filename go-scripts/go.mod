@@ -3,7 +3,7 @@ module github.com/canopy-network/k8s-node-tester/go-scripts
 go 1.25.3
 
 require (
-	github.com/canopy-network/canopy v0.1.15-0.20260115163841-d967f94649c2
+	github.com/canopy-network/canopy v0.1.15-0.20260118223427-3fb7b5348640
 	github.com/launchdarkly/go-jsonstream/v3 v3.1.0
 	golang.org/x/sync v0.17.0
 	gopkg.in/yaml.v3 v3.0.1

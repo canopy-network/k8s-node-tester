@@ -108,7 +108,10 @@ kube-state-metrics:
     node-role.kubernetes.io/control-plane: "true"
 # To bypass networks with no direct access to the node
 # prometheus-node-exporter:
-#   hostNetwork: false
+#   hostNetwork: true
 #   hostPID: true
 #   hostRootFsMount:
 #     enabled: true
+#   service:
+#     port: 9100
+#     targetPort: 9100
