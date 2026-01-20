@@ -85,11 +85,14 @@ one-chain-1000:
       id: 1
       rootChain: 1
       maxCommitteeSize: 1000
-      minimumPeersToStart: 800
+      minimumPeersToStart: 0
       sleepUntil: 0
+      gossipThreshold: 1
+      maxInbound: 7
+      maxOutbound: 21
       inMemory: true
       validators:
-        count: 100
+        count: 1000
         stakedAmount: 1000000000
         amount: 1000000
 

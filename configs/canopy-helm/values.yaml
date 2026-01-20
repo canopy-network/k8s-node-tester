@@ -26,7 +26,7 @@ serviceAccount:
 # container image
 image:
   repository: canopynetwork/canopy-test
-  tag: main-1266098e
+  tag: latest
   pullPolicy: IfNotPresent
 
 # container ports
@@ -68,15 +68,13 @@ topologySpreadConstraints:
 # maximum pods per node (hard limit)
 maxPodsPerNode:
   enabled: false
-  limit: 25
+  limit: 50
 
 # avoid scheduling pods on control plane nodes
 notScheduleInControlPlane: true
 # select nodes with specific labels
 # nodeSelector:
-#   type: dd
-#   disktype: ssd
-#   kubernetes.io/arch: amd64
+#   node-role.kubernetes.io/control-plane: "true"
 
 # Chaos Mesh NetworkChaos (optional). Requires Chaos Mesh installed in the cluster.
 # Targets pods by label selector (defaults to app=node).
