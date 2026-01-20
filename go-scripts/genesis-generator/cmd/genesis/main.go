@@ -92,20 +92,23 @@ type CommitteeAssignment struct {
 
 // ChainConfig represents a single chain's configuration
 type ChainConfig struct {
-	ID                  int                   `yaml:"id"`
-	RootChain           int                   `yaml:"rootChain"`
-	Validators          ValidatorsConfig      `yaml:"validators"`
-	FullNodes           FullNodesConfig       `yaml:"fullNodes"`
-	Accounts            AccountsConfig        `yaml:"accounts"`
-	Delegators          DelegatorsConfig      `yaml:"delegators"`
-	Committees          []CommitteeAssignment `yaml:"committees"`
-	GossipThreshold     uint                  `yaml:"gossipThreshold"`               // Optional: gossip threshold (default: 0)
-	SleepUntil          int                   `yaml:"sleepUntil,omitempty"`          // Optional: epoch timestamp for sleepUntil
-	MaxCommitteeSize    int                   `yaml:"maxCommitteeSize,omitempty"`    // Optional: max committee size (default: 100)
-	MinimumPeersToStart int                   `yaml:"minimumPeersToStart,omitempty"` // Optional: minimum peers to start (default: 0)
-	MaxInbound          int                   `yaml:"maxInbound,omitempty"`          // Optional: max inbound connections (default: 100)
-	MaxOutbound         int                   `yaml:"maxOutbound,omitempty"`         // Optional: max outbound connections (default: 100)
-	InMemory            bool                  `yaml:"inMemory,omitempty"`            // Optional: in-memory mode (default: false)
+	ID                         int                   `yaml:"id"`
+	RootChain                  int                   `yaml:"rootChain"`
+	Validators                 ValidatorsConfig      `yaml:"validators"`
+	FullNodes                  FullNodesConfig       `yaml:"fullNodes"`
+	Accounts                   AccountsConfig        `yaml:"accounts"`
+	Delegators                 DelegatorsConfig      `yaml:"delegators"`
+	Committees                 []CommitteeAssignment `yaml:"committees"`
+	GossipThreshold            uint                  `yaml:"gossipThreshold"`                      // Optional: gossip threshold (default: 0)
+	SleepUntil                 int                   `yaml:"sleepUntil,omitempty"`                 // Optional: epoch timestamp for sleepUntil
+	MaxCommitteeSize           int                   `yaml:"maxCommitteeSize,omitempty"`           // Optional: max committee size (default: 100)
+	MinimumPeersToStart        int                   `yaml:"minimumPeersToStart,omitempty"`        // Optional: minimum peers to start (default: 0)
+	MaxInbound                 int                   `yaml:"maxInbound,omitempty"`                 // Optional: max inbound connections (default: 100)
+	MaxOutbound                int                   `yaml:"maxOutbound,omitempty"`                // Optional: max outbound connections (default: 100)
+	InMemory                   bool                  `yaml:"inMemory,omitempty"`                   // Optional: in-memory mode (default: false)
+	LazyMempoolCheckFrequencyS int                   `yaml:"lazyMempoolCheckFrequencyS,omitempty"` // Optional: frequency of lazy mempool check in seconds (default: 1)
+	DropPercentage             int                   `yaml:"dropPercentage,omitempty"`             // Optional: percentage of transactions to drop (default: 0)
+	MaxTransactionCount        uint32                `yaml:"maxTransactionCount,omitempty"`        // Optional: max transactions count (default: 1000)
 }
 
 // AppConfig represents the configuration structure
@@ -844,7 +847,10 @@ func createTemplateConfig(
 	maxOutbound int,
 	inMemory bool,
 	gossipThreshold uint,
-	dialPeers []string) *lib.Config {
+	dialPeers []string,
+	maxTransactionCount uint32,
+	dropPercentage int,
+	lazyMempoolCheckFrequencyS int) *lib.Config {
 	var rootChain []lib.RootChain
 
 	if chainID == rootChainID {
@@ -879,6 +885,18 @@ func createTemplateConfig(
 	}
 	if maxOutbound == 0 {
 		maxOutbound = 7
+	}
+
+	if maxTransactionCount == 0 {
+		maxTransactionCount = 5000
+	}
+
+	if dropPercentage == 0 {
+		dropPercentage = 35
+	}
+
+	if lazyMempoolCheckFrequencyS == 0 {
+		lazyMempoolCheckFrequencyS = 1
 	}
 
 	return &lib.Config{
@@ -928,10 +946,11 @@ func createTemplateConfig(
 			RoundInterruptTimeoutMS: 2000,
 		},
 		MempoolConfig: lib.MempoolConfig{
-			MaxTotalBytes:       1000000,
-			MaxTransactionCount: 5000,
-			IndividualMaxTxSize: 4000,
-			DropPercentage:      35,
+			MaxTotalBytes:              1000000,
+			MaxTransactionCount:        maxTransactionCount,
+			IndividualMaxTxSize:        4000,
+			DropPercentage:             dropPercentage,
+			LazyMempoolCheckFrequencyS: lazyMempoolCheckFrequencyS,
 		},
 		MetricsConfig: lib.MetricsConfig{
 			MetricsEnabled:    true,
@@ -1166,6 +1185,9 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 		chainCfg.InMemory,
 		chainCfg.GossipThreshold,
 		dialPeers,
+		chainCfg.MaxTransactionCount,
+		chainCfg.DropPercentage,
+		chainCfg.LazyMempoolCheckFrequencyS,
 	)
 	mustSaveAsJSON(filepath.Join(chainDir, "config.json"), templateConfig)
 

@@ -36,7 +36,16 @@ func main() {
 	// parse flags
 	flag.Parse()
 	// create default logger
-	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+		// Remove timestamps
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.TimeKey {
+				return slog.Attr{}
+			}
+			return a
+		},
+	}))
 	log.Debug("starting populator")
 	// load the accounts and config
 	profile, accounts, err := LoadConfigs(*path, *profileConfig, *accounts)
@@ -72,20 +81,18 @@ func HandleSendTxs(log *slog.Logger, notifier <-chan uint64, profile *Profile, a
 		start := time.Now()
 		success, errors := RunConcurrentTxs(context.Background(),
 			profile.Send.Count, profile.Send.Concurrency, send, log)
-		if errors > 0 {
-			log.Warn("errors sending txs",
-				slog.Int("errors", errors),
-				slog.Int("success", success),
-				slog.Uint64("height", height),
-				slog.String("duration", time.Since(start).String()),
-			)
-			continue
+		// get block
+		block, err := cnpyClient.BlockByHeight(0)
+		if err != nil {
+			log.Error("error getting block", slog.Uint64("height", height), slog.String("error", err.Error()))
 		}
-		log.Info("success sending txs",
+		log.Info("finished sending SEND txs",
 			slog.Int("success", success),
+			slog.Int("failure", errors),
 			slog.Uint64("count", uint64(profile.Send.Count)),
 			slog.Uint64("height", height),
 			slog.String("duration", time.Since(start).String()),
+			slog.Uint64("last_block_txs", block.BlockHeader.NumTxs),
 		)
 	}
 }

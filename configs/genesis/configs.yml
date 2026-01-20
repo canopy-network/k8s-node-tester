@@ -65,6 +65,9 @@ single:
       id: 1
       rootChain: 1
       sleepUntil: 0
+      maxTransactionCount: 15000
+      dropPercentage: 1
+      lazyMempoolCheckFrequencyS: 1
       validators:
         count: 1
         stakedAmount: 1000
