@@ -63,15 +63,16 @@ type Transactions struct {
 
 // General populator configuration
 type General struct {
-	RpcURL          string `yaml:"rpcURL"`
-	AdminRpcURL     string `yaml:"adminRpcURL"`
-	Incremental     bool   `yaml:"incremental"`
-	BasePort        int    `yaml:"basePort"`
-	Accounts        int    `yaml:"accounts"`
-	Fee             uint64 `yaml:"fee"`
-	Chains          []int  `yaml:"chains"`
-	MaxHeight       uint64 `yaml:"maxHeight"`
-	WaitForNewBlock bool   `yaml:"waitForNewBlock"`
+	RpcURL                string `yaml:"rpcURL"`
+	AdminRpcURL           string `yaml:"adminRpcURL"`
+	Incremental           bool   `yaml:"incremental"`
+	BasePort              int    `yaml:"basePort"`
+	Accounts              int    `yaml:"accounts"`
+	Fee                   uint64 `yaml:"fee"`
+	Chains                []int  `yaml:"chains"`
+	MaxHeight             uint64 `yaml:"maxHeight"`
+	WaitForNewBlock       bool   `yaml:"waitForNewBlock"`
+	NotifyNewBlockDelayMs uint   `yaml:"notifyNewBlockDelay"` // milliseconds
 }
 
 // Common fields

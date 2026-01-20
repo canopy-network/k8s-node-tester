@@ -100,11 +100,14 @@ chaos/mesh:
 # ==================================================================================== #
 
 ## go-scripts/build: builds the go scripts for further usage, requires golang to be installed
+## usage: make go-scripts/build [GOOS=linux] [GOARCH=amd64]
+GOOS ?=
+GOARCH ?=
 .PHONY: go-scripts/build
 go-scripts/build:
-	cd ./go-scripts/genesis-generator && go build -o ../bin/genesis_apply ./cmd/k8s-applier/main.go
-	cd ./go-scripts/genesis-generator && go build -o ../bin/genesis_generate ./cmd/genesis/main.go
-	cd ./go-scripts/populator && go build -o ../bin/populator ./cmd/*.go
+	cd ./go-scripts/genesis-generator && GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o ../bin/genesis_apply ./cmd/k8s-applier/main.go
+	cd ./go-scripts/genesis-generator && GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o ../bin/genesis_generate ./cmd/genesis/main.go
+	cd ./go-scripts/populator && GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o ../bin/populator ./cmd/*.go
 
 
 ## genesis/generate: generates the genesis config files based on the given config

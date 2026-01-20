@@ -77,6 +77,7 @@ func HandleSendTxs(log *slog.Logger, notifier <-chan uint64, profile *Profile, a
 				slog.Int("errors", errors),
 				slog.Int("success", success),
 				slog.Uint64("height", height),
+				slog.String("duration", time.Since(start).String()),
 			)
 			continue
 		}
@@ -84,7 +85,7 @@ func HandleSendTxs(log *slog.Logger, notifier <-chan uint64, profile *Profile, a
 			slog.Int("success", success),
 			slog.Uint64("count", uint64(profile.Send.Count)),
 			slog.Uint64("height", height),
-			slog.Duration("duration", time.Since(start)),
+			slog.String("duration", time.Since(start).String()),
 		)
 	}
 }

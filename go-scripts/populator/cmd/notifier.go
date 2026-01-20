@@ -79,6 +79,11 @@ func (n *newBlockNotifier) run() {
 		if resp.Height == 0 || resp.Height <= n.lastHeight {
 			continue
 		}
+		// sleep for notifyDelay before emitting the height
+		notifyDelay := time.Duration(n.config.NotifyNewBlockDelayMs) * time.Millisecond
+		if notifyDelay > 0 {
+			time.Sleep(notifyDelay)
+		}
 		n.lastHeight = resp.Height
 		// wait for the next block on the very first iteration so is always notified on a "new block"
 		if !n.initialized {
