@@ -38,8 +38,8 @@ func (p *Profile) Validate() error {
 	if _, err := url.Parse(p.General.AdminRpcURL); err != nil {
 		errs = errors.Join(errs, fmt.Errorf("adminRpcURL: %w", err))
 	}
-	if len(p.General.Chains) == 0 {
-		errs = errors.Join(errs, required("chains"))
+	if p.General.ChainId == 0 {
+		errs = errors.Join(errs, required("chain"))
 	}
 	return errs
 }
@@ -69,7 +69,8 @@ type General struct {
 	BasePort              int    `yaml:"basePort"`
 	Accounts              int    `yaml:"accounts"`
 	Fee                   uint64 `yaml:"fee"`
-	Chains                []int  `yaml:"chains"`
+	ChainId               int    `yaml:"chainId"`
+	NetworkId             int    `yaml:"networkId"`
 	MaxHeight             uint64 `yaml:"maxHeight"`
 	WaitForNewBlock       bool   `yaml:"waitForNewBlock"`
 	NotifyNewBlockDelayMs uint   `yaml:"notifyNewBlockDelay"` // milliseconds
@@ -111,10 +112,10 @@ type delimitedBlock struct {
 
 // SendTx Tx is handled separately
 type SendTx struct {
-	amount      `yaml:",inline"`
-	Chains      []int `yaml:"chains"`
-	Count       uint  `yaml:"count"`
-	Concurrency uint  `yaml:"concurrency"`
+	amount        `yaml:",inline"`
+	Count         uint `yaml:"count"`
+	Concurrency   uint `yaml:"concurrency"`
+	UsePrivateKey bool `yaml:"usePrivateKey"`
 }
 
 // Transaction types

@@ -72,25 +72,28 @@ func main() {
 }
 
 // HandleSendTxs handles the sending of bulk `send` transactions per block
-func HandleSendTxs(log *slog.Logger, notifier <-chan uint64, profile *Profile, accounts []shared.Account) {
+func HandleSendTxs(log *slog.Logger, notifier <-chan HeightCh, profile *Profile, accounts []shared.Account) {
 	if profile.Send.Count == 0 {
 		return
 	}
 	for height := range notifier {
-		send := func() (string, error) { return sendTx(profile.Send, accounts[0], accounts[1], profile.General) }
+		send := func() (string, error) {
+			return sendTx(profile.Send, accounts[0], accounts[1], profile.General, height.Height)
+		}
 		start := time.Now()
 		success, errors := RunConcurrentTxs(context.Background(),
 			profile.Send.Count, profile.Send.Concurrency, send, log)
 		// get block
 		block, err := cnpyClient.BlockByHeight(0)
 		if err != nil {
-			log.Error("error getting block", slog.Uint64("height", height), slog.String("error", err.Error()))
+			log.Error("error getting block", slog.Uint64("height", height.Height),
+				slog.String("error", err.Error()))
 		}
 		log.Info("finished sending SEND txs",
 			slog.Int("success", success),
 			slog.Int("failure", errors),
 			slog.Uint64("count", uint64(profile.Send.Count)),
-			slog.Uint64("height", height),
+			slog.Uint64("height", height.Height),
 			slog.String("duration", time.Since(start).String()),
 			slog.Uint64("last_block_txs", block.BlockHeader.NumTxs),
 		)
@@ -98,15 +101,23 @@ func HandleSendTxs(log *slog.Logger, notifier <-chan uint64, profile *Profile, a
 }
 
 // HandleTxs handles the sending of most transactions per defined block
-func HandleTxs(log *slog.Logger, notifier <-chan uint64, profile *Profile, accounts []shared.Account) {
-	for height := range notifier {
+func HandleTxs(log *slog.Logger, notifier <-chan HeightCh, profile *Profile, accounts []shared.Account) {
+	var height uint64
+	for heightInfo := range notifier {
+		// set which type of height to use
+		if profile.General.Incremental {
+			height = heightInfo.Counter
+		} else {
+			height = heightInfo.Height
+		}
 		// gather all the transactions for the current height
 		txs := GatherAtHeight(profile, height)
 		for _, tx := range txs {
 			log.Info("sending transaction",
 				slog.String("type", string(tx.Kind())), slog.Uint64("height", height))
 			// send the transaction
-			hash, err := sendTx(tx, accounts[tx.Sender()], accounts[tx.Receiver()], profile.General)
+			hash, err := sendTx(tx, accounts[tx.Sender()], accounts[tx.Receiver()],
+				profile.General, heightInfo.Height)
 			if err != nil {
 				log.Error("failed to send transaction",
 					slog.String("type", string(tx.Kind())),
@@ -241,10 +252,10 @@ func RunConcurrentTxs(ctx context.Context, count, concurrency uint,
 }
 
 // sendTx is an util to build and send a transaction
-func sendTx(tx Tx, from, to shared.Account, config General) (string, error) {
+func sendTx(tx Tx, from, to shared.Account, config General, height uint64) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	req, err := BuildTxRequest(from, to, config)
+	req, err := BuildTxRequest(from, to, config, height)
 	if err != nil {
 		return "", fmt.Errorf("build tx request: %w", err)
 	}

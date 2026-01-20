@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc"
 	"github.com/canopy-network/canopy/fsm"
@@ -144,7 +145,7 @@ func (tx CloseOrderTx) Validate(ctx context.Context, req *TxRequest) error  { re
 
 // Validate ensures that the sender is not already staked
 func (tx StakeTx) Validate(ctx context.Context, req *TxRequest) error {
-	staked, _, err := isStaked(req.From.String())
+	staked, _, err := isStaked(req.FromAddr.String())
 	if err != nil {
 		return err
 	}
@@ -158,7 +159,7 @@ func (tx StakeTx) Validate(ctx context.Context, req *TxRequest) error {
 // current stake
 func (tx EditStakeTx) Validate(ctx context.Context, req *TxRequest) error {
 	// validate that is staked
-	staked, _, err := isStaked(req.From.String())
+	staked, _, err := isStaked(req.FromAddr.String())
 	if err != nil {
 		return err
 	}
@@ -166,7 +167,7 @@ func (tx EditStakeTx) Validate(ctx context.Context, req *TxRequest) error {
 		return ErrNotStaked
 	}
 	// confirm new stake is higher than the current stake
-	val, err := cnpyClient.Validator(0, req.From.String())
+	val, err := cnpyClient.Validator(0, req.FromAddr.String())
 	if err != nil {
 		return err
 	}
@@ -178,7 +179,7 @@ func (tx EditStakeTx) Validate(ctx context.Context, req *TxRequest) error {
 
 // Validate ensures that the sender is staked
 func (tx UnstakeTx) Validate(ctx context.Context, req *TxRequest) error {
-	staked, _, err := isStaked(req.From.String())
+	staked, _, err := isStaked(req.FromAddr.String())
 	if err != nil {
 		return err
 	}
@@ -190,7 +191,7 @@ func (tx UnstakeTx) Validate(ctx context.Context, req *TxRequest) error {
 
 // Validate ensures that the sender is stake and not a delegator
 func (tx PauseTx) Validate(ctx context.Context, req *TxRequest) error {
-	staked, delegator, err := isStaked(req.From.String())
+	staked, delegator, err := isStaked(req.FromAddr.String())
 	if err != nil {
 		return err
 	}
@@ -217,8 +218,41 @@ func (tx StartPollTx) Validate(ctx context.Context, req *TxRequest) error {
 
 // Do sends a send transaction
 func (tx SendTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	from := rpc.AddrOrNickname{Address: req.From.String()}
-	hash, _, err := cnpyClient.TxSend(from, req.To.String(), tx.Amount, req.Password, true, req.Fee)
+	var hash *string
+	var err lib.ErrorI
+	if tx.UsePrivateKey {
+		sendMsg := &fsm.MessageSend{
+			FromAddress: req.FromAddr.Bytes(),
+			ToAddress:   req.ToAddr.Bytes(),
+			Amount:      tx.Amount,
+		}
+		msg, err := lib.NewAny(sendMsg)
+		if err != nil {
+			return "", err
+		}
+		tx := &lib.Transaction{
+			MessageType:   sendMsg.Name(),
+			Msg:           msg,
+			Signature:     &lib.Signature{},
+			CreatedHeight: req.Height,
+			Time:          uint64(time.Now().UnixMicro()),
+			Fee:           req.Fee,
+			Memo:          "",
+			NetworkId:     0,
+			ChainId:       0,
+		}
+		pk, pkErr := crypto.NewPrivateKeyFromString(req.From.PrivateKey)
+		if pkErr != nil {
+			return "", fmt.Errorf("send [%s]: extract pk: %w", req.FromAddr.String(), pkErr)
+		}
+		if err := tx.Sign(pk); err != nil {
+			return "", fmt.Errorf("send [%s]: sign tx: %w", req.FromAddr.String(), err)
+		}
+		hash, err = cnpyClient.Transaction(tx)
+	} else {
+		from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
+		hash, _, err = cnpyClient.TxSend(from, req.ToAddr.String(), tx.Amount, req.Password, true, req.Fee)
+	}
 	return *hash, err
 }
 
@@ -227,12 +261,12 @@ func (tx StakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (strin
 	if err := tx.Validate(ctx, req); err != nil {
 		return "", fmt.Errorf("stake: [%s] %w", req.From, err)
 	}
-	from := rpc.AddrOrNickname{Address: req.From.String()}
+	from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
 	hash, _, err := cnpyClient.TxStake(from,
 		tx.NetAddr,
 		tx.Amount,
 		tx.committees.String(),
-		req.To.String(),
+		req.ToAddr.String(),
 		from,
 		tx.Delegate,
 		tx.EarlyWithdrawal,
@@ -248,15 +282,15 @@ func (tx StakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (strin
 // Do sends an edit stake transaction
 func (tx EditStakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
 	if err := tx.Validate(ctx, req); err != nil {
-		return "", fmt.Errorf("edit stake: [%s] %w", req.From, err)
+		return "", fmt.Errorf("edit stake: [%s] %w", req.FromAddr, err)
 	}
 	// send transaction
-	from := rpc.AddrOrNickname{Address: req.From.String()}
+	from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
 	hash, _, err := cnpyClient.TxEditStake(from,
 		tx.NetAddr,
 		tx.Amount,
 		tx.committees.String(),
-		req.To.String(),
+		req.ToAddr.String(),
 		from,
 		tx.Delegate,
 		tx.EarlyWithdrawal,
@@ -274,7 +308,7 @@ func (tx PauseTx) Do(ctx context.Context, req *TxRequest, baseURL string) (strin
 	if err := tx.Validate(ctx, req); err != nil {
 		return "", fmt.Errorf("pause: [%s] %w", req.From, err)
 	}
-	from := rpc.AddrOrNickname{Address: req.From.String()}
+	from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
 	hash, _, err := cnpyClient.TxPause(from, from, req.Password, true, req.Fee)
 	return *hash, err
 }
@@ -282,16 +316,16 @@ func (tx PauseTx) Do(ctx context.Context, req *TxRequest, baseURL string) (strin
 // Do sends an unstake transaction
 func (tx UnstakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
 	if err := tx.Validate(ctx, req); err != nil {
-		return "", fmt.Errorf("unstake: [%s] %w", req.From, err)
+		return "", fmt.Errorf("unstake: [%s] %w", req.FromAddr, err)
 	}
-	from := rpc.AddrOrNickname{Address: req.From.String()}
+	from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
 	hash, _, err := cnpyClient.TxUnstake(from, from, req.Password, true, req.Fee)
 	return *hash, err
 }
 
 // Do sends a change parameter transaction
 func (tx ChangeParamTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	from := rpc.AddrOrNickname{Address: req.From.String()}
+	from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
 	hash, _, err := cnpyClient.TxChangeParam(
 		from,
 		tx.ParamSpace,
@@ -307,7 +341,7 @@ func (tx ChangeParamTx) Do(ctx context.Context, req *TxRequest, baseURL string) 
 
 // Do sends a DAO transfer transaction
 func (tx DaoTransferTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	from := rpc.AddrOrNickname{Address: req.From.String()}
+	from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
 	hash, _, err := cnpyClient.TxDaoTransfer(
 		from,
 		tx.Amount,
@@ -322,7 +356,7 @@ func (tx DaoTransferTx) Do(ctx context.Context, req *TxRequest, baseURL string) 
 // Do sends a subsidy transaction
 func (tx SubsidyTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
 	return postTx(ctx, baseURL+subsidyRoute, txRequest{
-		Address:    req.From.String(),
+		Address:    req.FromAddr.String(),
 		Amount:     tx.Amount,
 		Committees: tx.committees.String(),
 		Password:   req.Password,
@@ -333,13 +367,13 @@ func (tx SubsidyTx) Do(ctx context.Context, req *TxRequest, baseURL string) (str
 
 // CreateOrderTx sends a create order transaction
 func (tx CreateOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	from := rpc.AddrOrNickname{Address: req.From.String()}
+	from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
 	hash, _, err := cnpyClient.TxCreateOrder(
 		from,
 		tx.SellAmount,
 		tx.ReceiveAmount,
 		tx.ChainId,
-		req.To.String(),
+		req.ToAddr.String(),
 		req.Password,
 		lib.HexBytes(tx.Data),
 		true,
@@ -349,14 +383,14 @@ func (tx CreateOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) 
 
 // EditOrderTx sends an edit order transaction
 func (tx EditOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	from := rpc.AddrOrNickname{Address: req.From.String()}
+	from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
 	hash, _, err := cnpyClient.TxEditOrder(
 		from,
 		tx.SellAmount,
 		tx.ReceiveAmount,
 		tx.OrderId,
 		tx.ChainId,
-		req.To.String(),
+		req.ToAddr.String(),
 		req.Password,
 		true,
 		req.Fee)
@@ -365,12 +399,12 @@ func (tx EditOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) (s
 
 // DeleteOrderTx sends a delete order transaction
 func (tx DeleteOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	from := rpc.AddrOrNickname{Address: req.From.String()}
+	from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
 	hash, _, err := cnpyClient.TxDeleteOrder(
 		from,
 		tx.OrderId,
 		tx.ChainId,
-		req.To.String(),
+		req.ToAddr.String(),
 		true,
 		req.Fee)
 	return *hash, err
@@ -378,10 +412,10 @@ func (tx DeleteOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) 
 
 // LockOrderTx sends a lock order transaction
 func (tx LockOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	from := rpc.AddrOrNickname{Address: req.From.String()}
+	from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
 	hash, _, err := cnpyClient.TxLockOrder(
 		from,
-		req.To.String(),
+		req.ToAddr.String(),
 		tx.OrderId,
 		req.Password,
 		true,
@@ -391,7 +425,7 @@ func (tx LockOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) (s
 
 // CloseOrderTx sends a close order transaction
 func (tx CloseOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
-	from := rpc.AddrOrNickname{Address: req.From.String()}
+	from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
 	hash, _, err := cnpyClient.TxCloseOrder(
 		from,
 		tx.OrderId,
@@ -406,7 +440,7 @@ func (tx StartPollTx) Do(ctx context.Context, req *TxRequest, baseURL string) (s
 	if err := tx.Validate(ctx, req); err != nil {
 		return "", err
 	}
-	from := rpc.AddrOrNickname{Address: req.From.String()}
+	from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
 	hash, _, err := cnpyClient.TxStartPoll(
 		from,
 		json.RawMessage(tx.PollJSON),
@@ -417,7 +451,7 @@ func (tx StartPollTx) Do(ctx context.Context, req *TxRequest, baseURL string) (s
 }
 
 // BuildTxRequest constructs a TxRequest with the required fields
-func BuildTxRequest(from, to shared.Account, config General) (*TxRequest, error) {
+func BuildTxRequest(from, to shared.Account, config General, height uint64) (*TxRequest, error) {
 	fromAddr, err := crypto.NewAddressFromString(from.Address)
 	if err != nil {
 		return nil, fmt.Errorf("create FROM address: %w", err)
@@ -431,10 +465,15 @@ func BuildTxRequest(from, to shared.Account, config General) (*TxRequest, error)
 		fee = config.Fee
 	}
 	req := TxRequest{
-		Fee:      fee,
-		Password: from.Password,
-		From:     fromAddr,
-		To:       toAddr,
+		Fee:       fee,
+		Password:  from.Password,
+		From:      from,
+		FromAddr:  fromAddr,
+		ToAddr:    toAddr,
+		To:        to,
+		Height:    height,
+		ChainId:   config.ChainId,
+		NetworkId: config.NetworkId,
 	}
 	return &req, nil
 }
@@ -483,10 +522,15 @@ func post(ctx context.Context, url string, bz []byte) ([]byte, error) {
 
 // TxRequest is the public struct for the arguments for a transaction request
 type TxRequest struct {
-	From     crypto.AddressI // Address of the sender
-	To       crypto.AddressI // Address of the recipient
-	Password string          // Password for the sender's account
-	Fee      uint64          // Fee for the transaction
+	From      shared.Account  // Full account information of the sender
+	To        shared.Account  // Full account information of the recipient
+	FromAddr  crypto.AddressI // Address of the sender helper
+	ToAddr    crypto.AddressI // Address of the recipient helper
+	Password  string          // Password for the sender's account
+	Fee       uint64          // Fee for the transaction
+	Height    uint64          // Height of the transaction
+	ChainId   int             // Chain ID of the transaction
+	NetworkId int             // Network ID of the transaction
 }
 
 // txRequest represents a full transaction request
