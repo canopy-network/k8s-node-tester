@@ -69,8 +69,8 @@ type General struct {
 	BasePort              int    `yaml:"basePort"`
 	Accounts              int    `yaml:"accounts"`
 	Fee                   uint64 `yaml:"fee"`
-	ChainId               int    `yaml:"chainId"`
-	NetworkId             int    `yaml:"networkId"`
+	ChainId               uint64 `yaml:"chainId"`
+	NetworkId             uint64 `yaml:"networkId"`
 	MaxHeight             uint64 `yaml:"maxHeight"`
 	WaitForNewBlock       bool   `yaml:"waitForNewBlock"`
 	NotifyNewBlockDelayMs uint   `yaml:"notifyNewBlockDelay"` // milliseconds

@@ -16,6 +16,7 @@ import (
 	"github.com/canopy-network/canopy/lib"
 	"github.com/canopy-network/canopy/lib/crypto"
 	"github.com/canopy-network/k8s-node-tester/go-scripts/shared"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -219,36 +220,14 @@ func (tx StartPollTx) Validate(ctx context.Context, req *TxRequest) error {
 // Do sends a send transaction
 func (tx SendTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
 	var hash *string
-	var err lib.ErrorI
+	var err error
 	if tx.UsePrivateKey {
 		sendMsg := &fsm.MessageSend{
 			FromAddress: req.FromAddr.Bytes(),
 			ToAddress:   req.ToAddr.Bytes(),
 			Amount:      tx.Amount,
 		}
-		msg, err := lib.NewAny(sendMsg)
-		if err != nil {
-			return "", err
-		}
-		tx := &lib.Transaction{
-			MessageType:   sendMsg.Name(),
-			Msg:           msg,
-			Signature:     &lib.Signature{},
-			CreatedHeight: req.Height,
-			Time:          uint64(time.Now().UnixMicro()),
-			Fee:           req.Fee,
-			Memo:          "",
-			NetworkId:     0,
-			ChainId:       0,
-		}
-		pk, pkErr := crypto.NewPrivateKeyFromString(req.From.PrivateKey)
-		if pkErr != nil {
-			return "", fmt.Errorf("send [%s]: extract pk: %w", req.FromAddr.String(), pkErr)
-		}
-		if err := tx.Sign(pk); err != nil {
-			return "", fmt.Errorf("send [%s]: sign tx: %w", req.FromAddr.String(), err)
-		}
-		hash, err = cnpyClient.Transaction(tx)
+		hash, err = SendRawTx(ctx, req, sendMsg.Name(), sendMsg)
 	} else {
 		from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
 		hash, _, err = cnpyClient.TxSend(from, req.ToAddr.String(), tx.Amount, req.Password, true, req.Fee)
@@ -478,6 +457,39 @@ func BuildTxRequest(from, to shared.Account, config General, height uint64) (*Tx
 	return &req, nil
 }
 
+// SendRawTx constructs and sends a raw transaction to the node
+func SendRawTx(ctx context.Context, req *TxRequest, msgName string, msg proto.Message) (*string, error) {
+	// validate the txMsg
+	txMsg, err := lib.NewAny(msg)
+	if err != nil {
+		return nil, err
+	}
+	// build the transaction struct
+	tx := &lib.Transaction{
+		MessageType:   msgName,
+		Msg:           txMsg,
+		Signature:     &lib.Signature{},
+		CreatedHeight: req.Height,
+		Time:          uint64(time.Now().UnixMicro()),
+		Fee:           req.Fee,
+		Memo:          "",
+		NetworkId:     req.ChainId,
+		ChainId:       req.NetworkId,
+	}
+	// retrieve the private key from the request
+	pk, pkErr := crypto.NewPrivateKeyFromString(req.From.PrivateKey)
+	if pkErr != nil {
+		return nil, fmt.Errorf("raw [%s] [%s]: extract pk: %w", msgName, req.FromAddr.String(), pkErr)
+	}
+	// sign the transaction with the private key
+	if err := tx.Sign(pk); err != nil {
+		return nil, fmt.Errorf("raw [%s] [%s]: sign tx: %w", msgName, req.FromAddr.String(), err)
+	}
+	// send the transaction to the node
+	hash, err := cnpyClient.Transaction(tx)
+	return hash, err
+}
+
 // postTx sends a transaction to the node, used for transactions that are not implemented by the
 // client
 func postTx(ctx context.Context, url string, obj txRequest) (string, error) {
@@ -529,8 +541,8 @@ type TxRequest struct {
 	Password  string          // Password for the sender's account
 	Fee       uint64          // Fee for the transaction
 	Height    uint64          // Height of the transaction
-	ChainId   int             // Chain ID of the transaction
-	NetworkId int             // Network ID of the transaction
+	ChainId   uint64          // Chain ID of the transaction
+	NetworkId uint64          // Network ID of the transaction
 }
 
 // txRequest represents a full transaction request
