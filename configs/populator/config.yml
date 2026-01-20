@@ -1,0 +1,63 @@
+default:
+  general:
+    rpcURL: "http://localhost:50002"
+    adminRpcURL: "http://localhost:50003"
+    basePort: 50000
+    accounts: 3
+    fee: 10001
+    chains: [1, 2]
+    password: "test"
+    incremental: true
+    maxHeight: 3
+    waitForNewBlock: true
+  send:
+    chains: [1, 2]
+    count: 100 # per block
+    amount: 1
+    concurrency: 10
+  transactions:
+    stake:
+      - from: 1
+        to: 1
+        amount: 1000
+        committees: [1, 2]
+        delegate: true
+        height: 1
+        earlyWithdrawal: true
+        # netAddress: "fake.com"
+    # editStake:
+    #   - from: 1
+    #     amount: 10000
+    #     committees: [1, 2]
+    #     delegate: true
+    #     height: 2
+    #     netAddress: "fake.com"
+    #     earlyWithdrawal: true
+    # pause:
+    #   - from: 1
+    #     height: 3
+    # unstake:
+    #   - from: 1
+    #     height: 4
+    # changeParam:
+    #   - from: 1
+    #     paramSpace: "fee"
+    #     paramKey: "fee"
+    #     paramValue: 10001
+    #     height: 5
+    #     startBlock: 10
+    #     endBlock: 100
+    # dao-transfer:
+    #   - from: 1
+    #     to: 2
+    #     amount: 1000
+    #     height: 6
+    #     startBlock: 10
+    #     endBlock: 100
+    # subsidy:
+    #   - from: 1
+    #     to: 1
+    #     amount: 1000
+    #     height: 6
+    #     opCode: "test"
+    #     committees: [1, 2]

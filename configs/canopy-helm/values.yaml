@@ -71,7 +71,7 @@ maxPodsPerNode:
   limit: 50
 
 # avoid scheduling pods on control plane nodes
-notScheduleInControlPlane: true
+notScheduleInControlPlane: false
 # select nodes with specific labels
 # nodeSelector:
 #   node-role.kubernetes.io/control-plane: "true"

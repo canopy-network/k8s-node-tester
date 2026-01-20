@@ -13,3 +13,6 @@ spec:
     - name: rpc
       port: 50002
       targetPort: 50002
+    - name: admin-rpc
+      port: 50003
+      targetPort: 50003

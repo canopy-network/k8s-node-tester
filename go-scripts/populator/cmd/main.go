@@ -69,6 +69,7 @@ func HandleSendTxs(log *slog.Logger, notifier <-chan uint64, profile *Profile, a
 	}
 	for height := range notifier {
 		send := func() (string, error) { return sendTx(profile.Send, accounts[0], accounts[1], profile.General) }
+		start := time.Now()
 		success, errors := RunConcurrentTxs(context.Background(),
 			profile.Send.Count, profile.Send.Concurrency, send, log)
 		if errors > 0 {
@@ -83,6 +84,7 @@ func HandleSendTxs(log *slog.Logger, notifier <-chan uint64, profile *Profile, a
 			slog.Int("success", success),
 			slog.Uint64("count", uint64(profile.Send.Count)),
 			slog.Uint64("height", height),
+			slog.Duration("duration", time.Since(start)),
 		)
 	}
 }
