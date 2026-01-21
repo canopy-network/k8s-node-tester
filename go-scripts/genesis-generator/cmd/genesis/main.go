@@ -102,6 +102,7 @@ type ChainConfig struct {
 	GossipThreshold            uint                  `yaml:"gossipThreshold"`                      // Optional: gossip threshold (default: 0)
 	SleepUntil                 int                   `yaml:"sleepUntil,omitempty"`                 // Optional: epoch timestamp for sleepUntil
 	MaxCommitteeSize           int                   `yaml:"maxCommitteeSize,omitempty"`           // Optional: max committee size (default: 100)
+	BlockSize                  uint64                `yaml:"blockSize,omitempty"`                  // Optional: block size (default: 1000000)
 	MinimumPeersToStart        int                   `yaml:"minimumPeersToStart,omitempty"`        // Optional: minimum peers to start (default: 0)
 	MaxInbound                 int                   `yaml:"maxInbound,omitempty"`                 // Optional: max inbound connections (default: 100)
 	MaxOutbound                int                   `yaml:"maxOutbound,omitempty"`                // Optional: max outbound connections (default: 100)
@@ -708,7 +709,7 @@ func mustSaveAsJSON(filename string, data any) {
 
 // writeGenesisFromIdentities writes genesis.json for a specific chain using identities
 // For validators from other chains (cross-chain), only include this chain's committee
-func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, validators []NodeIdentity, accountsPath string, maxCommitteeSize int) {
+func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, validators []NodeIdentity, accountsPath string, maxCommitteeSize int, blockSize uint64) {
 	genesisFile, err := os.Create(filepath.Join(chainDir, "genesis.json"))
 	if err != nil {
 		panic(err)
@@ -779,7 +780,7 @@ func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, v
 	remainingFields := map[string]interface{}{
 		"params": &fsm.Params{
 			Consensus: &fsm.ConsensusParams{
-				BlockSize:       1000000,
+				BlockSize:       blockSize,
 				ProtocolVersion: "1/0",
 				RootChainId:     uint64(rootChainID),
 				Retired:         0,
@@ -1147,7 +1148,11 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 	if maxCommitteeSize == 0 {
 		maxCommitteeSize = 100 // Default value
 	}
-	writeGenesisFromIdentities(chainDir, chainCfg.ID, chainCfg.RootChain, genesisValidators, accountsPath, maxCommitteeSize)
+	blockSize := chainCfg.BlockSize
+	if blockSize == 0 {
+		blockSize = 1000000 // Default value
+	}
+	writeGenesisFromIdentities(chainDir, chainCfg.ID, chainCfg.RootChain, genesisValidators, accountsPath, maxCommitteeSize, blockSize)
 
 	// Beautify genesis.json if configured
 	if jsonBeautify {

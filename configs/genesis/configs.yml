@@ -65,6 +65,7 @@ single:
       id: 1
       rootChain: 1
       sleepUntil: 0
+      blockSize: 100000000
       maxTransactionCount: 15000
       dropPercentage: 1
       lazyMempoolCheckFrequencyS: 1
