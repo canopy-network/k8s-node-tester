@@ -76,12 +76,18 @@ func HandleSendTxs(log *slog.Logger, notifier <-chan HeightCh, profile *Profile,
 	if profile.Send.Count == 0 {
 		return
 	}
+	lastBlockTime := time.Now()
 	for height := range notifier {
 		start := time.Now()
 		// execute the transactions
 		success, errors := executeSendTxs(profile, accounts, height.Height, log)
 		// get block
 		block, err := cnpyClient.BlockByHeight(0)
+		// calculate block duration
+		blockTime := time.UnixMicro(int64(block.BlockHeader.Time))
+		lastBlockDuration := blockTime.Sub(lastBlockTime)
+		lastBlockTime = blockTime
+		// log data
 		if err != nil {
 			log.Error("error getting block", slog.Uint64("height", height.Height),
 				slog.String("error", err.Error()))
@@ -93,6 +99,7 @@ func HandleSendTxs(log *slog.Logger, notifier <-chan HeightCh, profile *Profile,
 			slog.Uint64("height", height.Height),
 			slog.String("duration", time.Since(start).String()),
 			slog.Uint64("last_block_txs", block.BlockHeader.NumTxs),
+			slog.String("last_block_duration", lastBlockDuration.String()),
 		)
 	}
 }
@@ -268,13 +275,14 @@ func executeSendTxs(config *Profile, accounts []shared.Account, height uint64,
 // executeBulkSendTxs sends bulk transactions in parallel batches
 func executeBulkSendTxs(config *Profile, accounts []shared.Account, height uint64,
 	log *slog.Logger) (success, errors int) {
+	var wg sync.WaitGroup
+	var successCount atomic.Int32
+	var errorCount atomic.Int32
+
 	total := config.Send.Count
 	batchSize := config.Send.BulkSplit
 	// calculate number of batches needed
 	numBatches := (total + batchSize - 1) / batchSize
-	var wg sync.WaitGroup
-	var successCount atomic.Int32
-	var errorCount atomic.Int32
 	for i := range numBatches {
 		// calculate how many to send in this batch
 		toSend := batchSize

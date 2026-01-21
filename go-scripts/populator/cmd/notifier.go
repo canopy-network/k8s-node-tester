@@ -36,11 +36,10 @@ func newNotifier(log *slog.Logger, config General, checkInterval time.Duration, 
 		checkInterval: checkInterval,
 		maxRetries:    maxRetries,
 		heightCh:      make(chan HeightCh),
-		// avoid sending data to genesis blocks
-		lastHeight:  uint64(1),
-		retries:     0,
-		initialized: !config.WaitForNewBlock,
-		counter:     0,
+		lastHeight:    uint64(0),
+		retries:       0,
+		initialized:   !config.WaitForNewBlock,
+		counter:       0,
 	}
 }
 
