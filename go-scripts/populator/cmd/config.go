@@ -116,6 +116,8 @@ type SendTx struct {
 	Count         uint `yaml:"count"`
 	Concurrency   uint `yaml:"concurrency"`
 	UsePrivateKey bool `yaml:"usePrivateKey"`
+	Bulk          bool `yaml:"bulk"`
+	BulkSplit     uint `yaml:"bulkSplit"`
 }
 
 // Transaction types

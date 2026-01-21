@@ -77,12 +77,9 @@ func HandleSendTxs(log *slog.Logger, notifier <-chan HeightCh, profile *Profile,
 		return
 	}
 	for height := range notifier {
-		send := func() (string, error) {
-			return sendTx(profile.Send, accounts[0], accounts[1], profile.General, height.Height)
-		}
 		start := time.Now()
-		success, errors := RunConcurrentTxs(context.Background(),
-			profile.Send.Count, profile.Send.Concurrency, send, log)
+		// execute the transactions
+		success, errors := executeSendTxs(profile, accounts, height.Height, log)
 		// get block
 		block, err := cnpyClient.BlockByHeight(0)
 		if err != nil {
@@ -117,7 +114,7 @@ func HandleTxs(log *slog.Logger, notifier <-chan HeightCh, profile *Profile, acc
 				slog.String("type", string(tx.Kind())), slog.Uint64("height", height))
 			// send the transaction
 			hash, err := sendTx(tx, accounts[tx.Sender()], accounts[tx.Receiver()],
-				profile.General, heightInfo.Height)
+				profile.General, heightInfo.Height, false)
 			if err != nil {
 				log.Error("failed to send transaction",
 					slog.String("type", string(tx.Kind())),
@@ -125,7 +122,7 @@ func HandleTxs(log *slog.Logger, notifier <-chan HeightCh, profile *Profile, acc
 				continue
 			}
 			log.Info("successfully sent transaction", slog.String("type",
-				string(tx.Kind())), slog.Uint64("height", height), slog.String("hash", hash))
+				string(tx.Kind())), slog.Uint64("height", height), slog.String("hash", hash[0]))
 		}
 	}
 }
@@ -251,17 +248,83 @@ func RunConcurrentTxs(ctx context.Context, count, concurrency uint,
 	return int(successes.Load()), int(errors.Load())
 }
 
+// executeSendTxs runs the send transactions for a given height
+func executeSendTxs(config *Profile, accounts []shared.Account, height uint64,
+	log *slog.Logger) (success, errors int) {
+	if config.Send.Bulk {
+		return executeBulkSendTxs(config, accounts, height, log)
+	}
+	send := func() (string, error) {
+		hashes, err := sendTx(config.Send, accounts[0], accounts[1], config.General, uint64(height), false)
+		if err != nil {
+			return "", err
+		}
+		return hashes[0], nil
+	}
+	return RunConcurrentTxs(context.Background(),
+		config.Send.Count, config.Send.Concurrency, send, log)
+}
+
+// executeBulkSendTxs sends bulk transactions in parallel batches
+func executeBulkSendTxs(config *Profile, accounts []shared.Account, height uint64,
+	log *slog.Logger) (success, errors int) {
+	total := config.Send.Count
+	batchSize := config.Send.BulkSplit
+	// calculate number of batches needed
+	numBatches := (total + batchSize - 1) / batchSize
+	var wg sync.WaitGroup
+	var successCount atomic.Int32
+	var errorCount atomic.Int32
+	for i := range numBatches {
+		// calculate how many to send in this batch
+		toSend := batchSize
+		remaining := total - (i * batchSize)
+		if toSend > remaining {
+			toSend = remaining
+		}
+		// create a copy of the send config with the adjusted count for this batch
+		sendCopy := config.Send
+		sendCopy.Count = uint(toSend)
+		wg.Add(1)
+		go func(batchNum, batchSize uint) {
+			defer wg.Done()
+			hashes, err := sendTx(sendCopy, accounts[0], accounts[1], config.General, uint64(height), true)
+			if err != nil {
+				log.Error("error sending bulk SEND txs", slog.Uint64("height", height),
+					slog.Uint64("batch_num", uint64(batchNum)), slog.Uint64("batch_size", uint64(batchSize)),
+					slog.String("error", err.Error()))
+				errorCount.Add(int32(int(batchSize) - len(hashes)))
+				successCount.Add(int32(len(hashes)))
+				return
+			}
+			successCount.Add(int32(len(hashes)))
+		}(i, toSend)
+	}
+	wg.Wait()
+	return int(successCount.Load()), int(errorCount.Load())
+}
+
 // sendTx is an util to build and send a transaction
-func sendTx(tx Tx, from, to shared.Account, config General, height uint64) (string, error) {
+func sendTx(tx Tx, from, to shared.Account, config General, height uint64,
+	bulk bool) (hashes []string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	req, err := BuildTxRequest(from, to, config, height)
 	if err != nil {
-		return "", fmt.Errorf("build tx request: %w", err)
+		return nil, fmt.Errorf("build tx request: %w", err)
 	}
-	hash, err := tx.Do(ctx, req, config.AdminRpcURL)
+	if bulk {
+		bulkTx, ok := tx.(BulkTx)
+		if !ok {
+			return nil, fmt.Errorf("tx does not implement BulkTx")
+		}
+		hashes, err = bulkTx.DoBulk(ctx, req, config.AdminRpcURL)
+	} else {
+		hash, doErr := tx.Do(ctx, req, config.AdminRpcURL)
+		hashes, err = []string{hash}, doErr
+	}
 	if err != nil {
-		return "", fmt.Errorf("send transaction: %w", err)
+		return nil, fmt.Errorf("send transaction: %w", err)
 	}
-	return hash, nil
+	return hashes, nil
 }

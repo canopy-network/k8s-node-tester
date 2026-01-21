@@ -34,6 +34,8 @@ github.com/canopy-network/canopy v0.1.15-0.20260121171823-881826ca3432 h1:ItyBw5
 github.com/canopy-network/canopy v0.1.15-0.20260121171823-881826ca3432/go.mod h1:3Vp44Br8r0IJbGUcIMHyCHdZWvtTiL7KMA3YcJ873Ks=
 github.com/canopy-network/canopy v0.1.15-0.20260121173921-48b441fadaee h1:Fj/swAx+SZKo8qkoqHrafa+Iy8ZsEDMfhEDHCiqFSRs=
 github.com/canopy-network/canopy v0.1.15-0.20260121173921-48b441fadaee/go.mod h1:3Vp44Br8r0IJbGUcIMHyCHdZWvtTiL7KMA3YcJ873Ks=
+github.com/canopy-network/canopy v0.1.15-0.20260121182139-c182d40dae10 h1:DmTFLxoA+ww1+7Njym4sbRIA8sT4wVz2x0IfGZCJweA=
+github.com/canopy-network/canopy v0.1.15-0.20260121182139-c182d40dae10/go.mod h1:3Vp44Br8r0IJbGUcIMHyCHdZWvtTiL7KMA3YcJ873Ks=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=
 github.com/cenkalti/backoff/v4 v4.3.0/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyYozVcomhLiZE=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=

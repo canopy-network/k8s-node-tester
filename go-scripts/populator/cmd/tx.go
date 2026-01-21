@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/canopy-network/canopy/cmd/rpc"
@@ -46,6 +47,7 @@ var (
 	ErrNotValidator         = errors.New("not a validator")
 	ErrInvalidJSON          = errors.New("invalid JSON")
 	ErrInvalidPollEndHeight = errors.New("invalid poll end height")
+	ErrNotImplemented       = errors.New("not implemented")
 )
 
 // TxType is the type of transaction
@@ -56,11 +58,17 @@ type Tx interface {
 	// Kind returns the type of the transaction that is being represented
 	Kind() TxType
 	// Do executes the transaction
-	Do(ctx context.Context, request *TxRequest, baseURL string) (string, error)
+	Do(ctx context.Context, req *TxRequest, baseURL string) (string, error)
 	// Validate makes sure the transaction is valid under its own rules
 	Validate(ctx context.Context, req *TxRequest) error
 	Sender() int   // Idx of the account to use to send
 	Receiver() int // Idx of the account to receive
+}
+
+// BulkTx is the interface to represent a transaction that can be executed in bulk
+type BulkTx interface {
+	Tx
+	DoBulk(ctx context.Context, req *TxRequest, baseURL string) ([]string, error)
 }
 
 // DueAt is the interface to represent a transaction that is due at a specific height
@@ -238,6 +246,8 @@ func (tx SendTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string
 	}
 	return *hash, err
 }
+
+// Do implementation
 
 // Do sends a stake transaction
 func (tx StakeTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
@@ -433,6 +443,36 @@ func (tx StartPollTx) Do(ctx context.Context, req *TxRequest, baseURL string) (s
 	return *hash, err
 }
 
+// DoBulk implementations
+
+func (tx SendTx) DoBulk(ctx context.Context, req *TxRequest, baseURL string) ([]string, error) {
+	// only private key txs can be sent in bulk as they need to be signed
+	if !tx.UsePrivateKey {
+		return []string{}, ErrNotImplemented
+	}
+	sendMsgs := make([]proto.Message, 0, tx.Count)
+	for range tx.Count {
+		sendMsg := fsm.MessageSend{
+			FromAddress: req.FromAddr.Bytes(),
+			ToAddress:   req.ToAddr.Bytes(),
+			Amount:      tx.Amount,
+		}
+		sendMsgs = append(sendMsgs, &sendMsg)
+	}
+	hashes, err := SendRawTxs(ctx, req, sendMsgs)
+	if err != nil {
+		return nil, err
+	}
+	// iterate over hashes and print them
+	hashesPtr := make([]string, 0, len(hashes))
+	for _, hash := range hashes {
+		hashesPtr = append(hashesPtr, *hash)
+	}
+	return hashesPtr, err
+}
+
+// Helpers
+
 // BuildTxRequest constructs a TxRequest with the required fields
 func BuildTxRequest(from, to shared.Account, config General, height uint64) (*TxRequest, error) {
 	fromAddr, err := crypto.NewAddressFromString(from.Address)
@@ -493,43 +533,56 @@ func SendRawTxs(ctx context.Context, req *TxRequest, msgs []proto.Message) ([]*s
 
 // BuildTransactions constructs a list of transactions from a list of transaction messages
 func BuildTransactions(req *TxRequest, msgs []proto.Message) ([]lib.TransactionI, error) {
-	transactions := make([]lib.TransactionI, 0, len(msgs))
+	wg, txErr := sync.WaitGroup{}, error(nil)
+	transactions := make([]lib.TransactionI, len(msgs))
 	// iterate over the messages
-	for _, msg := range msgs {
-		// assert that the message is a valid TxMessage
-		n, ok := msg.(lib.MessageI)
-		if !ok {
-			return nil, fmt.Errorf("message is not a valid TxMessage")
-		}
-		// validate message struct
-		txMsg, err := lib.NewAny(msg)
-		if err != nil {
-			return nil, err
-		}
-		// build the transaction struct
-		tx := &lib.Transaction{
-			MessageType:   n.Name(),
-			Msg:           txMsg,
-			Signature:     &lib.Signature{},
-			CreatedHeight: req.Height,
-			Time:          uint64(time.Now().UnixMicro()),
-			Fee:           req.Fee,
-			// prevent duplicate transactions on burst transactions
-			Memo:      randomCharacters(20),
-			NetworkId: req.ChainId,
-			ChainId:   req.NetworkId,
-		}
-		// retrieve the private key from the request
-		pk, pkErr := crypto.NewPrivateKeyFromString(req.From.PrivateKey)
-		if pkErr != nil {
-			return nil, fmt.Errorf("raw [%s] [%s]: extract pk: %w", n.Name(), req.FromAddr.String(), pkErr)
-		}
-		// sign the transaction with the private key
-		if err := tx.Sign(pk); err != nil {
-			return nil, fmt.Errorf("raw [%s] [%s]: sign tx: %w", n.Name(), req.FromAddr.String(), err)
-		}
-		// add the transaction to the list
-		transactions = append(transactions, tx)
+	for i, msg := range msgs {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			// assert that the message is a valid TxMessage
+			n, ok := msg.(lib.MessageI)
+			if !ok {
+				txErr = fmt.Errorf("message is not a valid TxMessage")
+				return
+			}
+			// validate message struct
+			txMsg, err := lib.NewAny(msg)
+			if err != nil {
+				txErr = err
+				return
+			}
+			// build the transaction struct
+			tx := &lib.Transaction{
+				MessageType:   n.Name(),
+				Msg:           txMsg,
+				Signature:     &lib.Signature{},
+				CreatedHeight: req.Height,
+				Time:          uint64(time.Now().UnixMicro()),
+				Fee:           req.Fee,
+				// prevent duplicate transactions on burst transactions
+				Memo:      randomCharacters(20),
+				NetworkId: req.ChainId,
+				ChainId:   req.NetworkId,
+			}
+			// retrieve the private key from the request
+			pk, pkErr := crypto.NewPrivateKeyFromString(req.From.PrivateKey)
+			if pkErr != nil {
+				txErr = fmt.Errorf("raw [%s] [%s]: extract pk: %w", n.Name(), req.FromAddr.String(), pkErr)
+				return
+			}
+			// sign the transaction with the private key
+			if err := tx.Sign(pk); err != nil {
+				txErr = fmt.Errorf("raw [%s] [%s]: sign tx: %w", n.Name(), req.FromAddr.String(), err)
+				return
+			}
+			// add the transaction to the list
+			transactions[idx] = tx
+		}(i)
+	}
+	wg.Wait()
+	if txErr != nil {
+		return nil, txErr
 	}
 	return transactions, nil
 }
