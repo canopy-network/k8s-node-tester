@@ -110,6 +110,7 @@ type ChainConfig struct {
 	LazyMempoolCheckFrequencyS int                   `yaml:"lazyMempoolCheckFrequencyS,omitempty"` // Optional: frequency of lazy mempool check in seconds (default: 1)
 	DropPercentage             int                   `yaml:"dropPercentage,omitempty"`             // Optional: percentage of transactions to drop (default: 0)
 	MaxTransactionCount        uint32                `yaml:"maxTransactionCount,omitempty"`        // Optional: max transactions count (default: 1000)
+	MaxTotalBytes              uint64                `yaml:"maxTotalBytes,omitempty"`              // Optional: max total bytes (default: 1000000)
 }
 
 // AppConfig represents the configuration structure
@@ -851,7 +852,8 @@ func createTemplateConfig(
 	dialPeers []string,
 	maxTransactionCount uint32,
 	dropPercentage int,
-	lazyMempoolCheckFrequencyS int) *lib.Config {
+	lazyMempoolCheckFrequencyS int,
+	maxTotalBytes uint64) *lib.Config {
 	var rootChain []lib.RootChain
 
 	if chainID == rootChainID {
@@ -947,7 +949,7 @@ func createTemplateConfig(
 			RoundInterruptTimeoutMS: 2000,
 		},
 		MempoolConfig: lib.MempoolConfig{
-			MaxTotalBytes:              1000000,
+			MaxTotalBytes:              maxTotalBytes,
 			MaxTransactionCount:        maxTransactionCount,
 			IndividualMaxTxSize:        4000,
 			DropPercentage:             dropPercentage,
@@ -1178,7 +1180,10 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 	if err := os.Remove(accountsPath); err != nil {
 		panic(err)
 	}
-
+	maxTotalBytes := chainCfg.MaxTotalBytes
+	if maxTotalBytes == 0 {
+		maxTotalBytes = 1000000 // Default value
+	}
 	// Write config.json for this chain
 	templateConfig := createTemplateConfig(
 		chainCfg.ID,
@@ -1193,6 +1198,7 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 		chainCfg.MaxTransactionCount,
 		chainCfg.DropPercentage,
 		chainCfg.LazyMempoolCheckFrequencyS,
+		maxTotalBytes,
 	)
 	mustSaveAsJSON(filepath.Join(chainDir, "config.json"), templateConfig)
 

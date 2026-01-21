@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -227,7 +228,10 @@ func (tx SendTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string
 			ToAddress:   req.ToAddr.Bytes(),
 			Amount:      tx.Amount,
 		}
-		hash, err = SendRawTx(ctx, req, sendMsg.Name(), sendMsg)
+		hash, err = SendRawTx(ctx, req, sendMsg)
+		if err != nil {
+			return "", err
+		}
 	} else {
 		from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
 		hash, _, err = cnpyClient.TxSend(from, req.ToAddr.String(), tx.Amount, req.Password, true, req.Fee)
@@ -458,36 +462,87 @@ func BuildTxRequest(from, to shared.Account, config General, height uint64) (*Tx
 }
 
 // SendRawTx constructs and sends a raw transaction to the node
-func SendRawTx(ctx context.Context, req *TxRequest, msgName string, msg proto.Message) (*string, error) {
+func SendRawTx(ctx context.Context, req *TxRequest, msg proto.Message) (*string, error) {
 	// validate the txMsg
-	txMsg, err := lib.NewAny(msg)
+	tx, err := BuildTransactions(req, []proto.Message{msg})
 	if err != nil {
 		return nil, err
 	}
-	// build the transaction struct
-	tx := &lib.Transaction{
-		MessageType:   msgName,
-		Msg:           txMsg,
-		Signature:     &lib.Signature{},
-		CreatedHeight: req.Height,
-		Time:          uint64(time.Now().UnixMicro()),
-		Fee:           req.Fee,
-		Memo:          "",
-		NetworkId:     req.ChainId,
-		ChainId:       req.NetworkId,
+	// send the transaction to the node
+	hash, err := cnpyClient.Transaction(tx[0])
+	if err != nil {
+		return nil, fmt.Errorf("raw: send tx: %w", err)
 	}
-	// retrieve the private key from the request
-	pk, pkErr := crypto.NewPrivateKeyFromString(req.From.PrivateKey)
-	if pkErr != nil {
-		return nil, fmt.Errorf("raw [%s] [%s]: extract pk: %w", msgName, req.FromAddr.String(), pkErr)
-	}
-	// sign the transaction with the private key
-	if err := tx.Sign(pk); err != nil {
-		return nil, fmt.Errorf("raw [%s] [%s]: sign tx: %w", msgName, req.FromAddr.String(), err)
+	return hash, nil
+}
+
+// SendRawTxs constructs and sends a bulk of transactions to the node
+func SendRawTxs(ctx context.Context, req *TxRequest, msgs []proto.Message) ([]*string, error) {
+	// validate the txMsg
+	txs, err := BuildTransactions(req, msgs)
+	if err != nil {
+		return nil, err
 	}
 	// send the transaction to the node
-	hash, err := cnpyClient.Transaction(tx)
-	return hash, err
+	hashes, err := cnpyClient.Transactions(txs)
+	if err != nil {
+		return nil, fmt.Errorf("raw: send tx: %w", err)
+	}
+	return hashes, nil
+}
+
+// BuildTransactions constructs a list of transactions from a list of transaction messages
+func BuildTransactions(req *TxRequest, msgs []proto.Message) ([]lib.TransactionI, error) {
+	transactions := make([]lib.TransactionI, 0, len(msgs))
+	// iterate over the messages
+	for _, msg := range msgs {
+		// assert that the message is a valid TxMessage
+		n, ok := msg.(lib.MessageI)
+		if !ok {
+			return nil, fmt.Errorf("message is not a valid TxMessage")
+		}
+		// validate message struct
+		txMsg, err := lib.NewAny(msg)
+		if err != nil {
+			return nil, err
+		}
+		// build the transaction struct
+		tx := &lib.Transaction{
+			MessageType:   n.Name(),
+			Msg:           txMsg,
+			Signature:     &lib.Signature{},
+			CreatedHeight: req.Height,
+			Time:          uint64(time.Now().UnixMicro()),
+			Fee:           req.Fee,
+			// prevent duplicate transactions on burst transactions
+			Memo:      randomCharacters(20),
+			NetworkId: req.ChainId,
+			ChainId:   req.NetworkId,
+		}
+		// retrieve the private key from the request
+		pk, pkErr := crypto.NewPrivateKeyFromString(req.From.PrivateKey)
+		if pkErr != nil {
+			return nil, fmt.Errorf("raw [%s] [%s]: extract pk: %w", n.Name(), req.FromAddr.String(), pkErr)
+		}
+		// sign the transaction with the private key
+		if err := tx.Sign(pk); err != nil {
+			return nil, fmt.Errorf("raw [%s] [%s]: sign tx: %w", n.Name(), req.FromAddr.String(), err)
+		}
+		// add the transaction to the list
+		transactions = append(transactions, tx)
+	}
+	return transactions, nil
+}
+
+// randomCharacters generates a random hex string
+func randomCharacters(maxLength int) string {
+	const chars = "0123456789abcdefghijklmnopqrstuvwxyz"
+	length := 1 + rand.Intn(maxLength) // 1-maxLength characters
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = chars[rand.Intn(len(chars))]
+	}
+	return string(b)
 }
 
 // postTx sends a transaction to the node, used for transactions that are not implemented by the
