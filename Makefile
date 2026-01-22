@@ -107,7 +107,7 @@ GOARCH ?=
 go-scripts/build:
 	cd ./go-scripts/genesis-generator && GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o ../bin/genesis_apply ./cmd/k8s-applier/main.go
 	cd ./go-scripts/genesis-generator && GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o ../bin/genesis_generate ./cmd/genesis/main.go
-	cd ./go-scripts/populator && GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o ../bin/populator ./cmd/*.go
+	cd ./go-scripts/populator && GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o ../bin/populator ./*.go
 
 
 ## genesis/generate: generates the genesis config files based on the given config
