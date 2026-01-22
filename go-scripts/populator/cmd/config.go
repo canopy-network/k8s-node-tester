@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/canopy-network/canopy/cmd/rpc"
@@ -30,6 +31,8 @@ type Profile struct {
 
 // Validate validates the profile configuration
 func (p *Profile) Validate() error {
+	p.General.RpcURL = os.Getenv("RPC_URL")
+	p.General.AdminRpcURL = os.Getenv("ADMIN_RPC_URL")
 	var errs error
 	required := func(field string) error { return fmt.Errorf("%s is required", field) }
 	if _, err := url.Parse(p.General.RpcURL); err != nil {
@@ -63,8 +66,8 @@ type Transactions struct {
 
 // General populator configuration
 type General struct {
-	RpcURL                string `yaml:"rpcURL"`
-	AdminRpcURL           string `yaml:"adminRpcURL"`
+	RpcURL                string
+	AdminRpcURL           string
 	Incremental           bool   `yaml:"incremental"`
 	BasePort              int    `yaml:"basePort"`
 	Accounts              int    `yaml:"accounts"`

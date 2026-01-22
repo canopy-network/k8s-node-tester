@@ -16,3 +16,22 @@ spec:
     - name: admin-rpc
       port: 50003
       targetPort: 50003
+---
+# targets node-1 specifically for direct external access to avoid load balancing
+apiVersion: v1
+kind: Service
+metadata:
+  name: rpc-node-1
+  namespace: {{ .Values.namespace }}
+spec:
+  type: LoadBalancer
+  selector:
+    app: node
+    statefulset.kubernetes.io/pod-name: node-1
+  ports:
+    - name: rpc
+      port: 30002
+      targetPort: 50002
+    - name: admin-rpc
+      port: 30003
+      targetPort: 50003
