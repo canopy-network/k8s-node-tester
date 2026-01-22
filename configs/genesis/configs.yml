@@ -51,7 +51,7 @@ default:
 #        amount: 100
 #      committees: []
 
-single:
+tx-bulk:
   general:
     concurrency: 100
     password: "test"
@@ -59,18 +59,19 @@ single:
     netAddressSuffix: ".p2p"
     jsonBeautify: true
   nodes:
-    count: 1
+    count: 3
   chains:
     chain_1:
       id: 1
       rootChain: 1
       sleepUntil: 0
+      maxTotalBytes: 100000000
       blockSize: 100000000
-      maxTransactionCount: 15000
+      maxTransactionCount: 30000
       dropPercentage: 1
       lazyMempoolCheckFrequencyS: 1
       validators:
-        count: 1
+        count: 3
         stakedAmount: 1000
         amount: 10000
       fullNodes:
@@ -78,7 +79,7 @@ single:
         amount: 1000000
       accounts:
         count: 0
-        amount: 10000000000
+        amount: 50000000000
       delegators:
         count: 0
         stakedAmount: 100

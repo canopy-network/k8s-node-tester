@@ -81,6 +81,7 @@ func HandleSendTxs(log *slog.Logger, notifier <-chan HeightCh, profile *Profile,
 		start := time.Now()
 		// execute the transactions
 		success, errors := executeSendTxs(profile, accounts, height.Height, log)
+		duration := time.Since(start)
 		// get block
 		block, err := cnpyClient.BlockByHeight(0)
 		if err != nil {
@@ -98,7 +99,7 @@ func HandleSendTxs(log *slog.Logger, notifier <-chan HeightCh, profile *Profile,
 			slog.Int("failure", errors),
 			slog.Uint64("count", uint64(profile.Send.Count)),
 			slog.Uint64("height", height.Height),
-			slog.String("duration", time.Since(start).String()),
+			slog.String("duration", duration.String()),
 			slog.Uint64("last_block_txs", block.BlockHeader.NumTxs),
 			slog.String("last_block_duration", lastBlockDuration.String()),
 		)

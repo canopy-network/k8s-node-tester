@@ -64,21 +64,20 @@ default:
 
 send-bulk:
   general:
-    rpcURL: "http://localhost:50002"
-    adminRpcURL: "http://localhost:50003"
-    basePort: 50000
     accounts: 3
     fee: 10001
     chainId: 1
     networkId: 1
     password: "test"
     incremental: true
-    maxHeight: 3
+    maxHeight: 101
     waitForNewBlock: true
-    notifyNewBlockDelay: 500
+    notifyNewBlockDelay: 0
   send:
-    count: 10 # per block
+    count: 10000 # per block
+    bulk: true
+    bulkSplit: 1500
     amount: 1
-    concurrency: 10
+    concurrency: 100
     usePrivateKey: true
   transactions:
