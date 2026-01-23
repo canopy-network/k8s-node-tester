@@ -111,6 +111,7 @@ type ChainConfig struct {
 	DropPercentage             int                   `yaml:"dropPercentage,omitempty"`             // Optional: percentage of transactions to drop (default: 0)
 	MaxTransactionCount        uint32                `yaml:"maxTransactionCount,omitempty"`        // Optional: max transactions count (default: 1000)
 	MaxTotalBytes              uint64                `yaml:"maxTotalBytes,omitempty"`              // Optional: max total bytes (default: 1000000)
+	PoolAmount                 uint64                `yaml:"poolAmount,omitempty"`                 // Optional: Amount for the initial liquidity pool
 }
 
 // AppConfig represents the configuration structure
@@ -710,7 +711,7 @@ func mustSaveAsJSON(filename string, data any) {
 
 // writeGenesisFromIdentities writes genesis.json for a specific chain using identities
 // For validators from other chains (cross-chain), only include this chain's committee
-func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, validators []NodeIdentity, accountsPath string, maxCommitteeSize int, blockSize uint64) {
+func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, validators []NodeIdentity, accountsPath string, maxCommitteeSize int, blockSize uint64, poolAmount uint64) {
 	genesisFile, err := os.Create(filepath.Join(chainDir, "genesis.json"))
 	if err != nil {
 		panic(err)
@@ -820,6 +821,20 @@ func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, v
 			},
 			Governance: &fsm.GovernanceParams{
 				DaoRewardPercentage: 10,
+			},
+		},
+		"pools": []*fsm.Pool{
+			{
+				Id:              uint64(chainID) + fsm.LiquidityPoolAddend,
+				Amount:          poolAmount,
+				Points:          []*lib.PoolPoints{},
+				TotalPoolPoints: 0,
+			},
+			{
+				Id:              uint64(chainID+1) + fsm.LiquidityPoolAddend,
+				Amount:          poolAmount,
+				Points:          []*lib.PoolPoints{},
+				TotalPoolPoints: 0,
 			},
 		},
 	}
@@ -1154,7 +1169,7 @@ func writeChainFiles(chainName string, chainCfg *ChainConfig, chainIdentities []
 	if blockSize == 0 {
 		blockSize = 1000000 // Default value
 	}
-	writeGenesisFromIdentities(chainDir, chainCfg.ID, chainCfg.RootChain, genesisValidators, accountsPath, maxCommitteeSize, blockSize)
+	writeGenesisFromIdentities(chainDir, chainCfg.ID, chainCfg.RootChain, genesisValidators, accountsPath, maxCommitteeSize, blockSize, chainCfg.PoolAmount)
 
 	// Beautify genesis.json if configured
 	if jsonBeautify {

@@ -94,7 +94,6 @@ chaos/mesh:
 	helm upgrade --install chaos-mesh chaos-mesh/chaos-mesh -n chaos-mesh --create-namespace \
 		-f ./cluster/chaos-mesh/values.yaml
 
-## --- scripts ---
 # ==================================================================================== #
 # GO SCRIPTS
 # ==================================================================================== #

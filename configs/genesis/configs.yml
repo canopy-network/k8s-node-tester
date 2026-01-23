@@ -85,6 +85,42 @@ tx-bulk:
         stakedAmount: 100
         amount: 100
 
+dex:
+  general:
+    concurrency: 100
+    password: "test"
+    buffer: 1000
+    netAddressSuffix: ".p2p"
+    jsonBeautify: true
+  nodes:
+    count: 3
+  chains:
+    chain_1:
+      id: 1
+      rootChain: 1
+      poolAmount: 10000000000
+      validators:
+        count: 1
+        stakedAmount: 1000000000
+        amount: 1000000
+      accounts:
+        count: 0
+        amount: 50000000000
+      committees:
+        - id: 2
+          validatorCount: 1
+    chain_2:
+      id: 2
+      rootChain: 1
+      poolAmount: 10000000000
+      validators:
+        count: 1
+        stakedAmount: 1000000000
+        amount: 1000000
+      accounts:
+        count: 0
+        amount: 50000000000
+
 one-chain-25:
   general:
     concurrency: 10
