@@ -109,40 +109,36 @@ func HandleSendTxs(log *slog.Logger, notifier <-chan HeightCh, profile *Profile,
 
 // HandleTxs handles the sending of most transactions per defined block
 func HandleTxs(log *slog.Logger, notifier <-chan HeightCh, profile *Profile, accounts []shared.Account) {
-	var height uint64
 	for heightInfo := range notifier {
-		// set which type of height to use
+		height := heightInfo.Height
 		if profile.General.Incremental {
 			height = heightInfo.Counter
-		} else {
-			height = heightInfo.Height
 		}
-		// gather all the transactions for the current height
-		txs := GatherAtHeight(profile, height)
-		for _, tx := range txs {
+		for _, tx := range GatherAtHeight(profile, height) {
 			txLog := log.With(slog.String("type", string(tx.Kind())),
 				slog.Uint64("height", height), slog.Bool("batched", tx.IsBatch()))
 			txLog.Info("sending transaction")
-			// send the transaction
-			if tx.IsBatch() {
-				success, errors, err := doExecuteBulkTxs(tx, profile, accounts, heightInfo.Height)
-				batchLog := txLog.With(slog.Int("success", success), slog.Int("errors", errors))
-				if err != nil {
-					batchLog.Error("failed to send transaction", slog.String("error", err.Error()))
-					continue
-				} else {
-					batchLog.Info("successfully sent transaction")
-				}
-			} else {
-				hashes, err := sendTx(tx, accounts[tx.Sender()], accounts[tx.Receiver()],
-					profile.General, heightInfo.Height, tx.IsBatch(), 0)
-				if err != nil {
-					txLog.Error("failed to send transaction", slog.String("error", err.Error()))
-					continue
-				}
-				txLog.Info("successfully sent transaction", slog.String("hash", hashes[0]))
-			}
+			success, errors, err := executeTx(tx, profile, accounts, heightInfo.Height)
+			txLog.Info("transaction sent", slog.Int("success", success), slog.Int("errors", errors),
+				slog.Any("error", err))
 		}
+	}
+}
+
+// executeTx sends a single transaction (batch or non-batch) and logs the result
+func executeTx(tx Tx, profile *Profile, accounts []shared.Account, height uint64) (
+	success, errors int, err error) {
+	if tx.IsBatch() {
+		return doExecuteBulkTxs(tx, profile, accounts, height)
+	} else {
+		_, err = sendTx(tx, accounts[tx.Sender()], accounts[tx.Receiver()],
+			profile.General, height, false, 0)
+		if err != nil {
+			success++
+		} else {
+			errors++
+		}
+		return success, errors, err
 	}
 }
 
