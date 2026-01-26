@@ -502,56 +502,43 @@ func (tx DexLimitOrderTx) BatchSize() uint { return tx.batchOptions.BatchSize }
 // DoBulk implementations
 
 func (tx SendTx) DoBulk(ctx context.Context, req *TxRequest, baseURL string) ([]string, error) {
-	// only private key txs can be sent in bulk as they need to be signed
 	if !tx.UsePrivateKey {
 		return []string{}, PrivateKeyRequired
 	}
-	sendMsgs := make([]proto.Message, 0, tx.Count())
-	for range tx.Count() {
-		sendMsg := fsm.MessageSend{
-			FromAddress: req.FromAddr.Bytes(),
-			ToAddress:   req.ToAddr.Bytes(),
-			Amount:      tx.Amount,
-		}
-		sendMsgs = append(sendMsgs, &sendMsg)
-	}
-	hashes, err := SendRawTxs(ctx, req, sendMsgs)
-	if err != nil {
-		return nil, err
-	}
-	// iterate over hashes and print them
-	hashesPtr := make([]string, 0, len(hashes))
-	for _, hash := range hashes {
-		hashesPtr = append(hashesPtr, *hash)
-	}
-	return hashesPtr, err
+	return doBulk(ctx, req, tx.Count(), &fsm.MessageSend{
+		FromAddress: req.FromAddr.Bytes(),
+		ToAddress:   req.ToAddr.Bytes(),
+		Amount:      tx.Amount,
+	})
 }
 
 func (tx DexLimitOrderTx) DoBulk(ctx context.Context, req *TxRequest, baseURL string) ([]string, error) {
-	// only private key txs can be sent in bulk as they need to be signed
 	if !tx.UsePrivateKey {
 		return []string{}, PrivateKeyRequired
 	}
-	sendMsgs := make([]proto.Message, 0, tx.Count())
-	for range tx.Count() {
-		sendMsg := fsm.MessageDexLimitOrder{
-			ChainId:         uint64(tx.Committees[0]),
-			AmountForSale:   tx.SellAmount,
-			RequestedAmount: tx.ReceiveAmount,
-			Address:         req.FromAddr.Bytes(),
-		}
-		sendMsgs = append(sendMsgs, &sendMsg)
+	return doBulk(ctx, req, req.Count, &fsm.MessageDexLimitOrder{
+		ChainId:         uint64(tx.Committees[0]),
+		AmountForSale:   tx.SellAmount,
+		RequestedAmount: tx.ReceiveAmount,
+		Address:         req.FromAddr.Bytes(),
+	})
+}
+
+// doBulk sends multiple transactions built by the provided message builder
+func doBulk(ctx context.Context, req *TxRequest, count uint, msg proto.Message) ([]string, error) {
+	msgs := make([]proto.Message, 0, count)
+	for range count {
+		msgs = append(msgs, msg)
 	}
-	hashes, err := SendRawTxs(ctx, req, sendMsgs)
+	hashes, err := SendRawTxs(ctx, req, msgs)
 	if err != nil {
 		return nil, err
 	}
-	// iterate over hashes and print them
-	hashesPtr := make([]string, 0, len(hashes))
-	for _, hash := range hashes {
-		hashesPtr = append(hashesPtr, *hash)
+	out := make([]string, 0, len(hashes))
+	for _, h := range hashes {
+		out = append(out, *h)
 	}
-	return hashesPtr, err
+	return out, nil
 }
 
 // Helpers
@@ -580,6 +567,7 @@ func BuildTxRequest(from, to shared.Account, config General, height uint64, coun
 		Height:    height,
 		ChainId:   config.ChainId,
 		NetworkId: config.NetworkId,
+		Count:     count,
 	}
 	return &req, nil
 }

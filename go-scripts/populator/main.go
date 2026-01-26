@@ -285,40 +285,30 @@ func executeSendTxs(config *Profile, accounts []shared.Account, height uint64,
 // doExecuteBulkTxs sends bulk transactions in parallel batches
 func doExecuteBulkTxs(tx Tx, config *Profile, accounts []shared.Account,
 	height uint64) (success, errs int, err error) {
-	var wg sync.WaitGroup
-	var successCount atomic.Int32
-	var errorCount atomic.Int32
-
 	bulkTx, ok := tx.(BulkTx)
 	if !ok {
 		return 0, 0, errors.New("tx does not support bulk transactions")
 	}
 
 	total := bulkTx.Count()
-	batchSize := bulkTx.BatchSize()
-	// calculate number of batches needed
+	batchSize := max(bulkTx.BatchSize(), 1)
 	numBatches := (total + batchSize - 1) / batchSize
+
+	var wg sync.WaitGroup
+	var successCount, errorCount atomic.Int32
+
 	for i := range numBatches {
-		// calculate how many to send in this batch
-		toSend := batchSize
-		remaining := total - (i * batchSize)
-		if toSend > remaining {
-			toSend = remaining
-		}
-		// set the count for this batch
+		toSend := min(batchSize, total-i*batchSize)
 		wg.Add(1)
-		go func(batchNum, batchSize uint) {
+		go func(count uint) {
 			defer wg.Done()
-			hashes, txErr := sendTx(bulkTx, accounts[0], accounts[1], config.General,
-				uint64(height), true, toSend)
+			hashes, txErr := sendTx(bulkTx, accounts[0], accounts[1], config.General, height, true, count)
+			successCount.Add(int32(len(hashes)))
 			if txErr != nil {
 				err = txErr
-				errorCount.Add(int32(int(batchSize) - len(hashes)))
-				successCount.Add(int32(len(hashes)))
-				return
+				errorCount.Add(int32(count) - int32(len(hashes)))
 			}
-			successCount.Add(int32(len(hashes)))
-		}(i, toSend)
+		}(toSend)
 	}
 	wg.Wait()
 	return int(successCount.Load()), int(errorCount.Load()), err
@@ -326,7 +316,7 @@ func doExecuteBulkTxs(tx Tx, config *Profile, accounts []shared.Account,
 
 // sendTx is an util to build and send a transaction
 func sendTx(tx Tx, from, to shared.Account, config General, height uint64,
-	bulk bool, count uint) (hashes []string, err error) {
+	bulk bool, count uint) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	req, err := BuildTxRequest(from, to, config, height, count)
@@ -338,13 +328,11 @@ func sendTx(tx Tx, from, to shared.Account, config General, height uint64,
 		if !ok {
 			return nil, fmt.Errorf("tx [%T] does not implement BulkTx", tx)
 		}
-		hashes, err = bulkTx.DoBulk(ctx, req, config.AdminRpcURL)
-	} else {
-		hash, doErr := tx.Do(ctx, req, config.AdminRpcURL)
-		hashes, err = []string{hash}, doErr
+		return bulkTx.DoBulk(ctx, req, config.AdminRpcURL)
 	}
+	hash, err := tx.Do(ctx, req, config.AdminRpcURL)
 	if err != nil {
-		return nil, fmt.Errorf("send transaction: %w", err)
+		return nil, err
 	}
-	return hashes, nil
+	return []string{hash}, nil
 }
