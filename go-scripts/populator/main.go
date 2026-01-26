@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -73,14 +74,14 @@ func main() {
 
 // HandleSendTxs handles the sending of bulk `send` transactions per block
 func HandleSendTxs(log *slog.Logger, notifier <-chan HeightCh, profile *Profile, accounts []shared.Account) {
-	if profile.Send.Count == 0 {
+	if profile.Send.Count() == 0 {
 		return
 	}
 	lastBlockTime := time.Now()
 	for height := range notifier {
 		start := time.Now()
 		// execute the transactions
-		success, errors := executeSendTxs(profile, accounts, height.Height, log)
+		success, errors, _ := executeSendTxs(profile, accounts, height.Height, log)
 		duration := time.Since(start)
 		// get block
 		block, err := cnpyClient.BlockByHeight(0)
@@ -97,7 +98,7 @@ func HandleSendTxs(log *slog.Logger, notifier <-chan HeightCh, profile *Profile,
 		log.Info("finished sending SEND txs",
 			slog.Int("success", success),
 			slog.Int("failure", errors),
-			slog.Uint64("count", uint64(profile.Send.Count)),
+			slog.Uint64("count", uint64(profile.Send.Count())),
 			slog.Uint64("height", height.Height),
 			slog.String("duration", duration.String()),
 			slog.Uint64("last_block_txs", block.BlockHeader.NumTxs),
@@ -119,19 +120,28 @@ func HandleTxs(log *slog.Logger, notifier <-chan HeightCh, profile *Profile, acc
 		// gather all the transactions for the current height
 		txs := GatherAtHeight(profile, height)
 		for _, tx := range txs {
-			log.Info("sending transaction",
-				slog.String("type", string(tx.Kind())), slog.Uint64("height", height))
+			txLog := log.With(slog.String("type", string(tx.Kind())),
+				slog.Uint64("height", height), slog.Bool("batched", tx.IsBatch()))
+			txLog.Info("sending transaction")
 			// send the transaction
-			hash, err := sendTx(tx, accounts[tx.Sender()], accounts[tx.Receiver()],
-				profile.General, heightInfo.Height, false)
-			if err != nil {
-				log.Error("failed to send transaction",
-					slog.String("type", string(tx.Kind())),
-					slog.Uint64("height", height), slog.String("error", err.Error()))
-				continue
+			if tx.IsBatch() {
+				success, errors, err := doExecuteBulkTxs(tx, profile, accounts, heightInfo.Height)
+				batchLog := txLog.With(slog.Int("success", success), slog.Int("errors", errors))
+				if err != nil {
+					batchLog.Error("failed to send transaction", slog.String("error", err.Error()))
+					continue
+				} else {
+					batchLog.Info("successfully sent transaction")
+				}
+			} else {
+				hashes, err := sendTx(tx, accounts[tx.Sender()], accounts[tx.Receiver()],
+					profile.General, heightInfo.Height, tx.IsBatch(), 0)
+				if err != nil {
+					txLog.Error("failed to send transaction", slog.String("error", err.Error()))
+					continue
+				}
+				txLog.Info("successfully sent transaction", slog.String("hash", hashes[0]))
 			}
-			log.Info("successfully sent transaction", slog.String("type",
-				string(tx.Kind())), slog.Uint64("height", height), slog.String("hash", hash[0]))
 		}
 	}
 }
@@ -220,7 +230,7 @@ func filterDue[T DueAt](items []T, height uint64) []Tx {
 // RunConcurrentTxs runs concurrent tx for a total of count.
 // The do function should perform the work for a single idempotent job.
 func RunConcurrentTxs(ctx context.Context, count, concurrency uint,
-	do func() (string, error), log *slog.Logger) (int, int) {
+	do func() (string, error), log *slog.Logger) (int, int, error) {
 	if concurrency == 0 {
 		concurrency = 1
 	}
@@ -230,6 +240,7 @@ func RunConcurrentTxs(ctx context.Context, count, concurrency uint,
 	var successes atomic.Int32
 	var errors atomic.Int32
 	// run the tx N times
+	var err error
 	for range count {
 		if err := sem.Acquire(ctx, 1); err != nil {
 			// typically only fails if ctx is canceled
@@ -239,15 +250,14 @@ func RunConcurrentTxs(ctx context.Context, count, concurrency uint,
 			break
 		}
 		wg.Add(1)
+		// only save the last error
 		go func() {
 			defer sem.Release(1)
 			defer wg.Done()
 
-			if _, err := do(); err != nil {
-				// log the first error only (others are likely same cause)
-				if errors.Add(1) == 1 {
-					log.Error("error sending tx", slog.String("error", err.Error()))
-				}
+			if _, txErr := do(); txErr != nil {
+				err = txErr
+				errors.Add(1)
 				return
 			}
 			successes.Add(1)
@@ -255,35 +265,41 @@ func RunConcurrentTxs(ctx context.Context, count, concurrency uint,
 	}
 	// wait for all txs to complete
 	wg.Wait()
-	return int(successes.Load()), int(errors.Load())
+	return int(successes.Load()), int(errors.Load()), err
 }
 
 // executeSendTxs runs the send transactions for a given height
 func executeSendTxs(config *Profile, accounts []shared.Account, height uint64,
-	log *slog.Logger) (success, errors int) {
-	if config.Send.Bulk {
-		return executeBulkSendTxs(config, accounts, height, log)
+	log *slog.Logger) (success, errors int, errs error) {
+	if config.Send.IsBatch() {
+		return doExecuteBulkTxs(&config.Send, config, accounts, height)
 	}
 	send := func() (string, error) {
-		hashes, err := sendTx(config.Send, accounts[0], accounts[1], config.General, uint64(height), false)
+		hashes, err := sendTx(&config.Send,
+			accounts[0], accounts[1], config.General, uint64(height), false, 0)
 		if err != nil {
 			return "", err
 		}
 		return hashes[0], nil
 	}
 	return RunConcurrentTxs(context.Background(),
-		config.Send.Count, config.Send.Concurrency, send, log)
+		config.Send.Count(), config.Send.Concurrency, send, log)
 }
 
-// executeBulkSendTxs sends bulk transactions in parallel batches
-func executeBulkSendTxs(config *Profile, accounts []shared.Account, height uint64,
-	log *slog.Logger) (success, errors int) {
+// doExecuteBulkTxs sends bulk transactions in parallel batches
+func doExecuteBulkTxs(tx Tx, config *Profile, accounts []shared.Account,
+	height uint64) (success, errs int, err error) {
 	var wg sync.WaitGroup
 	var successCount atomic.Int32
 	var errorCount atomic.Int32
 
-	total := config.Send.Count
-	batchSize := config.Send.BulkSplit
+	bulkTx, ok := tx.(BulkTx)
+	if !ok {
+		return 0, 0, errors.New("tx does not support bulk transactions")
+	}
+
+	total := bulkTx.Count()
+	batchSize := bulkTx.BatchSize()
 	// calculate number of batches needed
 	numBatches := (total + batchSize - 1) / batchSize
 	for i := range numBatches {
@@ -293,17 +309,14 @@ func executeBulkSendTxs(config *Profile, accounts []shared.Account, height uint6
 		if toSend > remaining {
 			toSend = remaining
 		}
-		// create a copy of the send config with the adjusted count for this batch
-		sendCopy := config.Send
-		sendCopy.Count = uint(toSend)
+		// set the count for this batch
 		wg.Add(1)
 		go func(batchNum, batchSize uint) {
 			defer wg.Done()
-			hashes, err := sendTx(sendCopy, accounts[0], accounts[1], config.General, uint64(height), true)
-			if err != nil {
-				log.Error("error sending bulk SEND txs", slog.Uint64("height", height),
-					slog.Uint64("batch_num", uint64(batchNum)), slog.Uint64("batch_size", uint64(batchSize)),
-					slog.String("error", err.Error()))
+			hashes, txErr := sendTx(bulkTx, accounts[0], accounts[1], config.General,
+				uint64(height), true, toSend)
+			if txErr != nil {
+				err = txErr
 				errorCount.Add(int32(int(batchSize) - len(hashes)))
 				successCount.Add(int32(len(hashes)))
 				return
@@ -312,22 +325,22 @@ func executeBulkSendTxs(config *Profile, accounts []shared.Account, height uint6
 		}(i, toSend)
 	}
 	wg.Wait()
-	return int(successCount.Load()), int(errorCount.Load())
+	return int(successCount.Load()), int(errorCount.Load()), err
 }
 
 // sendTx is an util to build and send a transaction
 func sendTx(tx Tx, from, to shared.Account, config General, height uint64,
-	bulk bool) (hashes []string, err error) {
+	bulk bool, count uint) (hashes []string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	req, err := BuildTxRequest(from, to, config, height)
+	req, err := BuildTxRequest(from, to, config, height, count)
 	if err != nil {
 		return nil, fmt.Errorf("build tx request: %w", err)
 	}
 	if bulk {
 		bulkTx, ok := tx.(BulkTx)
 		if !ok {
-			return nil, fmt.Errorf("tx does not implement BulkTx")
+			return nil, fmt.Errorf("tx [%T] does not implement BulkTx", tx)
 		}
 		hashes, err = bulkTx.DoBulk(ctx, req, config.AdminRpcURL)
 	} else {

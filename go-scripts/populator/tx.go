@@ -48,7 +48,7 @@ var (
 	ErrNotValidator         = errors.New("not a validator")
 	ErrInvalidJSON          = errors.New("invalid JSON")
 	ErrInvalidPollEndHeight = errors.New("invalid poll end height")
-	ErrNotImplemented       = errors.New("not implemented")
+	PrivateKeyRequired      = errors.New("private key required")
 )
 
 // TxType is the type of transaction
@@ -64,12 +64,15 @@ type Tx interface {
 	Validate(ctx context.Context, req *TxRequest) error
 	Sender() int   // Idx of the account to use to send
 	Receiver() int // Idx of the account to receive
+	IsBatch() bool // Indicates if the transaction is batchable
 }
 
 // BulkTx is the interface to represent a transaction that can be executed in bulk
 type BulkTx interface {
 	Tx
 	DoBulk(ctx context.Context, req *TxRequest, baseURL string) ([]string, error)
+	Count() uint
+	BatchSize() uint
 }
 
 // DueAt is the interface to represent a transaction that is due at a specific height
@@ -96,22 +99,22 @@ func (StartPollTx) Kind() TxType     { return TxStartPoll }
 func (DexLimitOrderTx) Kind() TxType { return TxLimitOrder }
 
 // Due returns true if the height is due
-func (s height) Due(h uint64) bool { return s.Height == h }
+func (s heightBatch) Due(h uint64) bool { return s.Height == h }
 
 // Due implementations
-func (tx StakeTx) Due(h uint64) bool         { return tx.height.Due(h) }
-func (tx EditStakeTx) Due(h uint64) bool     { return tx.height.Due(h) }
-func (tx PauseTx) Due(h uint64) bool         { return tx.height.Due(h) }
-func (tx UnstakeTx) Due(h uint64) bool       { return tx.height.Due(h) }
-func (tx DaoTransferTx) Due(h uint64) bool   { return tx.height.Due(h) }
-func (tx SubsidyTx) Due(h uint64) bool       { return tx.height.Due(h) }
-func (tx CreateOrderTx) Due(h uint64) bool   { return tx.height.Due(h) }
-func (tx EditOrderTx) Due(h uint64) bool     { return tx.height.Due(h) }
-func (tx DeleteOrderTx) Due(h uint64) bool   { return tx.height.Due(h) }
-func (tx LockOrderTx) Due(h uint64) bool     { return tx.height.Due(h) }
-func (tx CloseOrderTx) Due(h uint64) bool    { return tx.height.Due(h) }
-func (tx StartPollTx) Due(h uint64) bool     { return tx.height.Due(h) }
-func (tx DexLimitOrderTx) Due(h uint64) bool { return tx.height.Due(h) }
+func (tx StakeTx) Due(h uint64) bool         { return tx.heightBatch.Due(h) }
+func (tx EditStakeTx) Due(h uint64) bool     { return tx.heightBatch.Due(h) }
+func (tx PauseTx) Due(h uint64) bool         { return tx.heightBatch.Due(h) }
+func (tx UnstakeTx) Due(h uint64) bool       { return tx.heightBatch.Due(h) }
+func (tx DaoTransferTx) Due(h uint64) bool   { return tx.heightBatch.Due(h) }
+func (tx SubsidyTx) Due(h uint64) bool       { return tx.heightBatch.Due(h) }
+func (tx CreateOrderTx) Due(h uint64) bool   { return tx.heightBatch.Due(h) }
+func (tx EditOrderTx) Due(h uint64) bool     { return tx.heightBatch.Due(h) }
+func (tx DeleteOrderTx) Due(h uint64) bool   { return tx.heightBatch.Due(h) }
+func (tx LockOrderTx) Due(h uint64) bool     { return tx.heightBatch.Due(h) }
+func (tx CloseOrderTx) Due(h uint64) bool    { return tx.heightBatch.Due(h) }
+func (tx StartPollTx) Due(h uint64) bool     { return tx.heightBatch.Due(h) }
+func (tx DexLimitOrderTx) Due(h uint64) bool { return tx.heightBatch.Due(h) }
 
 // Sender implementation
 func (tx SendTx) Sender() int          { return tx.From }
@@ -146,6 +149,23 @@ func (tx LockOrderTx) Receiver() int     { return tx.To }
 func (tx CloseOrderTx) Receiver() int    { return tx.To }
 func (tx StartPollTx) Receiver() int     { return tx.To }
 func (tx DexLimitOrderTx) Receiver() int { return tx.To }
+
+// IsBatch implementation
+func (tx StakeTx) IsBatch() bool         { return tx.Batch }
+func (tx EditStakeTx) IsBatch() bool     { return tx.Batch }
+func (tx EditOrderTx) IsBatch() bool     { return tx.Batch }
+func (tx PauseTx) IsBatch() bool         { return tx.Batch }
+func (tx UnstakeTx) IsBatch() bool       { return tx.Batch }
+func (tx SubsidyTx) IsBatch() bool       { return tx.Batch }
+func (tx ChangeParamTx) IsBatch() bool   { return tx.Batch }
+func (tx DaoTransferTx) IsBatch() bool   { return tx.Batch }
+func (tx CreateOrderTx) IsBatch() bool   { return tx.Batch }
+func (tx DeleteOrderTx) IsBatch() bool   { return tx.Batch }
+func (tx LockOrderTx) IsBatch() bool     { return tx.Batch }
+func (tx CloseOrderTx) IsBatch() bool    { return tx.Batch }
+func (tx StartPollTx) IsBatch() bool     { return tx.Batch }
+func (tx DexLimitOrderTx) IsBatch() bool { return tx.Batch }
+func (tx SendTx) IsBatch() bool          { return tx.Batch }
 
 // Validate implementation
 func (tx SendTx) Validate(ctx context.Context, req *TxRequest) error        { return nil }
@@ -471,15 +491,23 @@ func (tx DexLimitOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string
 	return *hash, err
 }
 
+// Count implementations
+func (tx SendTx) Count() uint          { return tx.batchOptions.Count }
+func (tx DexLimitOrderTx) Count() uint { return tx.batchOptions.Count }
+
+// BatchSize implementations
+func (tx SendTx) BatchSize() uint          { return tx.batchOptions.BatchSize }
+func (tx DexLimitOrderTx) BatchSize() uint { return tx.batchOptions.BatchSize }
+
 // DoBulk implementations
 
 func (tx SendTx) DoBulk(ctx context.Context, req *TxRequest, baseURL string) ([]string, error) {
 	// only private key txs can be sent in bulk as they need to be signed
 	if !tx.UsePrivateKey {
-		return []string{}, ErrNotImplemented
+		return []string{}, PrivateKeyRequired
 	}
-	sendMsgs := make([]proto.Message, 0, tx.Count)
-	for range tx.Count {
+	sendMsgs := make([]proto.Message, 0, tx.Count())
+	for range tx.Count() {
 		sendMsg := fsm.MessageSend{
 			FromAddress: req.FromAddr.Bytes(),
 			ToAddress:   req.ToAddr.Bytes(),
@@ -499,10 +527,37 @@ func (tx SendTx) DoBulk(ctx context.Context, req *TxRequest, baseURL string) ([]
 	return hashesPtr, err
 }
 
+func (tx DexLimitOrderTx) DoBulk(ctx context.Context, req *TxRequest, baseURL string) ([]string, error) {
+	// only private key txs can be sent in bulk as they need to be signed
+	if !tx.UsePrivateKey {
+		return []string{}, PrivateKeyRequired
+	}
+	sendMsgs := make([]proto.Message, 0, tx.Count())
+	for range tx.Count() {
+		sendMsg := fsm.MessageDexLimitOrder{
+			ChainId:         uint64(tx.Committees[0]),
+			AmountForSale:   tx.SellAmount,
+			RequestedAmount: tx.ReceiveAmount,
+			Address:         req.FromAddr.Bytes(),
+		}
+		sendMsgs = append(sendMsgs, &sendMsg)
+	}
+	hashes, err := SendRawTxs(ctx, req, sendMsgs)
+	if err != nil {
+		return nil, err
+	}
+	// iterate over hashes and print them
+	hashesPtr := make([]string, 0, len(hashes))
+	for _, hash := range hashes {
+		hashesPtr = append(hashesPtr, *hash)
+	}
+	return hashesPtr, err
+}
+
 // Helpers
 
 // BuildTxRequest constructs a TxRequest with the required fields
-func BuildTxRequest(from, to shared.Account, config General, height uint64) (*TxRequest, error) {
+func BuildTxRequest(from, to shared.Account, config General, height uint64, count uint) (*TxRequest, error) {
 	fromAddr, err := crypto.NewAddressFromString(from.Address)
 	if err != nil {
 		return nil, fmt.Errorf("create FROM address: %w", err)
@@ -679,6 +734,7 @@ type TxRequest struct {
 	Height    uint64          // Height of the transaction
 	ChainId   uint64          // Chain ID of the transaction
 	NetworkId uint64          // Network ID of the transaction
+	Count     uint            // Number of transactions to send for batch transaction
 }
 
 // txRequest represents a full transaction request

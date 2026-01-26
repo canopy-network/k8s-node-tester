@@ -82,8 +82,9 @@ type General struct {
 
 // Common fields
 
-type height struct {
+type heightBatch struct {
 	Height uint64 `yaml:"height"`
+	Batch  bool   `yaml:"batch"`
 }
 
 type account struct {
@@ -112,24 +113,28 @@ type delimitedBlock struct {
 	EndBlock   uint64 `yaml:"endBlock"`
 }
 
+type batchOptions struct {
+	Count         uint `yaml:"batchCount"`
+	Concurrency   uint `yaml:"concurrency"`
+	UsePrivateKey bool `yaml:"usePrivateKey"`
+	BatchSize     uint `yaml:"batchSize"`
+}
+
 // Transaction types
 
 // SendTx Tx is handled separately
 type SendTx struct {
-	account       `yaml:",inline"`
-	amount        `yaml:",inline"`
-	Count         uint `yaml:"count"`
-	Concurrency   uint `yaml:"concurrency"`
-	UsePrivateKey bool `yaml:"usePrivateKey"`
-	Bulk          bool `yaml:"bulk"`
-	BulkSplit     uint `yaml:"bulkSplit"`
+	account      `yaml:",inline"`
+	amount       `yaml:",inline"`
+	heightBatch  `yaml:",inline"`
+	batchOptions `yaml:",inline"`
 }
 
 // Transaction types
 
 // StakeTx represents a transaction to stake a validator/delegator
 type StakeTx struct {
-	height          `yaml:",inline"`
+	heightBatch     `yaml:",inline"`
 	account         `yaml:",inline"`
 	amount          `yaml:",inline"`
 	committees      `yaml:",inline"`
@@ -145,20 +150,20 @@ type EditStakeTx struct {
 
 // PauseTx represents a transaction to pause a validator
 type PauseTx struct {
-	height  `yaml:",inline"`
-	account `yaml:",inline"`
+	heightBatch `yaml:",inline"`
+	account     `yaml:",inline"`
 }
 
 // UnstakeTx represents a transaction to unstake a validator/delegator
 type UnstakeTx struct {
-	height  `yaml:",inline"`
-	account `yaml:",inline"`
+	heightBatch `yaml:",inline"`
+	account     `yaml:",inline"`
 }
 
 // ChangeParam represents a transaction to change a parameter
 type ChangeParamTx struct {
 	account        `yaml:",inline"`
-	height         `yaml:",inline"`
+	heightBatch    `yaml:",inline"`
 	ParamSpace     string `yaml:"paramSpace"`
 	ParamKey       string `yaml:"paramKey"`
 	ParamValue     string `yaml:"paramValue"`
@@ -169,17 +174,17 @@ type ChangeParamTx struct {
 type DaoTransferTx struct {
 	account        `yaml:",inline"`
 	amount         `yaml:",inline"`
-	height         `yaml:",inline"`
+	heightBatch    `yaml:",inline"`
 	delimitedBlock `yaml:",inline"`
 }
 
 // SubsidyTx represents a transaction to subsidy a nested chain
 type SubsidyTx struct {
-	account    `yaml:",inline"`
-	amount     `yaml:",inline"`
-	height     `yaml:",inline"`
-	committees `yaml:",inline"`
-	OpCode     string `yaml:"opCode"`
+	account     `yaml:",inline"`
+	amount      `yaml:",inline"`
+	heightBatch `yaml:",inline"`
+	committees  `yaml:",inline"`
+	OpCode      string `yaml:"opCode"`
 }
 
 // order is the set of fields that are used to work with order-related transactions
@@ -193,50 +198,51 @@ type order struct {
 
 // CreateOrderTx represents a transaction to create an order
 type CreateOrderTx struct {
-	account `yaml:",inline"`
-	order   `yaml:",inline"`
-	height  `yaml:",inline"`
-	Data    string `yaml:"data"`
+	account     `yaml:",inline"`
+	order       `yaml:",inline"`
+	heightBatch `yaml:",inline"`
+	Data        string `yaml:"data"`
 }
 
 // EditOrderTx represents a transaction to edit an order
 type EditOrderTx struct {
-	order   `yaml:",inline"`
-	account `yaml:",inline"`
-	height  `yaml:",inline"`
+	order       `yaml:",inline"`
+	account     `yaml:",inline"`
+	heightBatch `yaml:",inline"`
 }
 
 // DeleteOrderTx represents a transaction to delete an order
 type DeleteOrderTx struct {
-	order   `yaml:",inline"`
-	account `yaml:",inline"`
-	height  `yaml:",inline"`
+	order       `yaml:",inline"`
+	account     `yaml:",inline"`
+	heightBatch `yaml:",inline"`
 }
 
 // LockOrderTx represents a transaction to lock an order
 type LockOrderTx struct {
-	order   `yaml:",inline"`
-	account `yaml:",inline"`
-	height  `yaml:",inline"`
+	order       `yaml:",inline"`
+	account     `yaml:",inline"`
+	heightBatch `yaml:",inline"`
 }
 
 // CloseOrderTx represents a transaction to close an order
 type CloseOrderTx struct {
-	order   `yaml:",inline"`
-	account `yaml:",inline"`
-	height  `yaml:",inline"`
+	order       `yaml:",inline"`
+	account     `yaml:",inline"`
+	heightBatch `yaml:",inline"`
 }
 
 // StartPollTx represents a transaction to start a poll
 type StartPollTx struct {
-	height   `yaml:",inline"`
-	account  `yaml:",inline"`
-	PollJSON string `yaml:"pollJSON"`
+	heightBatch `yaml:",inline"`
+	account     `yaml:",inline"`
+	PollJSON    string `yaml:"pollJSON"`
 }
 
 // DexLimitOrderTx represents a transaction to limit an order
 type DexLimitOrderTx struct {
-	height  `yaml:",inline"`
-	order   `yaml:",inline"`
-	account `yaml:",inline"`
+	heightBatch  `yaml:",inline"`
+	order        `yaml:",inline"`
+	account      `yaml:",inline"`
+	batchOptions `yaml:",inline"`
 }

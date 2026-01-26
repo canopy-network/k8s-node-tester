@@ -73,8 +73,8 @@ send-bulk:
     notifyNewBlockDelay: 0
   send:
     count: 10000 # per block
-    bulk: true
-    bulkSplit: 1500
+    batch: true
+    batchSize: 1500
     amount: 1
     concurrency: 100
     usePrivateKey: true
@@ -99,3 +99,8 @@ dex:
         sellAmount: 25
         receiveAmount: 19
         committees: [2]
+        batch: true
+        batchSize: 5
+        batchCount: 5
+        concurrency: 1
+        usePrivateKey: true
