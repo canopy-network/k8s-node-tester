@@ -63,6 +63,8 @@ type Transactions struct {
 	CloseOrder    []CloseOrderTx    `yaml:"closeOrder"`
 	StartPoll     []StartPollTx     `yaml:"startPoll"`
 	DexLimitOrder []DexLimitOrderTx `yaml:"dexLimitOrder"`
+	DexWithdraw   []DexWithdrawTx   `yaml:"dexWithdraw"`
+	DexDeposit    []DexDepositTx    `yaml:"dexDeposit"`
 }
 
 // General populator configuration
@@ -97,7 +99,7 @@ type amount struct {
 }
 
 type committees struct {
-	Committees []int `yaml:"committees"`
+	Committees []uint64 `yaml:"committees"`
 }
 
 func (c committees) String() string {
@@ -244,5 +246,21 @@ type DexLimitOrderTx struct {
 	heightBatch  `yaml:",inline"`
 	order        `yaml:",inline"`
 	account      `yaml:",inline"`
+	batchOptions `yaml:",inline"`
+}
+
+type DexWithdrawTx struct {
+	heightBatch  `yaml:",inline"`
+	account      `yaml:",inline"`
+	batchOptions `yaml:",inline"`
+	Percent      int `yaml:"percent"`
+	committees   `yaml:",inline"`
+}
+
+type DexDepositTx struct {
+	heightBatch  `yaml:",inline"`
+	account      `yaml:",inline"`
+	committees   `yaml:",inline"`
+	amount       `yaml:",inline"`
 	batchOptions `yaml:",inline"`
 }

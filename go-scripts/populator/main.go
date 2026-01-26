@@ -116,7 +116,8 @@ func HandleTxs(log *slog.Logger, notifier <-chan HeightCh, profile *Profile, acc
 		}
 		for _, tx := range GatherAtHeight(profile, height) {
 			txLog := log.With(slog.String("type", string(tx.Kind())),
-				slog.Uint64("height", height), slog.Bool("batched", tx.IsBatch()))
+				slog.Uint64("height", height), slog.Bool("batched", tx.IsBatch()),
+				slog.String("address", accounts[tx.Sender()].Address))
 			txLog.Info("sending transaction")
 			success, errors, err := executeTx(tx, profile, accounts, heightInfo.Height)
 			txLog.Info("transaction sent", slog.Int("success", success), slog.Int("errors", errors),
@@ -133,7 +134,7 @@ func executeTx(tx Tx, profile *Profile, accounts []shared.Account, height uint64
 	} else {
 		_, err = sendTx(tx, accounts[tx.Sender()], accounts[tx.Receiver()],
 			profile.General, height, false, 0)
-		if err != nil {
+		if err == nil {
 			success++
 		} else {
 			errors++
@@ -209,6 +210,8 @@ func GatherAtHeight(p *Profile, height uint64) []Tx {
 	out = append(out, filterDue(p.Transactions.CloseOrder, height)...)
 	out = append(out, filterDue(p.Transactions.StartPoll, height)...)
 	out = append(out, filterDue(p.Transactions.DexLimitOrder, height)...)
+	out = append(out, filterDue(p.Transactions.DexDeposit, height)...)
+	out = append(out, filterDue(p.Transactions.DexWithdraw, height)...)
 	return out
 }
 
@@ -302,12 +305,13 @@ func doExecuteBulkTxs(tx Tx, config *Profile, accounts []shared.Account,
 		wg.Add(1)
 		go func(count uint) {
 			defer wg.Done()
-			hashes, txErr := sendTx(bulkTx, accounts[0], accounts[1], config.General, height, true, count)
-			successCount.Add(int32(len(hashes)))
+			_, txErr := sendTx(bulkTx, accounts[0], accounts[1], config.General, height, true, count)
 			if txErr != nil {
 				err = txErr
-				errorCount.Add(int32(count) - int32(len(hashes)))
+				errorCount.Add(int32(count))
+				return
 			}
+			successCount.Add(int32(count))
 		}(toSend)
 	}
 	wg.Wait()

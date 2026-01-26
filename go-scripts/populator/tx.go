@@ -37,6 +37,8 @@ const (
 	TxCloseOrder  TxType = "closeOrder"
 	TxStartPoll   TxType = "startPoll"
 	TxLimitOrder  TxType = "limitOrder"
+	TxDexWithdraw TxType = "dexWithdraw"
+	TxDexDeposit  TxType = "dexDeposit"
 
 	subsidyRoute = "/v1/admin/tx-subsidy"
 )
@@ -97,6 +99,8 @@ func (LockOrderTx) Kind() TxType     { return TxLockOrder }
 func (CloseOrderTx) Kind() TxType    { return TxCloseOrder }
 func (StartPollTx) Kind() TxType     { return TxStartPoll }
 func (DexLimitOrderTx) Kind() TxType { return TxLimitOrder }
+func (DexWithdrawTx) Kind() TxType   { return TxDexWithdraw }
+func (DexDepositTx) Kind() TxType    { return TxDexDeposit }
 
 // Due returns true if the height is due
 func (s heightBatch) Due(h uint64) bool { return s.Height == h }
@@ -115,6 +119,8 @@ func (tx LockOrderTx) Due(h uint64) bool     { return tx.heightBatch.Due(h) }
 func (tx CloseOrderTx) Due(h uint64) bool    { return tx.heightBatch.Due(h) }
 func (tx StartPollTx) Due(h uint64) bool     { return tx.heightBatch.Due(h) }
 func (tx DexLimitOrderTx) Due(h uint64) bool { return tx.heightBatch.Due(h) }
+func (tx DexWithdrawTx) Due(h uint64) bool   { return tx.heightBatch.Due(h) }
+func (tx DexDepositTx) Due(h uint64) bool    { return tx.heightBatch.Due(h) }
 
 // Sender implementation
 func (tx SendTx) Sender() int          { return tx.From }
@@ -132,6 +138,8 @@ func (tx LockOrderTx) Sender() int     { return tx.From }
 func (tx CloseOrderTx) Sender() int    { return tx.From }
 func (tx StartPollTx) Sender() int     { return tx.From }
 func (tx DexLimitOrderTx) Sender() int { return tx.From }
+func (tx DexWithdrawTx) Sender() int   { return tx.From }
+func (tx DexDepositTx) Sender() int    { return tx.From }
 
 // Receiver implementation
 func (tx SendTx) Receiver() int          { return tx.To }
@@ -149,6 +157,8 @@ func (tx LockOrderTx) Receiver() int     { return tx.To }
 func (tx CloseOrderTx) Receiver() int    { return tx.To }
 func (tx StartPollTx) Receiver() int     { return tx.To }
 func (tx DexLimitOrderTx) Receiver() int { return tx.To }
+func (tx DexWithdrawTx) Receiver() int   { return tx.To }
+func (tx DexDepositTx) Receiver() int    { return tx.To }
 
 // IsBatch implementation
 func (tx StakeTx) IsBatch() bool         { return tx.Batch }
@@ -166,6 +176,8 @@ func (tx CloseOrderTx) IsBatch() bool    { return tx.Batch }
 func (tx StartPollTx) IsBatch() bool     { return tx.Batch }
 func (tx DexLimitOrderTx) IsBatch() bool { return tx.Batch }
 func (tx SendTx) IsBatch() bool          { return tx.Batch }
+func (tx DexWithdrawTx) IsBatch() bool   { return tx.Batch }
+func (tx DexDepositTx) IsBatch() bool    { return tx.Batch }
 
 // Validate implementation
 func (tx SendTx) Validate(ctx context.Context, req *TxRequest) error        { return nil }
@@ -252,6 +264,20 @@ func (tx StartPollTx) Validate(ctx context.Context, req *TxRequest) error {
 }
 
 func (tx DexLimitOrderTx) Validate(ctx context.Context, req *TxRequest) error {
+	if len(tx.Committees) != 1 {
+		return fmt.Errorf("only exactly one committee is required")
+	}
+	return nil
+}
+
+func (tx DexWithdrawTx) Validate(ctx context.Context, req *TxRequest) error {
+	if len(tx.Committees) != 1 {
+		return fmt.Errorf("only exactly one committee is required")
+	}
+	return nil
+}
+
+func (tx DexDepositTx) Validate(ctx context.Context, req *TxRequest) error {
 	if len(tx.Committees) != 1 {
 		return fmt.Errorf("only exactly one committee is required")
 	}
@@ -484,7 +510,32 @@ func (tx DexLimitOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string
 		from,
 		tx.SellAmount,
 		tx.ReceiveAmount,
-		uint64(tx.Committees[0]),
+		tx.Committees[0],
+		req.Password,
+		true,
+		req.Fee)
+	return *hash, err
+}
+
+// Do DexWithdrawTx sends a dex withdraw transaction
+func (tx DexWithdrawTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
+	from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
+	hash, _, err := cnpyClient.TxDexLiquidityWithdraw(
+		from,
+		tx.Percent,
+		tx.Committees[0],
+		req.Password,
+		true,
+		req.Fee)
+	return *hash, err
+}
+
+func (tx DexDepositTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
+	from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
+	hash, _, err := cnpyClient.TxDexLiquidityDeposit(
+		from,
+		tx.Amount,
+		tx.Committees[0],
 		req.Password,
 		true,
 		req.Fee)
@@ -521,6 +572,28 @@ func (tx DexLimitOrderTx) DoBulk(ctx context.Context, req *TxRequest, baseURL st
 		AmountForSale:   tx.SellAmount,
 		RequestedAmount: tx.ReceiveAmount,
 		Address:         req.FromAddr.Bytes(),
+	})
+}
+
+func (tx DexDepositTx) DoBulk(ctx context.Context, req *TxRequest, baseURL string) ([]string, error) {
+	if !tx.UsePrivateKey {
+		return []string{}, PrivateKeyRequired
+	}
+	return doBulk(ctx, req, req.Count, &fsm.MessageDexLiquidityDeposit{
+		ChainId: uint64(tx.Committees[0]),
+		Amount:  tx.Amount,
+		Address: req.FromAddr.Bytes(),
+	})
+}
+
+func (tx DexWithdrawTx) DoBulk(ctx context.Context, req *TxRequest, baseURL string) ([]string, error) {
+	if !tx.UsePrivateKey {
+		return []string{}, PrivateKeyRequired
+	}
+	return doBulk(ctx, req, req.Count, &fsm.MessageDexLiquidityWithdraw{
+		ChainId: uint64(tx.Committees[0]),
+		Percent: uint64(tx.Percent),
+		Address: req.FromAddr.Bytes(),
 	})
 }
 
