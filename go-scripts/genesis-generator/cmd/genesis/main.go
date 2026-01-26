@@ -823,20 +823,35 @@ func writeGenesisFromIdentities(chainDir string, chainID int, rootChainID int, v
 				DaoRewardPercentage: 10,
 			},
 		},
-		"pools": []*fsm.Pool{
-			{
-				Id:              uint64(chainID) + fsm.LiquidityPoolAddend,
-				Amount:          poolAmount,
-				Points:          []*lib.PoolPoints{},
-				TotalPoolPoints: 0,
-			},
-			{
-				Id:              uint64(chainID+1) + fsm.LiquidityPoolAddend,
-				Amount:          poolAmount,
-				Points:          []*lib.PoolPoints{},
-				TotalPoolPoints: 0,
-			},
-		},
+		"pools": func() []*fsm.Pool {
+			// collect distinct committee IDs from all validators
+			seen := make(map[uint64]bool)
+			var committeeIDs []uint64
+			for _, v := range validators {
+				for _, c := range v.Committees {
+					if !seen[c] {
+						seen[c] = true
+						committeeIDs = append(committeeIDs, c)
+					}
+				}
+			}
+			// add root chain if it exists and not already seen
+			if chainID != rootChainID && !seen[uint64(rootChainID)] {
+				seen[uint64(rootChainID)] = true
+				committeeIDs = append(committeeIDs, uint64(rootChainID))
+			}
+			// create a pool for each distinct committee
+			pools := make([]*fsm.Pool, 0, len(committeeIDs))
+			for _, c := range committeeIDs {
+				pools = append(pools, &fsm.Pool{
+					Id:              c + fsm.LiquidityPoolAddend,
+					Amount:          poolAmount,
+					Points:          []*lib.PoolPoints{},
+					TotalPoolPoints: 0,
+				})
+			}
+			return pools
+		}(),
 	}
 
 	for key, value := range remainingFields {

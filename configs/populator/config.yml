@@ -1,7 +1,5 @@
 default:
   general:
-    rpcURL: "http://localhost:50002"
-    adminRpcURL: "http://localhost:50003"
     basePort: 50000
     accounts: 3
     fee: 10001
@@ -81,3 +79,23 @@ send-bulk:
     concurrency: 100
     usePrivateKey: true
   transactions:
+
+dex:
+  general:
+    accounts: 3
+    fee: 10001
+    chainId: 1
+    networkId: 1
+    password: "test"
+    incremental: true
+    maxHeight: 3
+    waitForNewBlock: true
+    notifyNewBlockDelay: 0
+  transactions:
+    dexLimitOrder:
+      - height: 1
+        from: 1
+        to: 1
+        sellAmount: 25
+        receiveAmount: 19
+        committees: [2]

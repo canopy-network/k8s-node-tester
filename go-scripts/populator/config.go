@@ -49,19 +49,20 @@ func (p *Profile) Validate() error {
 
 // Transactions is the config part that defines all the transactions to make
 type Transactions struct {
-	Stake       []StakeTx       `yaml:"stake"`
-	EditStake   []EditStakeTx   `yaml:"editStake"`
-	Pause       []PauseTx       `yaml:"pause"`
-	Unstake     []UnstakeTx     `yaml:"unstake"`
-	ChangeParam []ChangeParamTx `yaml:"changeParam"`
-	DaoTransfer []DaoTransferTx `yaml:"daoTransfer"`
-	Subsidy     []SubsidyTx     `yaml:"subsidy"`
-	CreateOrder []CreateOrderTx `yaml:"createOrder"`
-	EditOrder   []EditOrderTx   `yaml:"editOrder"`
-	DeleteOrder []DeleteOrderTx `yaml:"deleteOrder"`
-	LockOrder   []LockOrderTx   `yaml:"lockOrder"`
-	CloseOrder  []CloseOrderTx  `yaml:"closeOrder"`
-	StartPoll   []StartPollTx   `yaml:"startPoll"`
+	Stake         []StakeTx         `yaml:"stake"`
+	EditStake     []EditStakeTx     `yaml:"editStake"`
+	Pause         []PauseTx         `yaml:"pause"`
+	Unstake       []UnstakeTx       `yaml:"unstake"`
+	ChangeParam   []ChangeParamTx   `yaml:"changeParam"`
+	DaoTransfer   []DaoTransferTx   `yaml:"daoTransfer"`
+	Subsidy       []SubsidyTx       `yaml:"subsidy"`
+	CreateOrder   []CreateOrderTx   `yaml:"createOrder"`
+	EditOrder     []EditOrderTx     `yaml:"editOrder"`
+	DeleteOrder   []DeleteOrderTx   `yaml:"deleteOrder"`
+	LockOrder     []LockOrderTx     `yaml:"lockOrder"`
+	CloseOrder    []CloseOrderTx    `yaml:"closeOrder"`
+	StartPoll     []StartPollTx     `yaml:"startPoll"`
+	DexLimitOrder []DexLimitOrderTx `yaml:"dexLimitOrder"`
 }
 
 // General populator configuration
@@ -115,6 +116,7 @@ type delimitedBlock struct {
 
 // SendTx Tx is handled separately
 type SendTx struct {
+	account       `yaml:",inline"`
 	amount        `yaml:",inline"`
 	Count         uint `yaml:"count"`
 	Concurrency   uint `yaml:"concurrency"`
@@ -230,4 +232,11 @@ type StartPollTx struct {
 	height   `yaml:",inline"`
 	account  `yaml:",inline"`
 	PollJSON string `yaml:"pollJSON"`
+}
+
+// DexLimitOrderTx represents a transaction to limit an order
+type DexLimitOrderTx struct {
+	height  `yaml:",inline"`
+	order   `yaml:",inline"`
+	account `yaml:",inline"`
 }

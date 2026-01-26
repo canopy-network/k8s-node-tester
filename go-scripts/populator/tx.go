@@ -36,6 +36,7 @@ const (
 	TxLockOrder   TxType = "lockOrder"
 	TxCloseOrder  TxType = "closeOrder"
 	TxStartPoll   TxType = "startPoll"
+	TxLimitOrder  TxType = "limitOrder"
 
 	subsidyRoute = "/v1/admin/tx-subsidy"
 )
@@ -78,69 +79,73 @@ type DueAt interface {
 }
 
 // Kind implementations
-func (SendTx) Kind() TxType        { return TxSend }
-func (StakeTx) Kind() TxType       { return TxStake }
-func (EditStakeTx) Kind() TxType   { return TxEditStake }
-func (PauseTx) Kind() TxType       { return TxPause }
-func (UnstakeTx) Kind() TxType     { return TxUnstake }
-func (ChangeParamTx) Kind() TxType { return TxChangeParam }
-func (DaoTransferTx) Kind() TxType { return TxDaoTransfer }
-func (SubsidyTx) Kind() TxType     { return TxSubsidy }
-func (CreateOrderTx) Kind() TxType { return TxCreateOrder }
-func (EditOrderTx) Kind() TxType   { return TxEditOrder }
-func (DeleteOrderTx) Kind() TxType { return TxDeleteOrder }
-func (LockOrderTx) Kind() TxType   { return TxLockOrder }
-func (CloseOrderTx) Kind() TxType  { return TxCloseOrder }
-func (StartPollTx) Kind() TxType   { return TxStartPoll }
+func (SendTx) Kind() TxType          { return TxSend }
+func (StakeTx) Kind() TxType         { return TxStake }
+func (EditStakeTx) Kind() TxType     { return TxEditStake }
+func (PauseTx) Kind() TxType         { return TxPause }
+func (UnstakeTx) Kind() TxType       { return TxUnstake }
+func (ChangeParamTx) Kind() TxType   { return TxChangeParam }
+func (DaoTransferTx) Kind() TxType   { return TxDaoTransfer }
+func (SubsidyTx) Kind() TxType       { return TxSubsidy }
+func (CreateOrderTx) Kind() TxType   { return TxCreateOrder }
+func (EditOrderTx) Kind() TxType     { return TxEditOrder }
+func (DeleteOrderTx) Kind() TxType   { return TxDeleteOrder }
+func (LockOrderTx) Kind() TxType     { return TxLockOrder }
+func (CloseOrderTx) Kind() TxType    { return TxCloseOrder }
+func (StartPollTx) Kind() TxType     { return TxStartPoll }
+func (DexLimitOrderTx) Kind() TxType { return TxLimitOrder }
 
 // Due returns true if the height is due
 func (s height) Due(h uint64) bool { return s.Height == h }
 
 // Due implementations
-func (tx StakeTx) Due(h uint64) bool       { return tx.height.Due(h) }
-func (tx EditStakeTx) Due(h uint64) bool   { return tx.height.Due(h) }
-func (tx PauseTx) Due(h uint64) bool       { return tx.height.Due(h) }
-func (tx UnstakeTx) Due(h uint64) bool     { return tx.height.Due(h) }
-func (tx DaoTransferTx) Due(h uint64) bool { return tx.height.Due(h) }
-func (tx SubsidyTx) Due(h uint64) bool     { return tx.height.Due(h) }
-func (tx CreateOrderTx) Due(h uint64) bool { return tx.height.Due(h) }
-func (tx EditOrderTx) Due(h uint64) bool   { return tx.height.Due(h) }
-func (tx DeleteOrderTx) Due(h uint64) bool { return tx.height.Due(h) }
-func (tx LockOrderTx) Due(h uint64) bool   { return tx.height.Due(h) }
-func (tx CloseOrderTx) Due(h uint64) bool  { return tx.height.Due(h) }
-func (tx StartPollTx) Due(h uint64) bool   { return tx.height.Due(h) }
+func (tx StakeTx) Due(h uint64) bool         { return tx.height.Due(h) }
+func (tx EditStakeTx) Due(h uint64) bool     { return tx.height.Due(h) }
+func (tx PauseTx) Due(h uint64) bool         { return tx.height.Due(h) }
+func (tx UnstakeTx) Due(h uint64) bool       { return tx.height.Due(h) }
+func (tx DaoTransferTx) Due(h uint64) bool   { return tx.height.Due(h) }
+func (tx SubsidyTx) Due(h uint64) bool       { return tx.height.Due(h) }
+func (tx CreateOrderTx) Due(h uint64) bool   { return tx.height.Due(h) }
+func (tx EditOrderTx) Due(h uint64) bool     { return tx.height.Due(h) }
+func (tx DeleteOrderTx) Due(h uint64) bool   { return tx.height.Due(h) }
+func (tx LockOrderTx) Due(h uint64) bool     { return tx.height.Due(h) }
+func (tx CloseOrderTx) Due(h uint64) bool    { return tx.height.Due(h) }
+func (tx StartPollTx) Due(h uint64) bool     { return tx.height.Due(h) }
+func (tx DexLimitOrderTx) Due(h uint64) bool { return tx.height.Due(h) }
 
 // Sender implementation
-func (tx SendTx) Sender() int        { return -1 } // does not have a fixed sender
-func (tx StakeTx) Sender() int       { return tx.From }
-func (tx EditStakeTx) Sender() int   { return tx.From }
-func (tx PauseTx) Sender() int       { return tx.From }
-func (tx UnstakeTx) Sender() int     { return tx.From }
-func (tx ChangeParamTx) Sender() int { return tx.From }
-func (tx DaoTransferTx) Sender() int { return tx.From }
-func (tx SubsidyTx) Sender() int     { return tx.From }
-func (tx CreateOrderTx) Sender() int { return tx.From }
-func (tx EditOrderTx) Sender() int   { return tx.From }
-func (tx DeleteOrderTx) Sender() int { return tx.From }
-func (tx LockOrderTx) Sender() int   { return tx.From }
-func (tx CloseOrderTx) Sender() int  { return tx.From }
-func (tx StartPollTx) Sender() int   { return tx.From }
+func (tx SendTx) Sender() int          { return tx.From }
+func (tx StakeTx) Sender() int         { return tx.From }
+func (tx EditStakeTx) Sender() int     { return tx.From }
+func (tx PauseTx) Sender() int         { return tx.From }
+func (tx UnstakeTx) Sender() int       { return tx.From }
+func (tx ChangeParamTx) Sender() int   { return tx.From }
+func (tx DaoTransferTx) Sender() int   { return tx.From }
+func (tx SubsidyTx) Sender() int       { return tx.From }
+func (tx CreateOrderTx) Sender() int   { return tx.From }
+func (tx EditOrderTx) Sender() int     { return tx.From }
+func (tx DeleteOrderTx) Sender() int   { return tx.From }
+func (tx LockOrderTx) Sender() int     { return tx.From }
+func (tx CloseOrderTx) Sender() int    { return tx.From }
+func (tx StartPollTx) Sender() int     { return tx.From }
+func (tx DexLimitOrderTx) Sender() int { return tx.From }
 
 // Receiver implementation
-func (tx SendTx) Receiver() int        { return -1 } // does not have a fixed receiver
-func (tx StakeTx) Receiver() int       { return tx.To }
-func (tx EditStakeTx) Receiver() int   { return tx.To }
-func (tx PauseTx) Receiver() int       { return tx.To }
-func (tx UnstakeTx) Receiver() int     { return tx.To }
-func (tx ChangeParamTx) Receiver() int { return tx.To }
-func (tx DaoTransferTx) Receiver() int { return tx.To }
-func (tx SubsidyTx) Receiver() int     { return tx.To }
-func (tx CreateOrderTx) Receiver() int { return tx.To }
-func (tx EditOrderTx) Receiver() int   { return tx.To }
-func (tx DeleteOrderTx) Receiver() int { return tx.To }
-func (tx LockOrderTx) Receiver() int   { return tx.To }
-func (tx CloseOrderTx) Receiver() int  { return tx.To }
-func (tx StartPollTx) Receiver() int   { return tx.To }
+func (tx SendTx) Receiver() int          { return tx.To }
+func (tx StakeTx) Receiver() int         { return tx.To }
+func (tx EditStakeTx) Receiver() int     { return tx.To }
+func (tx PauseTx) Receiver() int         { return tx.To }
+func (tx UnstakeTx) Receiver() int       { return tx.To }
+func (tx ChangeParamTx) Receiver() int   { return tx.To }
+func (tx DaoTransferTx) Receiver() int   { return tx.To }
+func (tx SubsidyTx) Receiver() int       { return tx.To }
+func (tx CreateOrderTx) Receiver() int   { return tx.To }
+func (tx EditOrderTx) Receiver() int     { return tx.To }
+func (tx DeleteOrderTx) Receiver() int   { return tx.To }
+func (tx LockOrderTx) Receiver() int     { return tx.To }
+func (tx CloseOrderTx) Receiver() int    { return tx.To }
+func (tx StartPollTx) Receiver() int     { return tx.To }
+func (tx DexLimitOrderTx) Receiver() int { return tx.To }
 
 // Validate implementation
 func (tx SendTx) Validate(ctx context.Context, req *TxRequest) error        { return nil }
@@ -225,6 +230,15 @@ func (tx StartPollTx) Validate(ctx context.Context, req *TxRequest) error {
 	}
 	return nil
 }
+
+func (tx DexLimitOrderTx) Validate(ctx context.Context, req *TxRequest) error {
+	if len(tx.Committees) != 1 {
+		return fmt.Errorf("only exactly one committee is required")
+	}
+	return nil
+}
+
+// Do implementation
 
 // Do sends a send transaction
 func (tx SendTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
@@ -428,7 +442,7 @@ func (tx CloseOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) (
 	return *hash, err
 }
 
-// StartPollTx sends a start poll transaction
+// Do StartPollTx sends a start poll transaction
 func (tx StartPollTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
 	if err := tx.Validate(ctx, req); err != nil {
 		return "", err
@@ -437,6 +451,20 @@ func (tx StartPollTx) Do(ctx context.Context, req *TxRequest, baseURL string) (s
 	hash, _, err := cnpyClient.TxStartPoll(
 		from,
 		json.RawMessage(tx.PollJSON),
+		req.Password,
+		true,
+		req.Fee)
+	return *hash, err
+}
+
+// Do LimitOrderTx sends a limit order transaction
+func (tx DexLimitOrderTx) Do(ctx context.Context, req *TxRequest, baseURL string) (string, error) {
+	from := rpc.AddrOrNickname{Address: req.FromAddr.String()}
+	hash, _, err := cnpyClient.TxDexLimitOrder(
+		from,
+		tx.SellAmount,
+		tx.ReceiveAmount,
+		uint64(tx.Committees[0]),
 		req.Password,
 		true,
 		req.Fee)
