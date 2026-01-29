@@ -1,0 +1,61 @@
+# configures CoreDNS to rewrite external domains
+# to StatefulSet pod DNS names for isolated testing
+---
+- name: Configure CoreDNS with domain rewrites
+  hosts: localhost
+  gather_facts: false
+  vars:
+    coredns_template: "{{ playbook_dir }}/../../cluster/dns/coredns-corefile-isolated.yml"
+
+  tasks:
+    - name: read CoreDNS template
+      ansible.builtin.slurp:
+        src: "{{ coredns_template }}"
+      register: coredns_template_content
+
+    - name: generate rewrite rules
+      ansible.builtin.set_fact:
+        rewrite_rules: |
+          {% for domain in dns.rewrites.domains %}
+                  rewrite name {{ domain }} {{ dns.rewrites.statefulset_name }}-{{ loop.index0 + 1 }}.{{ dns.rewrites.service }}.{{ dns.rewrites.namespace }}.svc.cluster.local
+          {% endfor %}
+
+    - name: replace placeholder with rewrite rules
+      ansible.builtin.set_fact:
+        coredns_manifest: "{{ (coredns_template_content.content | b64decode) | regex_replace('# DNS_REWRITES_PLACEHOLDER', rewrite_rules | trim) }}"
+
+    - name: write processed ConfigMap to temp file
+      ansible.builtin.copy:
+        content: "{{ coredns_manifest }}"
+        dest: /tmp/coredns-configmap.yml
+        mode: "0644"
+
+    - name: apply CoreDNS ConfigMap
+      ansible.builtin.command:
+        cmd: kubectl apply -f /tmp/coredns-configmap.yml
+      register: apply_result
+      changed_when: "'configured' in apply_result.stdout or 'created' in apply_result.stdout"
+
+    - name: restart CoreDNS to pick up changes
+      ansible.builtin.command:
+        cmd: kubectl rollout restart deployment coredns -n kube-system
+      register: restart_result
+      changed_when: "'restarted' in restart_result.stdout"
+
+    - name: wait for CoreDNS rollout to complete
+      ansible.builtin.command:
+        cmd: kubectl rollout status deployment coredns -n kube-system --timeout=60s
+      changed_when: false
+
+    - name: display configured rewrites
+      ansible.builtin.debug:
+        msg: |
+          CoreDNS configured with the following rewrites:
+          {% for domain in dns.rewrites.domains %}
+          - {{ domain }} -> {{ dns.rewrites.statefulset_name }}-{{ loop.index1 }}.{{ dns.rewrites.service }}.{{ dns.rewrites.namespace }}.svc.cluster.local
+          {% endfor %}
+
+    - name: clean up temporary file
+      ansible.builtin.file:
+        path: /tmp/coredns-configmap.yml
+        state: absent

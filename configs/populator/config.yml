@@ -100,7 +100,29 @@ dex:
         receiveAmount: 19
         committees: [2]
         batch: true
-        batchSize: 5
-        batchCount: 5
+        batchSize: 0
+        batchCount: 2
         concurrency: 1
         usePrivateKey: true
+    # dexDeposit:
+    #   - height: 1
+    #     from: 1
+    #     to: 1
+    #     amount: 25
+    #     committees: [2]
+    #     batch: false
+    #     batchSize: 0
+    #     batchCount: 2
+    #     concurrency: 1
+    #     usePrivateKey: true
+    # dexWithdraw:
+    #   - height: 1
+    #     from: 1
+    #     to: 1
+    #     percent: 100
+    #     committees: [2]
+    #     batch: false
+    #     batchSize: 0
+    #     batchCount: 2
+    #     concurrency: 1
+    #     usePrivateKey: true

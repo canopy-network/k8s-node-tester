@@ -1,6 +1,9 @@
 # number of nodes to deploy
 replicaCount: 4
 
+# isolate pods from internet (only allows cluster-internal traffic)
+isolate: false
+
 # launch behavior of statefulset
 # Parallel: launch all pods in parallel
 # OrderedReady: launch pods in order, wait for each to be ready before launching the next

@@ -1,0 +1,24 @@
+{{- if .Values.isolate }}
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: isolate-statefulset
+  namespace: {{ .Values.namespace }}
+spec:
+  endpointSelector:
+    matchLabels:
+      app: {{ .Values.name }}
+  egress:
+    # allow DNS
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+    # allow all cluster traffic, deny internet
+    - toEntities:
+        - cluster
+{{- end }}

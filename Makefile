@@ -170,6 +170,12 @@ ansible/cluster-setup:
 	ansible-playbook -i ansible/inventory.yml ansible/playbooks/5-monitoring.yml \
 	  -e @./ansible/secrets.yml
 
+## ansible/dns-rewrite: rewrite external domains so they're locally redirected within the cluster
+.PHONY: ansible/dns-rewrite
+ansible/dns-rewrite:
+	ansible-playbook -i ansible/inventory.yml ansible/playbooks/8-coredns-rewrite.yml \
+	  -e @./ansible/secrets.yml
+
 ## ansible/ping: ping all nodes in the inventory
 .PHONY: ansible/ping
 ansible/ping:
