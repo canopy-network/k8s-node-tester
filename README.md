@@ -192,7 +192,79 @@ networkChaos:
         correlation: "0"
 ```
 
-Cleanup
+## Optional: Isolated network / local DNS redirect
+This is useful for testing live chains in an isolated network environment. Need to follow a strict
+order of operations:
+
+1. On the secrets file,  need to complete the dns rewrites with the domains of the nodes to mimic.
+   The nodes on the following `ids.json` file **must** be set on this same order.
+Example:
+```yaml
+dns:
+  rewrites:
+    namespace: canopy
+    service: p2p
+    statefulset_name: node
+    domains:
+      - domain-1.com
+      - domain-2.com
+```
+2. On `configs/genesis/artifacts` make a folder with the name of the configuration, i.e. `isolated`
+3. on `isolated/ids.json`, create a `keys` object which will contain the information of each node. 
+   Remember. The order of these nodes must match the order of the domains set earlier. Refer to the
+  [genesis generator's README](./go-scripts/genesis-generator/cmd/genesis/README.md) for more 
+  information on the meaning of each field.
+```json
+{
+  "main-accounts": {},
+  "keys": {
+    "node-1": {
+      "id": 1,
+      "chainId": 1,
+      "rootChainId": 1,
+      "rootChainNode": 1,
+      "peerNode": 1,
+      "address": "02cd4...",
+      "publicKey": "abda38...",
+      "privateKey": "6c275...",
+      "nodeType": "validator",
+      "domain": "domain-1.com"
+    },
+    "node-2": {
+      "id": 2,
+      "chainId": 1,
+      "rootChainId": 1,
+      "rootChainNode": 2,
+      "peerNode": 2,
+      "address": "02cd4e...",
+      "publicKey": "abda38e...",
+      "privateKey": "6c27505...",
+      "nodeType": "validator",
+      "domain": "domain-2.com"
+    },
+  }
+}
+```
+5. On `isolared/chain_N` (For this example 1) fill the required `config.json`, `genesis.json` and `keystore.json`
+   according to the [genesis README](./go-scripts/genesis-generator/cmd/genesis/README.md)
+4. On [canopy configs file](./configs/canopy-helm/values.yaml) set `isolate: true`
+5. Run `make genesis/apply CONFIG=isolated` and `make test/start NODES=2` depending on the config name
+   and number of nodes running on the setup
+
+Hint: To fill up all the artifacts for genesis, you could run `make genesis/prepare CONFIG=default` and
+replace all the generated files with the custom configuration.
+
+### Apply snapshot to isolated  environment
+With only the genesis files, the isolated enviroment will start at the genesis block, in order to start
+at a specific block: 
+1. On the [canopy configs file](./configs/canopy-helm/values.yaml) set `sharedPVC.active: true`. Which
+   will start a broken setup with the `shared-files` deployment
+2. Copy the canopy chain files to the shared folder with `kubectl cp ./{files} shared-files-{id}:/shared/chain_1/`
+   (currently only working for chain 1)
+3. Run `make test/destroy` and rerun the start process for a working setup, the pods will automatically
+   copy the files on that folder to their canopy folder
+
+## Cleanup
 
 - Remove Helm release and ConfigMaps used by tests:
 

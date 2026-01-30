@@ -40,6 +40,21 @@ test/destroy:
 	kubectl delete configmap config genesis ids keystore -n $(NAMESPACE)
 	kubectl delete svc -l type=chain -n $(NAMESPACE)
 
+## test/scale: scale the nodes statefulset to a given number of replicas
+.PHONY: test/scale
+test/scale:
+	$(call check_vars, REPLICAS)
+	$(eval NAMESPACE ?= canopy)
+	kubectl scale statefulset node --replicas=$(REPLICAS) -n $(NAMESPACE)
+
+## test/patch-image: patch a specific pod with a different image
+.PHONY: test/patch-image
+test/patch-image:
+	$(call check_vars, POD IMAGE)
+	$(eval NAMESPACE ?= canopy)
+	kubectl set image pod/$(POD) canopy=$(IMAGE) -n $(NAMESPACE)
+
+
 ## --- manual setup ---
 # ==================================================================================== #
 # MANUAL SETUP
