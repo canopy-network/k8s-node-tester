@@ -52,7 +52,7 @@
         msg: |
           CoreDNS configured with the following rewrites:
           {% for domain in dns.rewrites.domains %}
-          - {{ domain }} -> {{ dns.rewrites.statefulset_name }}-{{ loop.index1 }}.{{ dns.rewrites.service }}.{{ dns.rewrites.namespace }}.svc.cluster.local
+          - {{ domain }} -> {{ dns.rewrites.statefulset_name }}-{{ loop.index0+1 }}.{{ dns.rewrites.service }}.{{ dns.rewrites.namespace }}.svc.cluster.local
           {% endfor %}
 
     - name: clean up temporary file

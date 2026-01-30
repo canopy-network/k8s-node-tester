@@ -59,6 +59,8 @@ type NodeKey struct {
 	PublicKey     string `json:"publicKey"`
 	PrivateKey    string `json:"privateKey"`
 	NodeType      string `json:"nodeType"`
+	// optional: domain to use when assigning node's external address
+	Domain string `json:"domain"`
 }
 
 func main() {
@@ -246,8 +248,11 @@ func modifyConfig(config *Config, nodePrefix string, node, rootNode, peerNode *N
 		}
 		chain.URL = buildNodeAddress(true, nodePrefix, chainNode, ":50002")
 	}
-	// change the external address to itself so it can be discovered by the network
-	config.ExternalAddress = buildNodeAddress(false, nodePrefix, node, "")
+	// if set, apply the TCPDomain as the external address
+	if config.ExternalAddress = node.Domain; config.ExternalAddress == "" {
+		// otherwise, change the external address to itself so it can be discovered by the network
+		config.ExternalAddress = buildNodeAddress(false, nodePrefix, node, "")
+	}
 	// Randomize current dial peers
 	rand.Shuffle(len(config.DialPeers), func(i, j int) {
 		config.DialPeers[i], config.DialPeers[j] = config.DialPeers[j], config.DialPeers[i]

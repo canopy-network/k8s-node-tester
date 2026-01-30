@@ -1,0 +1,46 @@
+{{- if .Values.sharedPVC.active }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: {{ .Values.Namespace }}
+  name: {{ .Values.sharedPVC.name }}
+  annotations:
+    "helm.sh/resource-policy": keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.sharedPVC.size }}
+  storageClassName: {{ .Values.storage.storageClassName }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: {{ .Values.Namespace }}
+  name: shared-files
+  annotations:
+    "helm.sh/resource-policy": keep
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shared-files
+  template:
+    metadata:
+      labels:
+        app: shared-files
+    spec:
+      containers:
+        - name: shared-files
+          image: alpine:latest
+          command: ["sleep", "infinity"]
+          volumeMounts:
+            - name: shared-data
+              mountPath: /shared/
+      volumes:
+        - name: shared-data
+          persistentVolumeClaim:
+            claimName: {{ .Values.sharedPVC.name }}
+---
+{{- end }}

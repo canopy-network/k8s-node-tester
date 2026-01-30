@@ -2,7 +2,7 @@
 replicaCount: 4
 
 # isolate pods from internet (only allows cluster-internal traffic)
-isolate: false
+isolate: true
 
 # launch behavior of statefulset
 # Parallel: launch all pods in parallel
@@ -29,7 +29,7 @@ serviceAccount:
 # container image
 image:
   repository: canopynetwork/canopy-test
-  tag: latest
+  tag: dex
   pullPolicy: IfNotPresent
 
 # container ports
@@ -49,8 +49,13 @@ volumes:
 
 # storage per pod
 storage:
-  usePVC: false
+  usePVC: true
   size: 1Gi
+  storageClassName: local-path
+sharedPVC:
+  active: true
+  name: shared-pvc
+  size: 10G
   storageClassName: local-path
 
 # resources per pod

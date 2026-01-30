@@ -62,6 +62,28 @@ spec:
               app: node
       {{- end }}
       initContainers:
+      {{- if .Values.sharedPVC.active }}
+      - name: sync-shared-data
+        image: instrumentisto/rsync-ssh
+        command:
+          - sh
+          - -c
+          - |
+            if [ -f /root/.canopy/.synced ]; then
+              echo "already synced, skipping"
+              exit 0
+            fi
+            rm -rf /root/.canopy/canopy/*
+            mkdir -p /root/.canopy/canopy
+            rsync -avz /shared/chain_1/ /root/.canopy/canopy/
+            touch /root/.canopy/.synced
+        volumeMounts:
+        - name: data
+          mountPath: /root/.canopy
+        - name: shared-data
+          mountPath: /shared
+          readOnly: true
+      {{- end }}
       - name: init-node
         image: canopynetwork/loadtest-init-node:v1
         imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -128,6 +150,11 @@ spec:
               name: {{ .Values.volumes.configMaps.keystore }}
           - configMap:
               name: {{ .Values.volumes.configMaps.ids }}
+      {{- if .Values.sharedPVC.active }}
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: {{ .Values.sharedPVC.name }}
+      {{- end }}
       {{- if not .Values.storage.usePVC }}
       - name: data
         emptyDir: {}
