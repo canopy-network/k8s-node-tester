@@ -290,7 +290,7 @@ func doExecuteBulkTxs(tx Tx, config *Profile, accounts []shared.Account,
 	height uint64) (success, errs int, err error) {
 	bulkTx, ok := tx.(BulkTx)
 	if !ok {
-		return 0, 0, errors.New("tx does not support bulk transactions")
+		return 0, 1, errors.New("tx does not support bulk transactions")
 	}
 
 	total := bulkTx.Count()

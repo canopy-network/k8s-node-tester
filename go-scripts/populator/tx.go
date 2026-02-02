@@ -545,10 +545,14 @@ func (tx DexDepositTx) Do(ctx context.Context, req *TxRequest, baseURL string) (
 // Count implementations
 func (tx SendTx) Count() uint          { return tx.batchOptions.Count }
 func (tx DexLimitOrderTx) Count() uint { return tx.batchOptions.Count }
+func (tx DexDepositTx) Count() uint    { return tx.batchOptions.Count }
+func (tx DexWithdrawTx) Count() uint   { return tx.batchOptions.Count }
 
 // BatchSize implementations
 func (tx SendTx) BatchSize() uint          { return tx.batchOptions.BatchSize }
 func (tx DexLimitOrderTx) BatchSize() uint { return tx.batchOptions.BatchSize }
+func (tx DexDepositTx) BatchSize() uint    { return tx.batchOptions.BatchSize }
+func (tx DexWithdrawTx) BatchSize() uint   { return tx.batchOptions.BatchSize }
 
 // DoBulk implementations
 
@@ -647,17 +651,11 @@ func BuildTxRequest(from, to shared.Account, config General, height uint64, coun
 
 // SendRawTx constructs and sends a raw transaction to the node
 func SendRawTx(ctx context.Context, req *TxRequest, msg proto.Message) (*string, error) {
-	// validate the txMsg
-	tx, err := BuildTransactions(req, []proto.Message{msg})
+	hashes, err := SendRawTxs(ctx, req, []proto.Message{msg})
 	if err != nil {
 		return nil, err
 	}
-	// send the transaction to the node
-	hash, err := cnpyClient.Transaction(tx[0])
-	if err != nil {
-		return nil, fmt.Errorf("raw: send tx: %w", err)
-	}
-	return hash, nil
+	return hashes[0], nil
 }
 
 // SendRawTxs constructs and sends a bulk of transactions to the node
