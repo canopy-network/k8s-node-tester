@@ -305,7 +305,8 @@ func doExecuteBulkTxs(tx Tx, config *Profile, accounts []shared.Account,
 		wg.Add(1)
 		go func(count uint) {
 			defer wg.Done()
-			_, txErr := sendTx(bulkTx, accounts[0], accounts[1], config.General, height, true, count)
+			_, txErr := sendTx(bulkTx, accounts[tx.Sender()],
+				accounts[tx.Receiver()], config.General, height, true, count)
 			if txErr != nil {
 				err = txErr
 				errorCount.Add(int32(count))
