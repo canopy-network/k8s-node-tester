@@ -62,7 +62,7 @@ spec:
               app: node
       {{- end }}
       initContainers:
-      {{- if .Values.sharedPVC.active }}
+      {{- if .Values.sharedPVC.rsync }}
       - name: sync-shared-data
         image: instrumentisto/rsync-ssh
         command:
@@ -83,6 +83,29 @@ spec:
         - name: shared-data
           mountPath: /shared
           readOnly: true
+      {{- end }}
+      {{- if .Values.snapshot.active }}
+      - name: download-snapshot
+        image: netdata/wget
+        command:
+          - sh
+          - -c
+          - |
+            mkdir -p /root/.canopy/canopy
+            cd /root/.canopy/canopy
+
+            if [ -f /root/.canopy/.synced ]; then
+              echo "snapshot already synced, skipping download"
+              exit 0
+            fi
+
+            echo "Mirroring snapshot from {{ .Values.snapshot.url }} ..."
+            wget t -r -np -nH --cut-dirs=1 "{{ .Values.snapshot.url }}"
+
+            touch /root/.canopy/.synced
+        volumeMounts:
+        - name: data
+          mountPath: /root/.canopy
       {{- end }}
       - name: init-node
         image: canopynetwork/loadtest-init-node:v1
@@ -150,7 +173,7 @@ spec:
               name: {{ .Values.volumes.configMaps.keystore }}
           - configMap:
               name: {{ .Values.volumes.configMaps.ids }}
-      {{- if .Values.sharedPVC.active }}
+      {{- if .Values.sharedPVC.rsync }}
       - name: shared-data
         persistentVolumeClaim:
           claimName: {{ .Values.sharedPVC.name }}

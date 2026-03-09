@@ -33,8 +33,11 @@ spec:
     spec:
       containers:
         - name: shared-files
-          image: alpine:latest
-          command: ["sleep", "infinity"]
+          image: python:3.14-alpine
+          command: ["sh", "-c", "cd /shared && python -m http.server 8000"]
+          ports:
+            - containerPort: 8000
+              name: http
           volumeMounts:
             - name: shared-data
               mountPath: /shared/

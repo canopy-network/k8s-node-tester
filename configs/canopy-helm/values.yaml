@@ -29,7 +29,7 @@ serviceAccount:
 # container image
 image:
   repository: canopynetwork/canopy-test
-  tag: dex
+  tag: mainnet
   pullPolicy: IfNotPresent
 
 # container ports
@@ -50,14 +50,17 @@ volumes:
 # storage per pod
 storage:
   usePVC: true
-  size: 1Gi
+  size: 10Gi
   storageClassName: local-path
 sharedPVC:
   active: true
+  rsync: false
   name: shared-pvc
   size: 10G
   storageClassName: local-path
-
+snapshot:
+  active: true
+  url: http://10.42.2.182:8000/chain_1/
 # resources per pod
 # resources:
 # requests:
