@@ -2,6 +2,7 @@
   hosts: localhost
   gather_facts: false
   tasks:
+    # Requires cilium to be installed on the host machine
     - name: Install Cilium using CLI
       ansible.builtin.command:
         cmd: >

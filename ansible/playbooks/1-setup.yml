@@ -1,4 +1,4 @@
-# This playbook updates k3s cluster apt packages
+# This playbook updates k3s cluster packages (supports apt and dnf)
 # And for the main server it installs python3 and pip
 # along with kubernetes python package system-wide
 # Note: It is recommended to run python code in a virtual
@@ -7,12 +7,20 @@
   hosts: k3s_cluster
   become: true
   tasks:
-    - name: Upgrade package list
+    - name: Upgrade package list (apt)
       ansible.builtin.apt:
         update_cache: yes
         upgrade: dist
+      when: ansible_pkg_mgr == 'apt'
 
-    - name: Install iptables utilities for Chaos Mesh
+    - name: Upgrade package list (dnf)
+      ansible.builtin.dnf:
+        name: '*'
+        state: latest
+        update_cache: yes
+      when: ansible_pkg_mgr == 'dnf'
+
+    - name: Install iptables utilities for Chaos Mesh (apt)
       ansible.builtin.apt:
         name:
           - iptables
@@ -20,6 +28,17 @@
           - arptables
           - ebtables
         state: present
+      when: ansible_pkg_mgr == 'apt'
+
+    - name: Install iptables utilities for Chaos Mesh (dnf)
+      ansible.builtin.dnf:
+        name:
+          - iptables
+          - ipset
+          - arptables
+          - ebtables
+        state: present
+      when: ansible_pkg_mgr == 'dnf'
 
     - name: Force legacy iptables alternatives for Chaos Mesh
       ansible.builtin.command: "update-alternatives --set {{ item.name }} {{ item.path }}"
@@ -33,18 +52,41 @@
         - name: ebtables
           path: /usr/sbin/ebtables-legacy
       changed_when: false
+      when: ansible_pkg_mgr == 'apt'
 
-    - name: install python3 and pip
+    - name: install python3 and pip (apt)
       ansible.builtin.apt:
         name:
           - python3
           - python3-pip
         state: present
-      when: inventory_hostname in groups['server']
+      when:
+        - inventory_hostname in groups['server']
+        - ansible_pkg_mgr == 'apt'
 
-    - name: install kubernetes python package system-wide
+    - name: install python3 and pip (dnf)
+      ansible.builtin.dnf:
+        name:
+          - python3
+          - python3-pip
+        state: present
+      when:
+        - inventory_hostname in groups['server']
+        - ansible_pkg_mgr == 'dnf'
+
+    - name: install kubernetes python package system-wide (apt)
       ansible.builtin.apt:
         name:
           - python3-kubernetes
         state: present
-      when: inventory_hostname in groups['server']
+      when:
+        - inventory_hostname in groups['server']
+        - ansible_pkg_mgr == 'apt'
+
+    - name: install kubernetes python package system-wide (dnf)
+      ansible.builtin.pip:
+        name: kubernetes
+        state: present
+      when:
+        - inventory_hostname in groups['server']
+        - ansible_pkg_mgr == 'dnf'
