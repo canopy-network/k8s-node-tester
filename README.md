@@ -14,14 +14,17 @@ can create/add nodes, update the cluster, and configure TLS/monitoring end-to-en
 - Non-root user with sudo privileges
 - SSH access (public key authentication)
 - [Firewall allowances](https://docs.k3s.io/installation/requirements#inbound-rules-for-k3s-nodes):
-  - Inbound TCP 22 from your IP (SSH)
-  - Inbound TCP 80 from 0.0.0.0/0 (HTTP for apps/Let’s Encrypt)
-  - Inbound TCP 443 from 0.0.0.0/0 (HTTPS for apps)
-  - Inbound TCP 6443 between cluster nodes (K3s API server)
-  - Inbound TCP 10250 between cluster nodes (Kubelet API)
-  - Inbound UDP 8472 between cluster nodes (Flannel VXLAN)
-  - Inbound TCP 2379-2380 for embedded etcd (required for HA embedded etcd)
-  - Optional: Inbound TCP 6443 from your local IP (kubectl access)
+
+  | Direction | Protocol | Port(s) | Source | Purpose |
+  |-----------|----------|---------|--------|---------|
+  | Inbound | TCP | 22 | Your IP | SSH |
+  | Inbound | TCP | 80 | 0.0.0.0/0 | HTTP for apps/Let’s Encrypt |
+  | Inbound | TCP | 443 | 0.0.0.0/0 | HTTPS for apps |
+  | Inbound | TCP | 6443 | Cluster nodes | K3s API server |
+  | Inbound | TCP | 10250 | Cluster nodes | Kubelet API |
+  | Inbound | UDP | 8472 | Cluster nodes | Flannel VXLAN |
+  | Inbound | TCP | 2379-2380 | Cluster nodes | Embedded etcd (HA) |
+  | Inbound | TCP | 6443 | Your IP | kubectl access (optional) |
 
 ### DNS
 
