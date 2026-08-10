@@ -12,14 +12,17 @@ import (
 var (
 	BaseURL = getNodeURL(1)
 
-	ProposalAddress  = "02cd4e5eb53ea665702042a6ed6d31d616054dc5"
+	ProposalAddress  = ""
 	ProposalPassword = "test"
+
 	// URL Paths
 	RPCPort                 = ":50002"
 	AdminPort               = ":50003"
+	RawTxPath               = RPCPort + "/v1/tx"
 	BlockPath               = RPCPort + "/v1/query/block-by-height"
 	ChangeParamProposalPath = AdminPort + "/v1/admin/tx-change-param"
 	AddVotePath             = AdminPort + "/v1/gov/add-vote"
+
 	// single client
 	client = http.Client{
 		Timeout: 3 * time.Second,
@@ -33,7 +36,13 @@ func getNodeURL(node int) string {
 }
 
 func main() {
-	paramSpace, paramKey, paramValue := "consensus", "protocolVersion", "2/0"
+	block, err := GetBlock(0)
+	if err != nil {
+		fmt.Println("Error getting latest block:", err)
+		return
+	}
+
+	paramSpace, paramKey, paramValue := "cons", "protocolVersion", fmt.Sprintf("2/%d", block.BlockHeader.Height+10)
 	fmt.Printf("--- Generating proposal with values %s/%s: %s", paramSpace, paramKey,
 		paramValue)
 	proposal, err := GenerateProposal(paramSpace, paramKey, paramValue)
@@ -47,20 +56,36 @@ func main() {
 		fmt.Println("Error adding votes:", err)
 		return
 	}
+	fmt.Println("--- All votes sent")
+	fmt.Println("--- Sending proposal tx to submit")
+	hash, err := POST(BaseURL+RawTxPath, proposal)
+	if err != nil {
+		fmt.Println("Error sending proposal tx:", err)
+		return
+	}
+	fmt.Printf("--- Proposal tx sent successfully %s:", string(hash))
+}
+
+func GetBlock(height uint) (BlockResult, error) {
+	var latest BlockResult
+	reqLatest, _ := json.Marshal(HeightRequest{Height: 0})
+	bz, err := POST(BaseURL+BlockPath, reqLatest)
+	if err != nil {
+		return BlockResult{}, err
+	}
+	if err := json.Unmarshal(bz, &latest); err != nil {
+		return BlockResult{}, err
+	}
+	return latest, nil
 }
 
 func GenerateProposal(paramSpace, paramKey, paramValue string) ([]byte, error) {
 	// get latest height
-	var latest BlockResult
-	reqLatest, _ := json.Marshal(HeightRequest{Height: 0}) // Height 0 = latest
-	bz, err := POST(BaseURL+BlockPath, reqLatest)
+	block, err := GetBlock(0)
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(bz, &latest); err != nil {
-		return nil, err
-	}
-	latestHeight := latest.BlockHeader.Height
+	latestHeight := block.BlockHeader.Height
 	// make a request for the proposal
 	request := struct {
 		Address    string `json:"address"`
@@ -77,15 +102,16 @@ func GenerateProposal(paramSpace, paramKey, paramValue string) ([]byte, error) {
 	}{
 		ParamSpace: paramSpace,
 		ParamKey:   paramKey,
-		ParamValue: paramValue, StartBlock: latestHeight - 1,
-		EndBlock: latestHeight + 999,
-		Fee:      10000,
-		Submit:   false,
-		Address:  ProposalAddress,
-		Password: ProposalPassword,
+		ParamValue: paramValue,
+		StartBlock: latestHeight - 1,
+		EndBlock:   latestHeight + 10,
+		Fee:        10000,
+		Submit:     false,
+		Address:    ProposalAddress,
+		Password:   ProposalPassword,
 	}
 	// convert to json
-	bz, err = json.Marshal(request)
+	bz, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
 	}
